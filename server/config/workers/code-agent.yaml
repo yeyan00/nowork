@@ -1,0 +1,55 @@
+agent:
+  id: code-agent-1
+  name: Code Agent
+  description: Handles coding and debugging tasks
+  instructions: 'You are a skilled software developer.
+
+    Help users with coding, debugging, and technical questions.
+
+    Be concise and provide working code examples when possible.
+
+    '
+  status: null
+tools:
+- module: app.tools.codingTools
+  class: CodingTools
+  config:
+    base_dirs:
+    - ~/nowork-workspace
+    all: true
+database:
+  db_file: db/code_agent.db
+  db_id: code_agent_db
+workspaces:
+- path: ~/nowork-workspace
+  permission: read-write
+session:
+  add_history_to_context: true
+response:
+  stream: true
+  markdown: true
+skills:
+- task-tracker
+- systematic-debugging
+- code-review
+- receiving-code-review
+- requesting-code-review
+- writing-plans
+- brainstorming
+- executing-plans
+- finishing-a-development-branch
+- test-driven-development
+- verification-before-completion
+mcp:
+- test1
+history:
+  enable_compaction: true
+  compaction_context_usage_threshold: 0.75
+  compaction_context_reserve_tokens: 4000
+  compaction_preserve_last_n_messages: 2
+learning:
+  user_profile: true
+  user_memory: true
+  session_context: false
+  entity_memory: false
+  decision_log: false

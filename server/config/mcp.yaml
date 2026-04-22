@@ -1,0 +1,16 @@
+servers:
+- name: test1
+  transport: streamable-http
+  url: http://127.0.0.1:8000/mcp
+  timeout_seconds: 10
+  tools:
+  - io_load_las
+  - io_export_las
+  - classification_ground
+  - classification_vegetation
+  - classification_building
+  - filter_noise
+  - filter_statistical
+  - transform_coords
+  - terrain_dtm
+  - terrain_dsm

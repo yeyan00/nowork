@@ -1,0 +1,77 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+.eggs/
+*.venv/
+venv/
+
+# === Node.js ===
+node_modules/
+
+# === Frontend build output ===
+web/dist/
+
+# === Runtime metadata (generated at startup) ===
+server/runtime/app-runtime.json
+web/public/runtime/app-runtime.json
+
+# === Logs ===
+*.log
+nowork-stdout.log
+nowork-stderr.log
+
+# === Tauri ===
+src-tauri/target/
+src-tauri/gen/
+
+# === Bundled resources (generated at build time) ===
+src-tauri/resources/
+
+# === IDE / Editor ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# === OS ===
+Thumbs.db
+Desktop.ini
+.DS_Store
+._*
+
+server/db
+
+# === Testing ===
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/
+
+# === Env / Secrets ===
+.env
+.env.*
+!.env.example
+
+# === docs ===
+docs
+
+_test_result.txt
+
+.pi
+.worktrees/
+
+task_plan.md
+findings.md
+progress.md
+
+# === Config with secrets (do not commit) ===
+server/config/config.yaml
+server/config/models/*.yaml
+!server/config/models/*.example.yaml

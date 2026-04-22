@@ -1,0 +1,16 @@
+# Provider 示例配置 — 复制为 qwen-coding.yaml 并填入真实 api_key
+# cp qwen-coding.example.yaml qwen-coding.yaml
+provider: openai
+name: qwen-coding-plan
+type: openai_compatible
+base_url: https://coding.dashscope.aliyuncs.com/v1
+api_key: YOUR_API_KEY_HERE
+models:
+  qwen3.6-plus:
+    name: qwen3.6-plus
+    image: true
+    video: false
+  # glm-4.7:
+  #   name: glm-4.7
+  #   image: false
+  #   video: false

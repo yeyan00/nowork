@@ -1,0 +1,22 @@
+workflow:
+  id: pr-workflow-1
+  name: PR Workflow
+  description: Spec -> prototype -> review -> ship
+
+
+database:
+  db_file: db/pr_workflow.db
+  db_id: pr_workflow_db
+
+nodes:
+  - Spec
+  - Prototype
+  - Review
+  - Ship
+
+trigger: Manual launch
+
+outputs:
+  - Spec
+  - UI prototype
+  - QA summary
