@@ -8,6 +8,7 @@
     "build": "tsc && vite build"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.10.1",
     "marked": "^18.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

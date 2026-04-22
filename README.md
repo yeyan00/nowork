@@ -12,6 +12,21 @@ Build your own AI workforce — plan, code, review, debug, and document — all 
 
 ---
 
+## 🤔 Why Nowork?
+
+Command-line AI coding tools are powerful, but the interaction barrier is high. Existing desktop wrappers often feel unstable or inflexible.
+
+Nowork takes a different approach:
+
+- **Desktop-first, not terminal-dependent** — install and run, zero CLI knowledge required
+- **Chat-native** — each agent is a contact. No prompt templates, no workflow editors, just talk
+- **Lightweight & self-contained** — Python runtime bundled, no environment setup for end users
+- **Personal & small-team focused** — not trying to be a platform. Just a quiet, reliable tool that works
+
+The goal is simple: let AI handle the repetitive work, so you have more time for what matters.xiu
+
+---
+
 ## ✨ Highlights
 
 | Feature | Description |

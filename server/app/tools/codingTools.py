@@ -577,9 +577,9 @@ class CodingTools(Toolkit):
         if base_dirs is None:
             self.base_dirs: List[Path] = [Path.cwd().resolve()]
         elif isinstance(base_dirs, (str, Path)):
-            self.base_dirs = [Path(base_dirs).resolve()]
+            self.base_dirs = [Path(base_dirs).expanduser().resolve()]
         elif isinstance(base_dirs, list):
-            self.base_dirs = [Path(d).resolve() for d in base_dirs]
+            self.base_dirs = [Path(d).expanduser().resolve() for d in base_dirs]
         else:
             raise ValueError("base_dirs must be a string, Path, or list of strings/Paths")
         
@@ -659,7 +659,7 @@ class CodingTools(Toolkit):
         paths: list[Path] = []
         raw_list = workspaces if isinstance(workspaces, list) else [workspaces]
         for ws in raw_list:
-            resolved = Path(ws).resolve()
+            resolved = Path(ws).expanduser().resolve()
             if resolved.exists() and resolved.is_dir():
                 paths.append(resolved)
         if paths:

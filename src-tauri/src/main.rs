@@ -7,7 +7,7 @@ use std::process::Child;
 use std::sync::{Arc, Mutex};
 
 use rfd::FileDialog;
-use tauri::RunEvent;
+use tauri::{AppHandle, Manager, RunEvent};
 
 #[tauri::command]
 fn open_attachment_dialog(kind: String, multiple: bool) -> Result<Vec<String>, String> {
@@ -30,13 +30,30 @@ fn open_attachment_dialog(kind: String, multiple: bool) -> Result<Vec<String>, S
         .collect())
 }
 
+/// Read the runtime config file written by the Python backend.
+/// In release mode, the backend writes to resources/runtime/app-runtime.json,
+/// which is not accessible via fetch() from the embedded webview.
+/// The frontend calls this Tauri command to discover the backend URL.
+#[tauri::command]
+fn get_runtime_config(app: AppHandle) -> Result<String, String> {
+    use tauri::path::BaseDirectory;
+
+    let runtime_path = app
+        .path()
+        .resolve("resources/runtime/app-runtime.json", BaseDirectory::Resource)
+        .map_err(|e| format!("Failed to resolve runtime path: {e}"))?;
+
+    std::fs::read_to_string(&runtime_path)
+        .map_err(|e| format!("Failed to read runtime config: {e}"))
+}
+
 fn main() {
     let backend_child: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
     let child_for_setup = Arc::clone(&backend_child);
     let child_for_exit = Arc::clone(&backend_child);
 
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![open_attachment_dialog])
+        .invoke_handler(tauri::generate_handler![open_attachment_dialog, get_runtime_config])
         .setup(move |app| {
             let paths = backend_paths::resolve_paths(&app.handle());
             let child =

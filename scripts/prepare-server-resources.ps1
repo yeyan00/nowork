@@ -21,7 +21,21 @@ New-Item -ItemType Directory -Force -Path $targetRuntime | Out-Null
 
 # Copy server code and resources
 Copy-Item 'server\app' $targetServer -Recurse -Force
-Copy-Item 'server\config' $targetServer -Recurse -Force
+# Copy config but exclude real model provider files (keep only examples)
+$targetConfig = Join-Path $targetServer 'config'
+New-Item -ItemType Directory -Force -Path $targetConfig | Out-Null
+New-Item -ItemType Directory -Force -Path "$targetConfig\models" | Out-Null
+Copy-Item 'server\config\config.yaml' $targetConfig -Force
+Copy-Item 'server\config\mcp.yaml' $targetConfig -Force
+Get-ChildItem 'server\config\models\*.example.yaml' -ErrorAction SilentlyContinue | ForEach-Object {
+  Copy-Item $_.FullName "$targetConfig\models" -Force
+}
+if (Test-Path 'server\config\workers') {
+  Copy-Item 'server\config\workers' "$targetConfig\workers" -Recurse -Force
+}
+if (Test-Path 'server\config\knowledge') {
+  Copy-Item 'server\config\knowledge' "$targetConfig\knowledge" -Recurse -Force
+}
 Copy-Item 'server\skills' $targetServer -Recurse -Force
 Copy-Item 'server\requirements.txt' $targetServer -Force
 

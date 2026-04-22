@@ -1,5 +1,19 @@
 import type { ChatAttachment, ChatMessage, ScheduleRun, ScheduleSummary, SendMessageResult, SessionSummary, ToolCall, WorkerSummary } from '../types';
 
+// Lazy-loaded Tauri invoke — only available when running inside Tauri desktop shell
+let _invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null | undefined;
+
+async function getTauriInvoke(): Promise<typeof _invoke> {
+  if (_invoke !== undefined) return _invoke;
+  try {
+    const tauriApi = await import('@tauri-apps/api/core');
+    _invoke = tauriApi.invoke;
+  } catch {
+    _invoke = null;
+  }
+  return _invoke;
+}
+
 export interface AgentEvent {
   event: string;
   content?: string;
@@ -44,6 +58,20 @@ export async function readRuntimeState(): Promise<RuntimeState | null> {
 
   runtimeStatePromise = (async () => {
     try {
+      // 1. Try Tauri command (release mode: reads from bundled resources)
+      const invoke = await getTauriInvoke();
+      if (invoke) {
+        const jsonStr = await invoke('get_runtime_config', {}) as string;
+        if (jsonStr) {
+          return JSON.parse(jsonStr) as RuntimeState;
+        }
+      }
+    } catch {
+      // Tauri command not available or failed — fall through to fetch
+    }
+
+    try {
+      // 2. Fallback: fetch from Vite dev server (dev mode)
       const response = await fetch('/runtime/app-runtime.json', { cache: 'no-store' });
       if (!response.ok) {
         return null;

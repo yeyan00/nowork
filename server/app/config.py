@@ -180,7 +180,7 @@ def resolve_tools(tools_cfg: list[dict] | None) -> list:
                 base_dirs = tool_kwargs.get('base_dirs')
                 if isinstance(base_dirs, list):
                     for d in base_dirs:
-                        p = Path(d)
+                        p = Path(d).expanduser()
                         if not p.exists():
                             try:
                                 p.mkdir(parents=True, exist_ok=True)
@@ -190,7 +190,7 @@ def resolve_tools(tools_cfg: list[dict] | None) -> list:
                                 from agno.utils.log import log_warning as _lw
                                 _lw(f"Cannot create workspace directory {p}: {mkdir_err}")
                 elif isinstance(base_dirs, str):
-                    p = Path(base_dirs)
+                    p = Path(base_dirs).expanduser()
                     if not p.exists():
                         try:
                             p.mkdir(parents=True, exist_ok=True)
