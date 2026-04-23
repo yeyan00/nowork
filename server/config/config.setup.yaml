@@ -1,0 +1,21 @@
+server:
+  host: 127.0.0.1
+  port: 18080
+  log_dir: runtime/logs
+tools:
+  shell_path: null
+  rg_path: null
+  fd_path: null
+default_model: ''
+models: []
+workers:
+  - code-agent
+  - doc-agent
+  - pr-workflow
+  - implementation-engineer
+  - planning-engineer
+  - architecture-reviewer
+  - code-explorer
+  - documentation-researcher
+  - product-rd-team
+knowledge: []

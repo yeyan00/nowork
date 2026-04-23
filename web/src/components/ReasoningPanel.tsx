@@ -1,13 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 
 export function ReasoningPanel({ content, defaultOpen = false }: { content: string; defaultOpen?: boolean }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(defaultOpen);
+  const contentRef = useRef<HTMLPreElement>(null);
+  const isUserAtBottom = useRef(true);
 
   useEffect(() => {
     setOpen(defaultOpen);
   }, [defaultOpen]);
+
+  const handleScroll = useCallback(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    isUserAtBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+  }, []);
+
+  useEffect(() => {
+    if (!open || !isUserAtBottom.current) return;
+    requestAnimationFrame(() => {
+      if (!contentRef.current || !isUserAtBottom.current) return;
+      contentRef.current.scrollTop = contentRef.current.scrollHeight;
+    });
+  }, [content, open]);
 
   if (!content) return null;
 
@@ -18,7 +34,7 @@ export function ReasoningPanel({ content, defaultOpen = false }: { content: stri
         <span className="panel-title">{t('reasoning.title')}</span>
       </summary>
       <div className="panel-content">
-        <pre className="reasoning-content">{content}</pre>
+        <pre ref={contentRef} className="reasoning-content" onScroll={handleScroll}>{content}</pre>
       </div>
     </details>
   );

@@ -23,7 +23,7 @@ Nowork takes a different approach:
 - **Lightweight & self-contained** — Python runtime bundled, no environment setup for end users
 - **Personal & small-team focused** — not trying to be a platform. Just a quiet, reliable tool that works
 
-The goal is simple: let AI handle the repetitive work, so you have more time for what matters.xiu
+The goal is simple: let AI handle the repetitive work, so you have more time for what matters.
 
 ---
 

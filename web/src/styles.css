@@ -25,14 +25,12 @@ button {
 
 .app-desktop {
   min-height: 100vh;
-  padding: 28px;
-  display: grid;
-  place-items: center;
+  padding: 12px;
 }
 
 .app-window {
-  width: min(1420px, 100%);
-  height: calc(100vh - 56px);
+  width: 100%;
+  height: calc(100vh - 24px);
   display: grid;
   grid-template-columns: 92px 1fr;
   grid-template-rows: 1fr;
@@ -237,6 +235,7 @@ button {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  display: flex;
 }
 
 .worker-panel,
@@ -257,6 +256,206 @@ button {
 .page-frame {
   padding: 18px 22px;
   min-height: 0;
+}
+
+@media (min-width: 1600px) {
+  .worker-panel,
+  .chat-workspace,
+  .page-frame {
+    padding: 22px 28px;
+  }
+
+  .chat-workspace {
+    gap: 16px;
+  }
+
+  .chat-header {
+    align-items: flex-start;
+  }
+
+  .chat-title-block {
+    gap: 6px;
+  }
+
+  .chat-session-tabs {
+    gap: 10px;
+    padding-bottom: 14px;
+  }
+
+  .chat-session-tab {
+    padding: 9px 12px;
+  }
+
+  .message-list {
+    padding-right: 8px;
+  }
+
+  .composer {
+    padding: 14px 16px 16px;
+  }
+
+  .composer textarea {
+    min-height: 110px;
+  }
+
+  .composer-bottom {
+    gap: 16px;
+  }
+
+  .composer-ws-badge {
+    max-width: 220px;
+  }
+
+  .card-grid,
+  .workers-grid {
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  }
+
+  .workers-settings-layout {
+    grid-template-columns: 320px 1fr;
+    gap: 20px;
+  }
+
+  .models-layout {
+    grid-template-columns: 280px 1fr;
+    gap: 20px;
+  }
+
+  .models-form-row {
+    grid-template-columns: minmax(260px, 1.2fr) minmax(220px, 0.8fr);
+  }
+
+  .settings-form {
+    max-width: 560px;
+  }
+
+  .help-sidebar {
+    width: min(720px, 92%);
+  }
+}
+
+@media (min-width: 1920px) {
+  .app-window {
+    grid-template-columns: 96px 1fr;
+  }
+
+  .worker-panel,
+  .chat-workspace,
+  .page-frame {
+    padding: 24px 32px;
+  }
+
+  .chat-layout {
+    gap: 4px;
+  }
+
+  .chat-sidebar {
+    min-width: 320px;
+  }
+
+  .worker-items {
+    gap: 8px;
+  }
+
+  .worker-item {
+    grid-template-columns: 40px 1fr;
+    gap: 12px;
+    padding: 11px 12px;
+  }
+
+  .worker-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .worker-name {
+    font-size: 14px;
+  }
+
+  .worker-summary {
+    font-size: 12px;
+  }
+
+  .message-list {
+    padding-right: 12px;
+  }
+
+  .message-card {
+    max-width: min(920px, 72%);
+  }
+
+  .composer {
+    padding: 16px 18px 18px;
+  }
+
+  .composer textarea {
+    min-height: 124px;
+  }
+
+  .card-grid,
+  .workers-grid {
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  }
+
+  .workers-settings-layout {
+    grid-template-columns: 360px minmax(0, 1fr);
+  }
+
+  .models-layout {
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
+
+  .models-form {
+    display: grid;
+    grid-template-columns: minmax(320px, 0.9fr) minmax(320px, 1.1fr);
+    align-content: start;
+    column-gap: 22px;
+    row-gap: 16px;
+  }
+
+  .models-form > * {
+    min-width: 0;
+  }
+
+  .models-form .models-section-header,
+  .models-form .models-table,
+  .models-form .models-empty {
+    grid-column: 1 / -1;
+  }
+
+  .models-editor-header,
+  .settings-header,
+  .settings-body,
+  .models-form {
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+
+  .settings-body {
+    display: grid;
+    grid-template-columns: minmax(0, 720px);
+    justify-content: start;
+  }
+}
+
+@media (min-width: 2200px) {
+  .worker-panel,
+  .chat-workspace,
+  .page-frame {
+    padding: 28px 36px;
+  }
+
+  .message-card {
+    max-width: min(980px, 68%);
+  }
+
+  .models-layout {
+    grid-template-columns: 340px minmax(0, 1fr);
+  }
+
+  .workers-settings-layout {
+    grid-template-columns: 380px minmax(0, 1fr);
+  }
 }
 
 /* page-frame needs flex column so its children can fill and scroll */
@@ -316,6 +515,7 @@ button {
   overflow-y: auto;
   flex: 1;
   min-height: 0;
+  padding-right: 4px;
 }
 
 .worker-item {
@@ -328,6 +528,11 @@ button {
   border: 1px solid transparent;
   align-items: start;
   text-align: left;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.worker-item:hover {
+  background: rgba(231, 238, 251, 0.55);
 }
 
 .worker-item.active {
@@ -418,6 +623,7 @@ button {
   min-width: 0;
   height: 100%;
   overflow: hidden;
+  flex: 1;
 }
 
 .chat-title-block {
@@ -519,6 +725,8 @@ button {
   align-content: start;
   min-height: 0;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .load-more-sentinel {
@@ -574,7 +782,7 @@ button {
 }
 
 .message-card {
-  max-width: 74%;
+  max-width: min(820px, 78%);
   padding: 16px;
   border-radius: 20px;
   background: #f5f7fb;

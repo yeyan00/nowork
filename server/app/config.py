@@ -77,7 +77,10 @@ def _parse_model_ref(model_ref: str) -> tuple[str, str]:
 
 def get_full_model_config(model_ref: str | None = None, config: dict | None = None) -> dict:
     cfg = config or load_config()
-    ref = model_ref or get_default_model_id(cfg)
+    try:
+        ref = model_ref or get_default_model_id(cfg)
+    except ValueError:
+        return {}
     provider_name, model_id = _parse_model_ref(ref)
     provider_cfg = load_provider_config(provider_name)
     provider_cfg['id'] = model_id
@@ -86,7 +89,14 @@ def get_full_model_config(model_ref: str | None = None, config: dict | None = No
 
 def get_model_capabilities(model_ref: str | None = None, config: dict | None = None) -> dict:
     cfg = config or load_config()
-    ref = model_ref or get_default_model_id(cfg)
+    try:
+        ref = model_ref or get_default_model_id(cfg)
+    except ValueError:
+        return {
+            'image': False,
+            'video': False,
+            'file': True,
+        }
     provider_name, model_id = _parse_model_ref(ref)
     provider_cfg = load_provider_config(provider_name)
     models = provider_cfg.get('models', {}) if isinstance(provider_cfg, dict) else {}

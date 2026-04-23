@@ -301,16 +301,19 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
 
   const isUserAtBottom = useRef(true);
 
-  useEffect(() => {
+  const handleMessageListScroll = useCallback(() => {
     const el = messageListRef.current;
     if (!el) return;
     isUserAtBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-  }, [currentSessionState?.messages]);
+  }, []);
 
   useEffect(() => {
     const el = messageListRef.current;
     if (!el || !isUserAtBottom.current) return;
-    el.scrollTop = el.scrollHeight;
+    requestAnimationFrame(() => {
+      if (!messageListRef.current || !isUserAtBottom.current) return;
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+    });
   }, [currentSessionState?.messages]);
 
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -896,7 +899,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
         )}
       </div>
 
-      <div className="message-list" ref={messageListRef}>
+      <div className="message-list" ref={messageListRef} onScroll={handleMessageListScroll}>
         {currentSessionState?.hasMore && (
           <div ref={sentinelRef} className="load-more-sentinel">
             {currentSessionState.isLoadingMore ? t('chat.loadingMore') : ''}

@@ -185,7 +185,10 @@ def _build_single_knowledge(kb_cfg: dict) -> Any | None:
 
 def _build_model(model_ref: str | None) -> Any | None:
     if not model_ref:
-        model_ref = get_default_model_id()
+        try:
+            model_ref = get_default_model_id()
+        except ValueError:
+            return None
     model_cfg = get_full_model_config(model_ref)
     if not model_cfg:
         return None
@@ -288,7 +291,7 @@ def _build_skills(skill_names: list[str] | None, skills_dir: Path) -> Any | None
 
 
 async def build_agent_os(workers: list[dict[str, Any]], base_app: Any | None = None) -> AgentOS:
-    skills_dir = Path(__file__).resolve().parents[2] / 'skills'
+    skills_dir = Path(__file__).resolve().parents[1] / 'skills'
     agents: list[Agent] = []
     teams: list[Team] = []
 
@@ -398,7 +401,7 @@ async def build_agent_os(workers: list[dict[str, Any]], base_app: Any | None = N
 
 
 async def _build_single_agent(raw: dict[str, Any]) -> Agent | None:
-    skills_dir = Path(__file__).resolve().parents[2] / 'skills'
+    skills_dir = Path(__file__).resolve().parents[1] / 'skills'
     block = _extract_block(raw)
 
     agent_kwargs: dict[str, Any] = {
@@ -449,7 +452,7 @@ async def _build_single_agent(raw: dict[str, Any]) -> Agent | None:
 
 
 async def _build_single_team(raw: dict[str, Any], existing_agents: list[Agent]) -> Team | None:
-    skills_dir = Path(__file__).resolve().parents[2] / 'skills'
+    skills_dir = Path(__file__).resolve().parents[1] / 'skills'
     block = _extract_block(raw)
 
     model = _build_model(raw.get('model'))
