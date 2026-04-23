@@ -24,6 +24,12 @@ export function LogViewer({ onClose }: LogViewerProps) {
       if (result.files.length > 0 && !file) {
         setSelectedFile(result.files[0]);
       }
+      // Scroll to bottom after loading latest
+      requestAnimationFrame(() => {
+        if (contentRef.current) {
+          contentRef.current.scrollTop = contentRef.current.scrollHeight;
+        }
+      });
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
