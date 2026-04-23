@@ -81,6 +81,17 @@ def get_shell_env() -> dict:
     # Ensure critical paths are available
     if "PATH" not in env:
         env["PATH"] = "/usr/local/bin:/usr/bin:/bin"
+    
+    # Inject current Python runtime directories into PATH
+    # so python, pip, pytest etc. are always available in run_shell
+    python_dir = os.path.dirname(sys.executable)
+    extra_dirs = [python_dir]
+    # Windows: pip and other scripts live in Scripts/ subdirectory
+    scripts_dir = os.path.join(python_dir, "Scripts")
+    if os.path.isdir(scripts_dir):
+        extra_dirs.append(scripts_dir)
+    
+    env["PATH"] = os.pathsep.join(extra_dirs) + os.pathsep + env["PATH"]
     return env
 
 
@@ -505,6 +516,37 @@ class CodingTools(Toolkit):
         result = preamble + "\n\n## Tool Usage Guidelines\n\n" + "\n\n".join(sections)
         if best_practices:
             result += "\n\n## Best Practices\n" + "\n".join(best_practices)
+        
+        # Add environment info when run_shell is enabled
+        if "run_shell" in tool_names:
+            shell_cmd, _shell_args = self.tool_config.get_shell_config()
+            platform_name = get_platform()
+            python_path = sys.executable
+            
+            shell_base = Path(shell_cmd).stem.lower()
+            if "powershell" in shell_base or "pwsh" in shell_base:
+                shell_desc = "PowerShell"
+                shell_hint = "Use PowerShell syntax: $env:VAR = 'value', Get-ChildItem, Write-Output, -eq."
+            elif "cmd" in shell_base:
+                shell_desc = "CMD"
+                shell_hint = "Use CMD syntax: set VAR=value, dir, echo. Use & for chaining."
+            elif get_platform() == "windows":
+                shell_desc = f"Bash ({shell_cmd})"
+                shell_hint = "Use Bash syntax: export VAR=value, ls, grep, && for chaining."
+            else:
+                shell_desc = shell_base.capitalize()
+                shell_hint = "Use standard Unix shell syntax: export VAR=value, ls, grep, && for chaining."
+            
+            env_lines = [
+                "## Environment",
+                f"- **OS**: {platform_name}",
+                f"- **Shell**: {shell_desc} (`{shell_cmd}`)",
+                f"- **Python**: `{python_path}` (available in PATH as `python`)",
+                f"- **pip**: available in PATH",
+                f"- {shell_hint}",
+            ]
+            result += "\n\n" + "\n".join(env_lines)
+        
         return result
     
     def __init__(
