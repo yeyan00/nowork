@@ -191,14 +191,35 @@ button {
 .backend-status {
   font-size: 12px;
   color: #62738f;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.backend-status::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #b0b8c8;
+  flex-shrink: 0;
 }
 
 .backend-status.connected {
   color: #1f6b3c;
 }
 
+.backend-status.connected::before {
+  background: #34a853;
+}
+
 .backend-status.failed {
   color: #9a4c2f;
+}
+
+.backend-status.failed::before {
+  background: #d93025;
 }
 
 .chat-layout {

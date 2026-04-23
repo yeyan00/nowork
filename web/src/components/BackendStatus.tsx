@@ -62,8 +62,8 @@ export function BackendStatus() {
   }
 
   if (state.kind === 'failed') {
-    return <div className="backend-status failed">{t('backend.failed', { msg: state.message })}</div>;
+    return <div className="backend-status failed">{t('backend.failed')}</div>;
   }
 
-  return <div className="backend-status connected">{t('backend.connected', { url: state.baseUrl })}</div>;
+  return <div className="backend-status connected">{t('backend.connected')}</div>;
 }
