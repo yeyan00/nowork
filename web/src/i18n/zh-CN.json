@@ -177,7 +177,8 @@
     "unsavedChanges": "有未保存的更改",
     "selectProvider": "选择一个提供商或新增。",
     "fetchFromApi": "从 API 获取",
-    "addModel": "+ 添加模型"
+    "addModel": "+ 添加模型",
+    "default": "默认"
   },
   "mcp": {
     "title": "MCP 服务器",

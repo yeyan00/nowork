@@ -36,6 +36,7 @@ from app.services import (
     list_workers,
     read_skill_file,
     save_mcp_servers,
+    set_default_model,
     stream_message,
     test_mcp_connection,
     update_provider,
@@ -263,6 +264,16 @@ async def api_update_provider(provider_id: str, request: Request):
 @app.delete('/api/providers/{provider_id}')
 def api_delete_provider(provider_id: str):
     return delete_provider(provider_id)
+
+
+@app.put('/api/default-model')
+async def api_set_default_model(request: Request):
+    body = await request.json()
+    model_id = body.get('model', '')
+    if not model_id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail='model is required')
+    return set_default_model(model_id)
 
 
 @app.post('/api/providers/fetch-models')

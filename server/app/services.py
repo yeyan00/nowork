@@ -976,9 +976,11 @@ def delete_skill(skill_name: str) -> dict[str, Any]:
 
 
 def list_models() -> dict[str, Any]:
-    from app.config import get_all_providers
+    from app.config import get_all_providers, load_config
     providers = get_all_providers()
-    return {'providers': providers}
+    cfg = load_config()
+    default_model = cfg.get('default_model', '') or ''
+    return {'providers': providers, 'default_model': default_model}
 
 
 def create_provider(payload: dict[str, Any]) -> dict[str, Any]:
@@ -1002,7 +1004,7 @@ def create_provider(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def update_provider(provider_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-    from app.config import load_provider_config, save_provider_config, _serialize_provider
+    from app.config import load_provider_config, save_provider_config, _serialize_provider, load_config, set_default_model_id
     cfg = load_provider_config(provider_id)
     if not cfg:
         return None
@@ -1028,6 +1030,17 @@ def update_provider(provider_id: str, payload: dict[str, Any]) -> dict[str, Any]
             }
         cfg['models'] = models_cfg
     save_provider_config(provider_id, cfg)
+    # Auto-set default_model if currently empty and this provider has models
+    if 'models' in payload:
+        try:
+            global_cfg = load_config()
+            if not global_cfg.get('default_model'):
+                saved_models = cfg.get('models', {})
+                if isinstance(saved_models, dict) and saved_models:
+                    first_model_id = f"{provider_id}/{next(iter(saved_models))}"
+                    set_default_model_id(first_model_id)
+        except Exception:
+            pass
     reloaded = load_provider_config(provider_id)
     return _serialize_provider(provider_id, reloaded)
 
@@ -1037,6 +1050,12 @@ def delete_provider(provider_id: str) -> dict[str, Any]:
     remove_provider_ref(provider_id)
     deleted = delete_provider_config(provider_id)
     return {'ok': deleted, 'id': provider_id}
+
+
+def set_default_model(model_id: str) -> dict[str, Any]:
+    from app.config import set_default_model_id
+    set_default_model_id(model_id)
+    return {'ok': True, 'default_model': model_id}
 
 
 def fetch_remote_models(base_url: str, api_key: str | None = None) -> list[dict[str, Any]]:

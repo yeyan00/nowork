@@ -68,6 +68,14 @@ def get_default_model_id(config: dict | None = None) -> str:
     return model
 
 
+def set_default_model_id(model_id: str) -> None:
+    config_path = resolve_config_path()
+    cfg = load_config(config_path)
+    cfg['default_model'] = model_id
+    with open(config_path, 'w', encoding='utf-8') as f:
+        yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+
 def _parse_model_ref(model_ref: str) -> tuple[str, str]:
     if '/' in model_ref:
         provider, model_id = model_ref.split('/', 1)

@@ -5,6 +5,7 @@ import {
   deleteProvider,
   fetchRemoteModels,
   listModels,
+  setDefaultModel,
   updateProvider,
 } from '../lib/backend';
 import type { ProviderInfo } from '../lib/backend';
@@ -63,10 +64,12 @@ export function ModelsPage() {
   const [isNew, setIsNew] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [defaultModel, setDefaultModelState] = useState('');
 
   const reload = useCallback(async () => {
     const data = await listModels();
     setProviders(data.providers);
+    setDefaultModelState(data.default_model || '');
   }, []);
 
   useEffect(() => {
@@ -198,6 +201,13 @@ export function ModelsPage() {
     setDirty(true);
   }, []);
 
+  const handleSetDefault = useCallback(async (modelId: string) => {
+    try {
+      const result = await setDefaultModel(modelId);
+      setDefaultModelState(result.default_model);
+    } catch { /* ignore */ }
+  }, []);
+
   return (
     <section className="page-frame">
       <header className="page-header">
@@ -315,14 +325,27 @@ export function ModelsPage() {
 
                 <div className="models-table">
                   <div className="models-table-header">
+                    <span className="col-default">{t('models.default')}</span>
                     <span className="col-id">{t('models.modelId')}</span>
                     <span className="col-name">{t('models.modelName')}</span>
                     <span className="col-vision">{t('models.image')}</span>
                     <span className="col-vision">{t('models.video')}</span>
                     <span className="col-action"></span>
                   </div>
-                  {form.models.map((m, idx) => (
+                  {form.models.map((m, idx) => {
+                    const fullId = form.id && m.localId ? `${form.id}/${m.localId}` : '';
+                    const isDefault = defaultModel === fullId;
+                    return (
                     <div key={idx} className="models-table-row">
+                      <button
+                        type="button"
+                        className={`default-star ${isDefault ? 'active' : ''}`}
+                        title={isDefault ? 'Default model' : 'Set as default'}
+                        disabled={!fullId}
+                        onClick={() => { if (fullId) void handleSetDefault(fullId); }}
+                      >
+                        {isDefault ? '★' : '☆'}
+                      </button>
                       <input
                         className="settings-input col-id"
                         value={m.localId}
@@ -355,7 +378,8 @@ export function ModelsPage() {
                         ✕
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                   {form.models.length === 0 && (
                     <p className="skill-empty">{t('models.noModels')}</p>
                   )}

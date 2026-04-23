@@ -177,7 +177,8 @@
     "unsavedChanges": "Unsaved changes",
     "selectProvider": "Select a provider or add a new one.",
     "fetchFromApi": "Fetch from API",
-    "addModel": "+ Add Model"
+    "addModel": "+ Add Model",
+    "default": "Default"
   },
   "mcp": {
     "title": "MCP Servers",

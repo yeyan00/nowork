@@ -385,10 +385,10 @@ export interface ProviderInfo {
   models: ModelInfo[];
 }
 
-export async function listModels(): Promise<{ providers: ProviderInfo[] }> {
+export async function listModels(): Promise<{ providers: ProviderInfo[]; default_model: string }> {
   const response = await fetchFromApi('/api/models');
   if (!response.ok) throw new Error('Failed to load models');
-  return (await response.json()) as { providers: ProviderInfo[] };
+  return (await response.json()) as { providers: ProviderInfo[]; default_model: string };
 }
 
 export async function createProvider(payload: {
@@ -440,6 +440,15 @@ export async function fetchRemoteModels(
   if (!response.ok) throw new Error('Failed to fetch models');
   const data = (await response.json()) as { models: { id: string; name: string }[] };
   return data.models;
+}
+
+export async function setDefaultModel(modelRef: string): Promise<{ ok: boolean; default_model: string }> {
+  const response = await fetchFromApi('/api/default-model', {
+    method: 'PUT',
+    body: JSON.stringify({ model: modelRef }),
+  });
+  if (!response.ok) throw new Error('Failed to set default model');
+  return (await response.json()) as { ok: boolean; default_model: string };
 }
 
 export interface ToolSubDef {
