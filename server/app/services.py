@@ -1058,6 +1058,45 @@ def set_default_model(model_id: str) -> dict[str, Any]:
     return {'ok': True, 'default_model': model_id}
 
 
+def read_log_file(lines: int = 200, offset: int = 0, file_name: str | None = None) -> dict[str, Any]:
+    from app.config import get_log_dir
+    log_dir = get_log_dir()
+    if not log_dir.exists():
+        return {'lines': [], 'total': 0, 'offset': 0, 'has_more': False, 'files': []}
+
+    # List available log files
+    all_files = sorted(
+        [f.name for f in log_dir.iterdir() if f.is_file() and f.suffix == '.log'],
+        reverse=True,
+    )
+    if not all_files:
+        return {'lines': [], 'total': 0, 'offset': 0, 'has_more': False, 'files': []}
+
+    target = file_name if file_name else all_files[0]
+    log_path = log_dir / target
+    if not log_path.exists():
+        return {'lines': [], 'total': 0, 'offset': 0, 'has_more': False, 'files': all_files}
+
+    # Read file, count total lines
+    with open(log_path, encoding='utf-8', errors='replace') as f:
+        all_lines = f.readlines()
+    total = len(all_lines)
+
+    # offset=0 means latest N lines; offset=200 means 200 lines before that
+    end = total - offset
+    start = max(0, end - lines)
+    has_more = start > 0
+    selected = all_lines[start:end]
+
+    return {
+        'lines': [line.rstrip('\n\r') for line in selected],
+        'total': total,
+        'offset': offset + len(selected),
+        'has_more': has_more,
+        'files': all_files,
+    }
+
+
 def fetch_remote_models(base_url: str, api_key: str | None = None) -> list[dict[str, Any]]:
     import httpx
     headers = {}

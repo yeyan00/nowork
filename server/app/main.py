@@ -49,6 +49,7 @@ from app.services import (
     update_user_memory_content,
     delete_user_memory_content,
     add_user_memory_content,
+    read_log_file,
 )
 
 logger = logging.getLogger('nowork')
@@ -274,6 +275,11 @@ async def api_set_default_model(request: Request):
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail='model is required')
     return set_default_model(model_id)
+
+
+@app.get('/api/logs')
+def api_read_logs(lines: int = 200, offset: int = 0, file: str | None = None):
+    return read_log_file(lines=lines, offset=offset, file_name=file)
 
 
 @app.post('/api/providers/fetch-models')

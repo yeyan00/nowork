@@ -5,12 +5,14 @@
 import { useState } from 'react';
 import { useI18n, LOCALE_OPTIONS } from '../i18n';
 import type { Locale } from '../i18n/types';
+import { LogViewer } from './LogViewer';
 
 export function SettingsPage() {
   const { t, locale, setLocale } = useI18n();
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'upToDate' | 'available' | 'error'>('idle');
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const [showLicense, setShowLicense] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
 
   const appVersion = __APP_VERSION__;
 
@@ -103,7 +105,22 @@ export function SettingsPage() {
             <pre className="settings-license-text">{t('settings.licenseContent')}</pre>
           )}
         </div>
+
+        {/* ── Logs ──────────────────────────────────────────── */}
+        <div className="settings-section form-card">
+          <h2 className="settings-section-title">{t('logs.title')}</h2>
+          <p className="settings-section-desc">{t('logs.hint')}</p>
+          <button
+            type="button"
+            className="soft-button"
+            onClick={() => setShowLogs(true)}
+          >
+            {t('logs.viewLogs')}
+          </button>
+        </div>
       </div>
+
+      {showLogs && <LogViewer onClose={() => setShowLogs(false)} />}
     </section>
   );
 }

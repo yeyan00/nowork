@@ -451,6 +451,24 @@ export async function setDefaultModel(modelRef: string): Promise<{ ok: boolean; 
   return (await response.json()) as { ok: boolean; default_model: string };
 }
 
+export interface LogData {
+  lines: string[];
+  total: number;
+  offset: number;
+  has_more: boolean;
+  files: string[];
+}
+
+export async function fetchLogs(lines = 200, offset = 0, file?: string): Promise<LogData> {
+  const params = new URLSearchParams();
+  params.set('lines', String(lines));
+  params.set('offset', String(offset));
+  if (file) params.set('file', file);
+  const response = await fetchFromApi(`/api/logs?${params.toString()}`);
+  if (!response.ok) throw new Error('Failed to fetch logs');
+  return (await response.json()) as LogData;
+}
+
 export interface ToolSubDef {
   id: string;
   name: string;

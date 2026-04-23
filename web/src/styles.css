@@ -2805,6 +2805,128 @@ button {
   margin: 8px 0 0;
 }
 
+/* ── Log Viewer ─────────────────────────────────────────── */
+
+.log-viewer-card {
+  background: #fff;
+  border-radius: 16px;
+  width: min(820px, 85vw);
+  height: 75vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+.log-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(132, 146, 170, 0.15);
+  flex-shrink: 0;
+}
+
+.log-viewer-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #162033;
+}
+
+.log-viewer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.log-file-select {
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid rgba(132, 146, 170, 0.25);
+  border-radius: 6px;
+  background: #f5f7fb;
+  color: #31415d;
+  outline: none;
+  cursor: pointer;
+}
+
+.log-file-select:focus {
+  border-color: #4c78ff;
+}
+
+.log-viewer-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.log-viewer-content {
+  height: 100%;
+  margin: 0;
+  padding: 12px 16px;
+  background: #1e293b;
+  color: #cbd5e1;
+  font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.log-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-line.log-error {
+  color: #fca5a5;
+}
+
+.log-line.log-warn {
+  color: #fde68a;
+}
+
+.log-line.log-debug {
+  color: #94a3b8;
+}
+
+.log-loading-more {
+  padding: 6px 0;
+  text-align: center;
+  color: #64748b;
+  font-style: italic;
+}
+
+.log-viewer-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #6a7993;
+  font-size: 14px;
+}
+
+.log-viewer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 18px;
+  border-top: 1px solid rgba(132, 146, 170, 0.15);
+  flex-shrink: 0;
+}
+
+.log-viewer-info {
+  font-size: 11px;
+  color: #8494ad;
+}
+
+.log-viewer-loading {
+  font-size: 11px;
+  color: #8494ad;
+}
+
 .secondary-button {
   padding: 6px 16px;
   border: 1px solid rgba(132, 146, 170, 0.25);
