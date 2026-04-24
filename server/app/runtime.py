@@ -317,10 +317,12 @@ async def build_agent_os(workers: list[dict[str, Any]], base_app: Any | None = N
         block = _extract_block(raw)
 
         if worker_type == 'Agent':
+            worker_id = block.get('id', worker.get('id', ''))
             agent_kwargs: dict[str, Any] = {
-                'id': block.get('id', worker.get('id', '')),
+                'id': worker_id,
                 'name': block.get('name', worker.get('name', '')),
                 'description': block.get('description', ''),
+                'user_id': block.get('user_id', worker_id),
             }
 
             instructions = block.get('instructions')

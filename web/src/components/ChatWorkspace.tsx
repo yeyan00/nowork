@@ -32,7 +32,8 @@ function formatSessionTime(timeStr: string, newSessionLabel: string): string {
     }
     if (Number.isNaN(d.getTime())) return newSessionLabel;
     const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const yy = String(d.getFullYear()).slice(-2);
+    return `${yy}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   } catch {
     return newSessionLabel;
   }

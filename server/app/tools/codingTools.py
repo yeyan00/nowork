@@ -410,31 +410,97 @@ class CodingTools(Toolkit):
         )
     """
     
-    DEFAULT_ALLOWED_COMMANDS: List[str] = [
+    # --- Allowed commands per shell type ---
+    # Used when the user does not explicitly pass `allowed_commands`.
+    # Initialized as empty; populated by _get_default_allowed_commands().
+
+    # Git Bash / Unix shell: full Unix toolchain + external dev tools
+    _BASH_COMMANDS: List[str] = [
         # Python
-        "python", "python3", "python3.8", "python3.9", "python3.10", "python3.11", "python3.12",
-        # Testing
-        "pytest", "unittest", "vitest", "jest",
-        # Package management
-        "pip", "pip3", "npm", "npm3",
-        # Basic utilities
-        "cat", "head", "tail", "wc", "ls", "find", "grep", "rg", "fd",
-        # File operations
-        "mkdir", "rm", "mv", "cp", "touch", "echo", "printf",
-        # VCS
-        "git", "hg", "svn",
-        # Text processing
-        "sed", "awk", "tr", "cut", "sort", "uniq", "diff", "patch",
+        "python", "python3", "pip", "pip3", "uv", "poetry", "pipx",
+        "pytest", "unittest", "black", "ruff", "mypy", "pylint", "flake8",
+        # Node.js / Frontend
+        "node", "npm", "npx", "yarn", "pnpm", "bun", "deno",
+        "tsc", "tsx", "eslint", "prettier", "vite", "vitest", "jest",
+        # Rust / Go / Other runtimes
+        "cargo", "rustc", "rustup", "go", "ruby", "java", "dotnet",
         # Build tools
-        "make", "cmake", "cargo", "go", "rustc", "gcc", "clang",
-        # Shell builtins & common utilities
-        "pwd", "cd", "which", "where", "type",
-        "whoami", "hostname", "uname", "date", "env", "printenv",
-        # Shell utilities
-        "curl", "wget", "tar", "zip", "unzip", "gzip",
-        # Cross-platform
-        "node", "npm", "yarn", "ruby", "java",
+        "make", "cmake", "gcc", "g++", "clang", "clang++",
+        # VCS
+        "git", "gh",
+        # Search & text processing
+        "grep", "rg", "fd", "find", "sed", "awk", "tr", "cut",
+        "sort", "uniq", "diff", "patch", "xargs", "wc",
+        # File operations
+        "ls", "cat", "head", "tail", "tee",
+        "mkdir", "rm", "mv", "cp", "touch", "ln",
+        "basename", "dirname", "realpath", "readlink", "file", "stat",
+        # Archives
+        "tar", "zip", "unzip", "gzip", "gunzip",
+        # Network
+        "curl", "wget",
+        # System info
+        "pwd", "which", "whoami", "hostname", "uname", "date",
+        "env", "printenv", "echo", "printf",
+        "ps", "df", "du", "timeout", "kill",
+        # Database clients
+        "sqlite3", "psql", "mysql", "redis-cli",
+        # Docker
+        "docker",
     ]
+
+    # PowerShell: external tools + common cmdlets/aliases
+    _POWERSHELL_COMMANDS: List[str] = [
+        # External dev tools (shared with Bash)
+        "python", "python3", "pip", "pip3", "uv", "poetry",
+        "pytest", "node", "npm", "npx", "yarn", "pnpm", "bun",
+        "tsc", "eslint", "prettier", "vite", "vitest", "jest",
+        "cargo", "rustc", "go", "dotnet", "java",
+        "git", "gh", "docker",
+        "rg", "fd", "sqlite3",
+        "make", "cmake", "gcc", "clang",
+        # PowerShell cmdlets
+        "Get-ChildItem", "Get-Content", "Get-Item", "Get-Location",
+        "Set-Location", "Select-String", "Write-Output", "Write-Host",
+        "Test-Path", "Copy-Item", "Move-Item", "Remove-Item",
+        "New-Item", "Get-Process", "Get-Service",
+        # PowerShell aliases (commonly used by models)
+        "ls", "cat", "pwd", "echo", "rm", "cp", "mv", "mkdir",
+        "dir", "type", "cls", "clear", "sort", "tee", "curl",
+    ]
+
+    # CMD: external tools + CMD builtins
+    _CMD_COMMANDS: List[str] = [
+        # External dev tools (shared)
+        "python", "python3", "pip", "pip3", "uv",
+        "pytest", "node", "npm", "npx", "yarn", "pnpm",
+        "git", "gh", "docker",
+        "cargo", "rustc", "dotnet",
+        "rg", "fd", "sqlite3",
+        "make", "cmake", "gcc", "clang",
+        # CMD builtins
+        "dir", "type", "echo", "del", "copy", "move", "mkdir", "rmdir",
+        "cls", "set", "findstr", "where", "path",
+        "tasklist", "taskkill", "systeminfo", "hostname", "date", "time",
+    ]
+
+    DEFAULT_ALLOWED_COMMANDS: List[str] = []  # placeholder; resolved dynamically
+
+    @classmethod
+    def _get_default_allowed_commands(cls, tool_config: "ToolConfig") -> List[str]:
+        """Select allowed commands based on the detected shell type."""
+        shell_cmd, _ = tool_config.get_shell_config()
+        shell_base = Path(shell_cmd).stem.lower()
+        # IMPORTANT: check PowerShell/CMD BEFORE generic "sh",
+        # because "powershell" contains "sh"
+        if "powershell" in shell_base or "pwsh" in shell_base:
+            return cls._POWERSHELL_COMMANDS
+        elif "cmd" in shell_base:
+            return cls._CMD_COMMANDS
+        elif "bash" in shell_base or "sh" in shell_base or "zsh" in shell_base:
+            return cls._BASH_COMMANDS
+        else:
+            return list(set(cls._BASH_COMMANDS + cls._POWERSHELL_COMMANDS + cls._CMD_COMMANDS))
     
     _TOOL_INSTRUCTIONS = {
         "read_file": dedent("""\
@@ -592,9 +658,9 @@ class CodingTools(Toolkit):
         enable_edit_file: bool = True,
         enable_write_file: bool = True,
         enable_run_shell: bool = True,
-        enable_grep: bool = False,
-        enable_find: bool = False,
-        enable_ls: bool = False,
+        enable_grep: bool = True,
+        enable_find: bool = True,
+        enable_ls: bool = True,
         instructions: Optional[str] = None,
         add_instructions: bool = True,
         all: bool = False,
@@ -621,9 +687,9 @@ class CodingTools(Toolkit):
             enable_edit_file: Enable the edit_file tool.
             enable_write_file: Enable the write_file tool.
             enable_run_shell: Enable the run_shell tool.
-            enable_grep: Enable the grep tool (disabled by default).
-            enable_find: Enable the find tool (disabled by default).
-            enable_ls: Enable the ls tool (disabled by default).
+            enable_grep: Enable the grep tool (enabled by default, uses rg if available).
+            enable_find: Enable the find tool (enabled by default, uses fd if available).
+            enable_ls: Enable the ls tool (enabled by default).
             instructions: Custom instructions for the LLM.
             add_instructions: Whether to add instructions to system message.
             all: Enable all tools regardless of individual flags.
@@ -672,17 +738,16 @@ class CodingTools(Toolkit):
         
         self.restrict_to_base_dirs = restrict_to_base_dirs
         self.allow_shell_operators = allow_shell_operators
+        # Tool configuration (must be resolved before allowed_commands)
+        self.tool_config = self._normalize_tool_config(tool_config)
         self.allowed_commands: Optional[List[str]] = (
-            allowed_commands if allowed_commands is not None else self.DEFAULT_ALLOWED_COMMANDS
+            allowed_commands if allowed_commands is not None else self._get_default_allowed_commands(self.tool_config)
         )
         self.max_lines = max_lines
         self.max_bytes = max_bytes
         self.shell_timeout = shell_timeout
         self._temp_files: List[str] = []
         self._session_workspaces: Dict[str, Union[Path, List[Path]]] = {}
-        
-        # Tool configuration
-        self.tool_config = self._normalize_tool_config(tool_config)
         
         self.file_ops: FileOperations = file_operations or LocalFileOperations()
         self.shell_ops: ShellOperations = shell_operations or LocalShellOperations(self.tool_config)
