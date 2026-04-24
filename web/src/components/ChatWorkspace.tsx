@@ -646,12 +646,14 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           }));
         }
 
-        // Live token tracking: accumulate on each ModelRequestCompleted
+        // Live token tracking: overwrite with latest ModelRequestCompleted
+        // input_tokens is the full context size (not incremental), so last = peak
+        // output_tokens is per-call, but we show latest for simplicity
         if (eventType === 'ModelRequestCompleted') {
           const m = event.metrics;
           if (m) {
-            liveInput += m.input_tokens ?? 0;
-            liveOutput += m.output_tokens ?? 0;
+            liveInput = m.input_tokens ?? 0;
+            liveOutput = m.output_tokens ?? 0;
             updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
               ...sessionState,
               liveTokenUsage: { input: liveInput, output: liveOutput },
@@ -984,12 +986,14 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                   return null;
                 }
 
-                // Cumulative tokens: sum all worker messages in this group
+                // Cumulative tokens across worker group
+                // input: max across group = peak context size (each call sends full history)
+                // output: sum across group = total tokens generated
                 let groupInput = 0;
                 let groupOutput = 0;
                 for (let i = index; i >= 0; i--) {
                   if (messages[i].role !== 'worker') break;
-                  groupInput += messages[i].tokenInput ?? 0;
+                  groupInput = Math.max(groupInput, messages[i].tokenInput ?? 0);
                   groupOutput += messages[i].tokenOutput ?? 0;
                 }
                 if (groupInput > 0 || groupOutput > 0) {
