@@ -1,6 +1,8 @@
 # LiDAR360 Agent Service Requirements
 
-# Core framework
+# Core framework — currently using a forked version of Agno with custom patches
+# See: https://github.com/yeyan00/agno
+# Install: pip install git+https://github.com/yeyan00/agno.git
 agno>=0.1.0
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0

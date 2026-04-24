@@ -82,6 +82,20 @@ Nowork 的思路不同：
 
 > *即将更新 —— 设计文档见 [docs/](docs/)。*
 
+## ⚠️ Agno 依赖说明
+
+Nowork 核心依赖 [Agno](https://github.com/agno-agi/agno) 作为 Agent 框架。由于部分自定义修改尚未合入上游，目前使用 fork 版本：
+
+**https://github.com/yeyan00/agno**
+
+安装方式：
+
+```bash
+pip install git+https://github.com/yeyan00/agno.git
+```
+
+> 待上游合入相关改动或不再需要这些补丁后，会切回官方版本。
+
 ## 🚀 快速开始
 
 ### 1. 配置模型供应商

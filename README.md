@@ -82,6 +82,20 @@ The goal is simple: let AI handle the repetitive work, so you have more time for
 
 > *Coming soon — see [docs/](docs/) for design documents.*
 
+## ⚠️ Agno Dependency
+
+Nowork depends on [Agno](https://github.com/agno-agi/agno) as its core agent framework. Due to custom patches and feature adjustments not yet upstreamed, the project currently uses a forked version:
+
+**https://github.com/yeyan00/agno**
+
+Install it via:
+
+```bash
+pip install git+https://github.com/yeyan00/agno.git
+```
+
+> Once the upstream changes are merged or the patches are no longer needed, we will switch back to the official release.
+
 ## 🚀 Quick Start
 
 ### 1. Model Provider
