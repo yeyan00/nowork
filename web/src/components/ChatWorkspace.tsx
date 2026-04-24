@@ -967,7 +967,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                 ? <div className="message-body"><MarkdownContent content={message.content} /></div>
                 : <div className="message-body">{message.content}</div>}
               {message.role === 'worker' && (() => {
-                // Last worker message in a consecutive group
+                // Last worker message in a consecutive group → show cumulative tokens
                 const isLastInGroup = index === messages.length - 1 || messages[index + 1]?.role !== 'worker';
                 if (!isLastInGroup) return null;
 
@@ -985,12 +985,19 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                   return null;
                 }
 
-                // Final tokens after completion
-                if (message.tokenInput || message.tokenOutput) {
+                // Cumulative tokens: sum all worker messages in this group
+                let groupInput = 0;
+                let groupOutput = 0;
+                for (let i = index; i >= 0; i--) {
+                  if (messages[i].role !== 'worker') break;
+                  groupInput += messages[i].tokenInput ?? 0;
+                  groupOutput += messages[i].tokenOutput ?? 0;
+                }
+                if (groupInput > 0 || groupOutput > 0) {
                   return (
                     <div className="message-metrics">
                       <svg className="message-metrics-icon" viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M3 12h2v-4H3v4zm4 0h2V6H7v6zm4 0h2V3h-2v9zM2 14h12V2H2v12z"/></svg>
-                      <span>Tokens: {(message.tokenInput ?? 0).toLocaleString()} / {(message.tokenOutput ?? 0).toLocaleString()}</span>
+                      <span>Tokens: {groupInput.toLocaleString()} / {groupOutput.toLocaleString()}</span>
                     </div>
                   );
                 }
