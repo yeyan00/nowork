@@ -1,0 +1,16 @@
+# Server runtime dependencies for packaging
+# Format: package-name or package-name[extra1,extra2]
+#
+# The resolve-packages.py script reads this file and generates
+# package-allowlist.txt with the full transitive dependency tree.
+
+# --- Core framework ---
+agno[openai,mcp,milvusdb,sqlite]
+fastapi
+uvicorn
+
+# --- Note: extras used by the server ---
+# agno[openai]    → OpenAI-like model provider
+# agno[mcp]       → MCP tool protocol
+# agno[milvusdb]  → Milvus vector DB for knowledge
+# agno[sqlite]    → SQLite session storage via SQLAlchemy

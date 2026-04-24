@@ -793,31 +793,49 @@ def _get_skills_dir() -> Path:
     return Path(__file__).resolve().parents[1] / 'skills'
 
 
+def _load_skills_metadata() -> list[dict[str, Any]]:
+    """Load skill metadata using SkillToolkit's frontmatter parser.
+
+    Returns a list of dicts suitable for the web API, without depending
+    on the old agno.skills.agent_skills / LocalSkills loader.
+    """
+    from agno.tools.skill_toolkit import _discover_skills
+
+    skills_dir = _get_skills_dir()
+    if not skills_dir.exists():
+        return []
+
+    skills = _discover_skills(skills_dir)
+    result = []
+    for s in skills:
+        # Build file listing from skill_dir
+        skill_dir = Path(s.skill_dir)
+        files: list[dict[str, Any]] = []
+        for fpath in sorted(skill_dir.rglob('*')):
+            if not fpath.is_file() or fpath.name.startswith('.'):
+                continue
+            rel = fpath.relative_to(skill_dir)
+            files.append({'name': str(rel).replace('\\', '/'), 'size': fpath.stat().st_size})
+
+        result.append({
+            'name': s.name,
+            'description': s.description,
+            'sourcePath': s.skill_dir,
+            'scripts': [],
+            'references': [],
+            'instructions': '',  # Progressive disclosure: not pre-loaded
+            '_files': files,
+        })
+    return result
+
+
 def list_skills() -> list[dict[str, Any]]:
     global _skills_cache
     if _skills_cache is not None:
         return _skills_cache
 
-    skills_dir = _get_skills_dir()
-    if not skills_dir.exists():
-        _skills_cache = []
-        return _skills_cache
-
-    from agno.skills.loaders.local import LocalSkills
     try:
-        loader = LocalSkills(str(skills_dir), validate=False)
-        skills = loader.load()
-        _skills_cache = [
-            {
-                'name': s.name,
-                'description': s.description,
-                'sourcePath': s.source_path,
-                'scripts': s.scripts,
-                'references': s.references,
-                'instructions': s.instructions,
-            }
-            for s in skills
-        ]
+        _skills_cache = _load_skills_metadata()
     except Exception as e:
         logger.warning('Failed to load skills: %s', e)
         _skills_cache = []
@@ -838,22 +856,18 @@ def read_skill_file(skill_name: str, file_path: str) -> str | None:
 
     skill_dir = Path(skill['sourcePath'])
 
-    if file_path == 'SKILL.md':
-        target = skill_dir / 'SKILL.md'
-    elif file_path.startswith('scripts/') or file_path.startswith('references/'):
-        target = skill_dir / file_path
-    else:
+    # Resolve the requested file within skill_dir
+    target = (skill_dir / file_path).resolve()
+
+    # Security: prevent path traversal outside skill_dir
+    if not str(target).startswith(str(skill_dir.resolve())):
         return None
 
-    resolved = target.resolve()
-    if not str(resolved).startswith(str(skill_dir.resolve())):
-        return None
-
-    if not resolved.exists() or not resolved.is_file():
+    if not target.exists() or not target.is_file():
         return None
 
     try:
-        return resolved.read_text(encoding='utf-8')
+        return target.read_text(encoding='utf-8')
     except Exception:
         return None
 
@@ -862,6 +876,11 @@ def list_skill_files(skill_name: str) -> list[dict[str, Any]] | None:
     skill = get_skill(skill_name)
     if skill is None:
         return None
+    # Use cached file listing from _load_skills_metadata if available
+    cached = skill.get('_files')
+    if cached is not None:
+        return cached
+    # Fallback: scan on demand
     skill_dir = Path(skill['sourcePath'])
     result: list[dict[str, Any]] = []
     for fpath in sorted(skill_dir.rglob('*')):

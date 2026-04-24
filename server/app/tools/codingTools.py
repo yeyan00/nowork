@@ -46,18 +46,24 @@ def get_platform() -> str:
 
 
 def _find_git_bash() -> Optional[str]:
+    # Priority 1: well-known Git Bash install locations
     candidates = [
         Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "bash.exe",
         Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Git" / "bin" / "bash.exe",
         Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Git" / "bin" / "bash.exe",
         Path(os.environ.get("ProgramW6432", r"C:\Program Files")) / "Git" / "bin" / "bash.exe",
     ]
-    shutil_bash = shutil.which("bash")
-    if shutil_bash:
-        candidates.insert(0, Path(shutil_bash))
     for c in candidates:
         if c.exists():
             return str(c)
+
+    # Priority 2: shutil.which("bash") — but skip WSL's System32\bash.exe
+    shutil_bash = shutil.which("bash")
+    if shutil_bash:
+        lower = shutil_bash.lower()
+        if "system32" not in lower and "windowsapps" not in lower:
+            return shutil_bash
+
     return None
 
 
@@ -421,6 +427,9 @@ class CodingTools(Toolkit):
         "sed", "awk", "tr", "cut", "sort", "uniq", "diff", "patch",
         # Build tools
         "make", "cmake", "cargo", "go", "rustc", "gcc", "clang",
+        # Shell builtins & common utilities
+        "pwd", "cd", "which", "where", "type",
+        "whoami", "hostname", "uname", "date", "env", "printenv",
         # Shell utilities
         "curl", "wget", "tar", "zip", "unzip", "gzip",
         # Cross-platform
@@ -482,16 +491,37 @@ class CodingTools(Toolkit):
             "With these tools, you can perform any coding task including reading code, making edits,\n"
             "creating files, running tests, using git, installing packages, and searching codebases."
         )
-        
+
+        # Inform the LLM about available workspace directories
+        if self.base_dirs:
+            dir_lines = []
+            for d in self.base_dirs:
+                perm = self.workspace_permissions.get(str(d), 'read-write')
+                dir_lines.append(f"  - {d} ({perm})")
+            dir_list = "\n".join(dir_lines)
+            preamble += (
+                f"\n\n## Workspace Directories\n"
+                f"Your workspace directories (use these as base paths for all file operations):\n"
+                f"{dir_list}\n"
+                f"Directories marked 'read-only' must not be modified."
+            )
+
         # Build sections, dynamically adjusting run_shell instructions based on operator restrictions
         sections = []
         for name in tool_names:
             if name not in self._TOOL_INSTRUCTIONS:
                 continue
             if name == "run_shell":
+                # Build allowed commands hint for the model
+                allowed_hint = ""
+                if self.allowed_commands is not None:
+                    allowed_hint = (
+                        f"\n- Only the following commands are allowed: "
+                        f"{', '.join(sorted(self.allowed_commands))}."
+                        f"\n  Do NOT use commands outside this list."
+                    )
                 if self.allow_shell_operators:
-                    # Operators allowed — use default instruction, no restrictions mentioned
-                    sections.append(self._TOOL_INSTRUCTIONS[name])
+                    sections.append(self._TOOL_INSTRUCTIONS[name] + allowed_hint)
                 else:
                     # Operators blocked — instruct model to avoid them, reducing rejected commands
                     sections.append(dedent("""\
@@ -501,7 +531,7 @@ class CodingTools(Toolkit):
                         - Commands run from the base directory.
                         - Output is truncated if too long; the full output is saved to a temp file.
                         - IMPORTANT: Shell chaining operators (&&, ||, ;, |, >, >>, <, &, $(), `) are NOT allowed.
-                          Run each command as a separate run_shell call. Do not pipe, redirect, or chain commands."""))
+                          Run each command as a separate run_shell call. Do not pipe, redirect, or chain commands.""") + allowed_hint)
             else:
                 sections.append(self._TOOL_INSTRUCTIONS[name])
         
@@ -552,6 +582,7 @@ class CodingTools(Toolkit):
     def __init__(
         self,
         base_dirs: Optional[Union[str, Path, List[Union[str, Path]]]] = None,
+        workspace_permissions: Optional[Dict[str, str]] = None,
         restrict_to_base_dirs: bool = True,
         allow_shell_operators: bool = True,
         max_lines: int = 2000,
@@ -631,6 +662,13 @@ class CodingTools(Toolkit):
                 raise ValueError(f"Directory does not exist: {base_dir}")
             if not base_dir.is_dir():
                 raise ValueError(f"Not a directory: {base_dir}")
+        
+        # Store workspace permission mapping: resolved_path -> 'read-only' | 'read-write'
+        self.workspace_permissions: Dict[str, str] = {}
+        if workspace_permissions:
+            for raw_path, perm in workspace_permissions.items():
+                resolved = str(Path(raw_path).expanduser().resolve())
+                self.workspace_permissions[resolved] = perm
         
         self.restrict_to_base_dirs = restrict_to_base_dirs
         self.allow_shell_operators = allow_shell_operators

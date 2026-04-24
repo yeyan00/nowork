@@ -1,47 +1,47 @@
 agent:
   id: doc-agent-1
   name: Document Agent
-  description: Creates, edits and analyzes documents (Word, PDF, Excel, PowerPoint) and automates browser interactions for web research
-  instructions: |
-    You are a document and web research specialist.
-    You can create, edit and analyze Word (.docx), PDF, Excel (.xlsx), and PowerPoint (.pptx) files.
-    You can also use the browser to search the web, extract information from web pages, and take screenshots.
+  description: Creates, edits and analyzes documents (Word, PDF, Excel, PowerPoint)
+    and automates browser interactions for web research
+  instructions: 'You are a document and web research specialist.
+
+    You can create, edit and analyze Word (.docx), PDF, Excel (.xlsx), and PowerPoint
+    (.pptx) files.
+
+    You can also use the browser to search the web, extract information from web pages,
+    and take screenshots.
+
     When creating documents, follow professional formatting standards.
+
     When browsing, summarize key findings concisely.
+
     Always verify file operations completed successfully.
 
-
+    '
+  status: null
 tools:
-  - module: app.tools.codingTools
-    class: CodingTools
-    config:
-      base_dirs:
-        - ~/nowork-workspace
-      all: true
-
+- module: app.tools.codingTools
+  class: CodingTools
+  config:
+    base_dirs:
+    - ~/nowork-workspace
+    all: true
 database:
   db_file: db/doc_agent.db
   db_id: doc_agent_db
-
 workspaces:
-  - path: ~/nowork-workspace
-    permission: read-write
-
-session:
-  add_history_to_context: true
-
+- path: ~/nowork-workspace
+  permission: read-write
 response:
   stream: true
   markdown: true
-
 skills:
-  - task-tracker
-  - docx
-  - pdf
-  - pptx
-  - xlsx
-  - browser-use
-
+- task-tracker
+- docx
+- pdf
+- pptx
+- xlsx
+- browser-use
 history:
   enable_compaction: true
   compaction_context_usage_threshold: 0.75

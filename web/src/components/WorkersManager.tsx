@@ -25,7 +25,11 @@ const tabI18nKeys: Record<WorkerTab, string> = {
   Workflows: 'workers.workflows',
 };
 
-export function WorkersManager() {
+interface WorkersManagerProps {
+  onWorkerUpdate?: (worker: WorkerSummary) => void;
+}
+
+export function WorkersManager({ onWorkerUpdate }: WorkersManagerProps) {
   const { t } = useI18n();
   const [tab, setTab] = useState<WorkerTab>('Agents');
   const [workers, setWorkers] = useState<WorkerSummary[]>([]);
@@ -112,6 +116,7 @@ export function WorkersManager() {
                   setWorkers((current) =>
                     current.map((item) => (item.id === saved.id ? saved : item)),
                   );
+                  onWorkerUpdate?.(saved);
                 }}
               />
             </div>

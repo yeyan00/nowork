@@ -70,8 +70,9 @@ _test_result.txt
 task_plan.md
 findings.md
 progress.md
+tests
 
 # === Config with secrets (do not commit) ===
 server/config/config.yaml
 server/config/models/*.yaml
-!server/config/models/*.example.yaml
+!server/config/models/*.example.yamlnul

@@ -63,8 +63,6 @@ workspaces:
     permission: read-write
     permission: read
 
-session:
-  add_history_to_context: true
 
 history:
   enable_compaction: true

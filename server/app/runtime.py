@@ -11,6 +11,18 @@ from app.config import get_full_model_config, get_default_model_id, resolve_tool
 from app.repository import _detect_type, _merge_history, _merge_learning
 
 
+def _extract_workspace_permissions(raw: dict[str, Any]) -> dict[str, str] | None:
+    """Build {path: permission} from raw config's workspaces field."""
+    ws_list = raw.get('workspaces') or raw.get('team_workspaces') or []
+    if not isinstance(ws_list, list) or not ws_list:
+        return None
+    perms: dict[str, str] = {}
+    for ws in ws_list:
+        if isinstance(ws, dict) and ws.get('path'):
+            perms[ws['path']] = ws.get('permission', 'read-write')
+    return perms or None
+
+
 def _apply_history(agent_kwargs: dict, history: dict) -> None:
     """Apply history/compaction settings to agent or team kwargs."""
     if history.get('enable_compaction'):
@@ -269,23 +281,27 @@ def _extract_block(raw: dict) -> dict:
     return block
 
 
-def _build_skills(skill_names: list[str] | None, skills_dir: Path) -> Any | None:
+def _build_skill_toolkit(skill_names: list[str] | None, skills_dir: Path) -> Any | None:
+    """Build a SkillToolkit that injects skill descriptions into the system prompt.
+
+    Uses the Pi-style progressive disclosure model: only name + description
+    are injected into the prompt.  The agent reads full SKILL.md content
+    on-demand via its existing CodingTools (read_file / run_shell).
+
+    Returns None if no skills are requested or none match.
+    """
     if not skill_names:
         return None
     try:
-        from agno.skills.agent_skills import Skills
-        from agno.skills.loaders.local import LocalSkills
-        loader = LocalSkills(str(skills_dir), validate=False)
-        all_skills = Skills(loaders=[loader])
-        matched = [all_skills.get_skill(n) for n in skill_names]
-        matched = [s for s in matched if s is not None]
-        if not matched:
+        from agno.tools.skill_toolkit import SkillToolkit
+        tk = SkillToolkit(dirs=[skills_dir])
+        # Filter to only requested skills
+        tk._skills = {n: s for n, s in tk._skills.items() if n in skill_names}
+        # Rebuild instructions with the filtered set
+        tk.instructions = tk._build_instructions()
+        if not tk._skills:
             return None
-        from agno.skills.agent_skills import Skills as SkillsCls
-        filtered = SkillsCls.__new__(SkillsCls)
-        filtered.loaders = [loader]
-        filtered._skills = {s.name: s for s in matched}
-        return filtered
+        return tk
     except Exception:
         return None
 
@@ -315,7 +331,7 @@ async def build_agent_os(workers: list[dict[str, Any]], base_app: Any | None = N
             if model:
                 agent_kwargs['model'] = model
 
-            tools = resolve_tools(raw.get('tools'))
+            tools = resolve_tools(raw.get('tools'), _extract_workspace_permissions(raw))
             if tools:
                 agent_kwargs['tools'] = tools
 
@@ -328,9 +344,11 @@ async def build_agent_os(workers: list[dict[str, Any]], base_app: Any | None = N
             if db:
                 agent_kwargs['db'] = db
 
-            skills = _build_skills(raw.get('skills'), skills_dir)
-            if skills:
-                agent_kwargs['skills'] = skills
+            skill_tk = _build_skill_toolkit(raw.get('skills'), skills_dir)
+            if skill_tk:
+                agent_kwargs['tools'] = agent_kwargs.get('tools') or []
+                if isinstance(agent_kwargs['tools'], list):
+                    agent_kwargs['tools'].append(skill_tk)
 
             history = _merge_history(raw)
             _apply_history(agent_kwargs, history)
@@ -378,9 +396,11 @@ async def build_agent_os(workers: list[dict[str, Any]], base_app: Any | None = N
             if db:
                 team_kwargs['db'] = db
 
-            skills = _build_skills(raw.get('skills'), skills_dir)
-            if skills:
-                team_kwargs['skills'] = skills
+            skill_tk = _build_skill_toolkit(raw.get('skills'), skills_dir)
+            if skill_tk:
+                team_kwargs['tools'] = team_kwargs.get('tools') or []
+                if isinstance(team_kwargs['tools'], list):
+                    team_kwargs['tools'].append(skill_tk)
 
             history = _merge_history(raw)
             _apply_history(team_kwargs, history)
@@ -418,7 +438,7 @@ async def _build_single_agent(raw: dict[str, Any]) -> Agent | None:
     if model:
         agent_kwargs['model'] = model
 
-    tools = resolve_tools(raw.get('tools'))
+    tools = resolve_tools(raw.get('tools'), _extract_workspace_permissions(raw))
     if tools:
         agent_kwargs['tools'] = tools
 
@@ -431,9 +451,11 @@ async def _build_single_agent(raw: dict[str, Any]) -> Agent | None:
     if db:
         agent_kwargs['db'] = db
 
-    skills = _build_skills(raw.get('skills'), skills_dir)
-    if skills:
-        agent_kwargs['skills'] = skills
+    skill_tk = _build_skill_toolkit(raw.get('skills'), skills_dir)
+    if skill_tk:
+        agent_kwargs['tools'] = agent_kwargs.get('tools') or []
+        if isinstance(agent_kwargs['tools'], list):
+            agent_kwargs['tools'].append(skill_tk)
 
     history = _merge_history(raw)
     _apply_history(agent_kwargs, history)
@@ -485,9 +507,11 @@ async def _build_single_team(raw: dict[str, Any], existing_agents: list[Agent]) 
     if db:
         team_kwargs['db'] = db
 
-    skills = _build_skills(raw.get('skills'), skills_dir)
-    if skills:
-        team_kwargs['skills'] = skills
+    skill_tk = _build_skill_toolkit(raw.get('skills'), skills_dir)
+    if skill_tk:
+        team_kwargs['tools'] = team_kwargs.get('tools') or []
+        if isinstance(team_kwargs['tools'], list):
+            team_kwargs['tools'].append(skill_tk)
 
     history = _merge_history(raw)
     _apply_history(team_kwargs, history)

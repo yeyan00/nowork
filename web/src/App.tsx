@@ -42,7 +42,9 @@ export default function App() {
           const nextWorkers = await listWorkers();
           if (!cancelled) {
             setWorkers(nextWorkers);
-            setActiveWorkerId(nextWorkers[0]?.id ?? null);
+            if (activePage === 'Chat') {
+              setActiveWorkerId(nextWorkers[0]?.id ?? null);
+            }
           }
           return;
         } catch {
@@ -63,6 +65,18 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  // Re-fetch workers when switching back to Chat page
+  useEffect(() => {
+    if (activePage === 'Chat') {
+      void listWorkers().then((w) => {
+        setWorkers(w);
+        if (w.length > 0 && !w.find((ww) => ww.id === activeWorkerId)) {
+          setActiveWorkerId(w[0].id);
+        }
+      }).catch(() => {});
+    }
+  }, [activePage]);
 
   const handleDividerDown = useCallback((e: React.PointerEvent) => {
     dragging.current = true;
@@ -122,7 +136,9 @@ export default function App() {
       </div>
     );
   } else if (activePage === 'Workers') {
-    content = <WorkersManager />;
+    content = <WorkersManager onWorkerUpdate={(updated) => {
+      setWorkers((current) => current.map((w) => w.id === updated.id ? updated : w));
+    }} />;
   } else if (activePage === 'Schedules') {
     content = <SchedulesPage onOpenChatSession={openChatSession} />;
   } else if (activePage === 'Skills') {

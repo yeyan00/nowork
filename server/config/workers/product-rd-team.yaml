@@ -124,8 +124,6 @@ skills:
   - writing-plans
   - code-review
 
-session:
-  add_history_to_context: true
 
 history:
   enable_compaction: true

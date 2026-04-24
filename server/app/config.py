@@ -174,7 +174,7 @@ def _get_global_tools_config() -> dict:
     return cfg.get('tools', {})
 
 
-def resolve_tools(tools_cfg: list[dict] | None) -> list:
+def resolve_tools(tools_cfg: list[dict] | None, workspace_permissions: dict[str, str] | None = None) -> list:
     global_tools = _get_global_tools_config()
     shell_path = global_tools.get('shell_path')
     rg_path = global_tools.get('rg_path')
@@ -217,6 +217,9 @@ def resolve_tools(tools_cfg: list[dict] | None) -> list:
                         except Exception as mkdir_err:
                             from agno.utils.log import log_warning as _lw
                             _lw(f"Cannot create workspace directory {p}: {mkdir_err}")
+                # Pass workspace permissions to CodingTools
+                if workspace_permissions:
+                    tool_kwargs['workspace_permissions'] = workspace_permissions
                 if has_global:
                     tc = tool_kwargs.get('tool_config', {})
                     if isinstance(tc, dict):

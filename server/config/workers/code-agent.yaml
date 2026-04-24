@@ -23,8 +23,6 @@ database:
 workspaces:
 - path: ~/nowork-workspace
   permission: read-write
-session:
-  add_history_to_context: true
 response:
   stream: true
   markdown: true
