@@ -44,6 +44,7 @@ function createSessionState(sessionId: string): CachedSessionState {
     messages: [],
     draft: '',
     tokenUsage: { input: 0, output: 0, total: 0, duration: 0 },
+    liveTokenUsage: null,
     isLoading: false,
     isLoadingMore: false,
     hasMore: false,
@@ -73,6 +74,7 @@ function cloneWorkerState(workerState: CachedWorkerState): CachedWorkerState {
           ...sessionState,
           messages: cloneMessages(sessionState.messages),
           tokenUsage: { ...sessionState.tokenUsage },
+          liveTokenUsage: sessionState.liveTokenUsage ? { ...sessionState.liveTokenUsage } : null,
         },
       ]),
     ),
@@ -163,6 +165,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
             ...workerState.sessionStates[sessionId],
             messages: cloneMessages(workerState.sessionStates[sessionId].messages),
             tokenUsage: { ...workerState.sessionStates[sessionId].tokenUsage },
+            liveTokenUsage: workerState.sessionStates[sessionId].liveTokenUsage ? { ...workerState.sessionStates[sessionId].liveTokenUsage } : null,
           }
         : createSessionState(sessionId);
       workerState.sessionStates = {
@@ -629,6 +632,8 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
       let accumulatedReasoning = '';
       let accumulatedTools: ToolCall[] = [];
       let accumulatedSenderName = '';
+      let liveInput = 0;
+      let liveOutput = 0;
       let msgCounter = 0;
 
       await sendMessageStream(sessionId, userContent, outgoingAttachments, (event: AgentEvent) => {
@@ -639,6 +644,20 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
             ...sessionState,
             runId: sessionState.runId ?? event.run_id ?? null,
           }));
+        }
+
+        // Live token tracking: accumulate on each ModelRequestCompleted
+        if (eventType === 'ModelRequestCompleted') {
+          const m = event.metrics;
+          if (m) {
+            liveInput += m.input_tokens ?? 0;
+            liveOutput += m.output_tokens ?? 0;
+            updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
+              ...sessionState,
+              liveTokenUsage: { input: liveInput, output: liveOutput },
+            }));
+          }
+          return;
         }
 
         if (eventType === 'ToolCallStarted' || eventType === 'ToolCallCompleted' || eventType === 'ToolCallError') {
@@ -718,14 +737,20 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           if (event.reasoning && event.reasoning.length >= accumulatedReasoning.length) accumulatedReasoning = event.reasoning;
           if (event.toolCalls) accumulatedTools = event.toolCalls;
 
+          // Final token value: max(accumulated, RunCompleted.metrics) — never shrink
+          const m = event.metrics;
+          const finalInput = Math.max(liveInput, m?.input_tokens ?? 0);
+          const finalOutput = Math.max(liveOutput, m?.output_tokens ?? 0);
+
           updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
             ...sessionState,
             isStreaming: false,
             runId: null,
+            liveTokenUsage: null,
             tokenUsage: event.metrics ? {
-              input: event.metrics.input_tokens ?? 0,
-              output: event.metrics.output_tokens ?? 0,
-              total: event.metrics.total_tokens ?? 0,
+              input: finalInput,
+              output: finalOutput,
+              total: event.metrics.total_tokens ?? finalInput + finalOutput,
               duration: event.metrics.duration ?? 0,
             } : sessionState.tokenUsage,
             messages: sessionState.messages.map((message) => message.id === currentWorkerMsgId ? {
@@ -736,8 +761,8 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
               reasoning: accumulatedReasoning || undefined,
               streaming: false,
               senderName: senderName || undefined,
-              tokenInput: event.metrics?.input_tokens ?? undefined,
-              tokenOutput: event.metrics?.output_tokens ?? undefined,
+              tokenInput: finalInput || undefined,
+              tokenOutput: finalOutput || undefined,
             } : message),
           }));
           return;
@@ -928,19 +953,6 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           const previousMessage = index > 0 ? messages[index - 1] : null;
           const showRole = message.role !== 'worker' || !previousMessage || previousMessage.role !== 'worker';
           const roleLabel = message.role === 'worker' ? (message.senderName || t('chat.roleWorker')) : message.role === 'user' ? t('chat.roleUser') : t('chat.roleSystem');
-          const isLastInGroup = message.role === 'worker' && (index === messages.length - 1 || messages[index + 1]?.role !== 'worker');
-
-          let groupMetrics: { input: number; output: number } | null = null;
-          if (isLastInGroup) {
-            let input = 0;
-            let output = 0;
-            for (let i = index; i >= 0; i--) {
-              if (messages[i].role !== 'worker') break;
-              input += messages[i].tokenInput ?? 0;
-              output += messages[i].tokenOutput ?? 0;
-            }
-            if (input > 0 || output > 0) groupMetrics = { input, output };
-          }
 
           return (
             <article key={message.id} className={`message-card ${message.role}${!showRole ? ' continuation' : ''}`}>
@@ -954,12 +966,36 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
               {message.role === 'worker'
                 ? <div className="message-body"><MarkdownContent content={message.content} /></div>
                 : <div className="message-body">{message.content}</div>}
-              {groupMetrics && (
-                <div className="message-metrics">
-                  <svg className="message-metrics-icon" viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M3 12h2v-4H3v4zm4 0h2V6H7v6zm4 0h2V3h-2v9zM2 14h12V2H2v12z"/></svg>
-                  <span>Tokens: {groupMetrics.input}/{groupMetrics.output}</span>
-                </div>
-              )}
+              {message.role === 'worker' && (() => {
+                // Last worker message in a consecutive group
+                const isLastInGroup = index === messages.length - 1 || messages[index + 1]?.role !== 'worker';
+                if (!isLastInGroup) return null;
+
+                // Live tokens during streaming (last message only)
+                if (message.streaming && index === messages.length - 1) {
+                  const live = currentSessionState?.liveTokenUsage;
+                  if (live && (live.input > 0 || live.output > 0)) {
+                    return (
+                      <div className="message-metrics message-metrics-live">
+                        <span className="metrics-live-dot" />
+                        <span>Tokens: {live.input.toLocaleString()} / {live.output.toLocaleString()}</span>
+                      </div>
+                    );
+                  }
+                  return null;
+                }
+
+                // Final tokens after completion
+                if (message.tokenInput || message.tokenOutput) {
+                  return (
+                    <div className="message-metrics">
+                      <svg className="message-metrics-icon" viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M3 12h2v-4H3v4zm4 0h2V6H7v6zm4 0h2V3h-2v9zM2 14h12V2H2v12z"/></svg>
+                      <span>Tokens: {(message.tokenInput ?? 0).toLocaleString()} / {(message.tokenOutput ?? 0).toLocaleString()}</span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </article>
           );
         })}

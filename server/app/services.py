@@ -647,6 +647,8 @@ _TEAM_EVENT_MAP = {
     'TeamReasoningStep': 'ReasoningStep',
     'TeamReasoningContentDelta': 'ReasoningContentDelta',
     'TeamReasoningCompleted': 'ReasoningCompleted',
+    'TeamModelRequestCompleted': 'ModelRequestCompleted',
+    'TeamModelRequestStarted': 'ModelRequestStarted',
 }
 
 
@@ -760,6 +762,14 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
                                 t['status'] = 'error'
                                 break
                     event_data['toolCalls'] = current_tools
+
+                if event_type == 'ModelRequestCompleted':
+                    # Forward per-request token metrics for live display
+                    event_data['metrics'] = {
+                        'input_tokens': getattr(event, 'input_tokens', 0) or 0,
+                        'output_tokens': getattr(event, 'output_tokens', 0) or 0,
+                        'total_tokens': getattr(event, 'total_tokens', 0) or 0,
+                    }
 
                 if event_type == 'RunCompleted':
                     metrics = getattr(event, 'metrics', None)

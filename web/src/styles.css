@@ -2360,6 +2360,69 @@ button {
   padding: 8px 14px 14px;
 }
 
+/* ---- Tool Chip (inline summary) ---- */
+
+.tool-chip {
+  border: 1px solid rgba(132, 146, 170, 0.15);
+  border-radius: 10px;
+  margin-bottom: 4px;
+  background: #f0f3f9;
+  overflow: hidden;
+}
+
+.tool-chip.done {
+  border-color: rgba(34, 160, 90, 0.18);
+}
+
+.tool-chip.error {
+  border-color: rgba(200, 60, 40, 0.18);
+}
+
+.tool-chip-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #31415d;
+  text-align: left;
+  font-family: "Cascadia Code", "Fira Code", monospace;
+  line-height: 1.4;
+}
+
+.tool-chip-header:hover {
+  background: rgba(132, 146, 170, 0.06);
+}
+
+.tool-chip-status {
+  font-size: 11px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.tool-chip-summary {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.tool-chip-toggle {
+  font-size: 10px;
+  color: #9aa8c2;
+  flex-shrink: 0;
+}
+
+.tool-chip-detail {
+  padding: 4px 12px 10px;
+  border-top: 1px solid rgba(132, 146, 170, 0.1);
+}
+
 .tool-section {
   margin-bottom: 8px;
 }
@@ -2406,12 +2469,24 @@ button {
   white-space: pre-wrap;
 }
 
-.tool-panel.tool-done {
-  border-color: rgba(34, 160, 90, 0.2);
+/* ---- Token Metrics (live + final) ---- */
+
+.message-metrics-live {
+  color: #1a8a50;
 }
 
-.tool-panel.tool-error {
-  border-color: rgba(200, 60, 40, 0.2);
+.metrics-live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22a05a;
+  animation: metrics-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes metrics-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 .reasoning-panel .reasoning-content {

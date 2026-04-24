@@ -1,10 +1,16 @@
 import type { ChatMessage, SessionSummary, TokenUsage } from '../types';
 
+export interface LiveTokenUsage {
+  input: number;
+  output: number;
+}
+
 export interface CachedSessionState {
   sessionId: string;
   messages: ChatMessage[];
   draft: string;
   tokenUsage: TokenUsage;
+  liveTokenUsage: LiveTokenUsage | null;
   isLoading: boolean;
   isLoadingMore: boolean;
   hasMore: boolean;
@@ -40,6 +46,7 @@ export function ensureSessionState(workerState: CachedWorkerState, sessionId: st
       messages: [],
       draft: '',
       tokenUsage: { input: 0, output: 0, total: 0, duration: 0 },
+      liveTokenUsage: null,
       isLoading: false,
       isLoadingMore: false,
       hasMore: false,
