@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $targetServer = 'src-tauri\resources\server'
-$targetSitePackages = Join-Path $targetServer 'site-packages'
+# site-packages provided by Python runtime, not server resources
 $targetRuntime = 'src-tauri\resources\runtime'
 # Set NOWORK_PYTHON to your conda environment directory before running, e.g.:
 #   $env:NOWORK_PYTHON = 'C:\Users\you\.conda\envs\nowork'
@@ -21,7 +21,7 @@ if (Test-Path $targetRuntime) {
 }
 
 New-Item -ItemType Directory -Force -Path $targetServer | Out-Null
-New-Item -ItemType Directory -Force -Path $targetSitePackages | Out-Null
+# site-packages provided by Python runtime
 New-Item -ItemType Directory -Force -Path $targetRuntime | Out-Null
 
 # Copy server code and resources
@@ -44,10 +44,11 @@ if (Test-Path 'server\config\workers') {
   Copy-Item 'server\config\workers' "$targetConfig\workers" -Recurse -Force
 }
 Copy-Item 'server\skills' $targetServer -Recurse -Force
-Copy-Item 'server\requirements.txt' $targetServer -Force
+# requirements.txt not needed at runtime (deps in Python runtime site-packages)
 
 # Create runtime directories
 New-Item -ItemType Directory -Force -Path "$targetServer\runtime\logs" | Out-Null
 New-Item -ItemType Directory -Force -Path "$targetServer\db" | Out-Null
 
-& $python -m pip install -r 'server\requirements.txt' --target $targetSitePackages
+# NOTE: site-packages are provided by the Python runtime (prepare-python-runtime.ps1)
+# No pip install needed at build time
