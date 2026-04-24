@@ -737,10 +737,9 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           if (event.reasoning && event.reasoning.length >= accumulatedReasoning.length) accumulatedReasoning = event.reasoning;
           if (event.toolCalls) accumulatedTools = event.toolCalls;
 
-          // Final token value: max(accumulated, RunCompleted.metrics) — never shrink
-          const m = event.metrics;
-          const finalInput = Math.max(liveInput, m?.input_tokens ?? 0);
-          const finalOutput = Math.max(liveOutput, m?.output_tokens ?? 0);
+          // Use accumulated tokens from ModelRequestCompleted events directly
+          const finalInput = liveInput;
+          const finalOutput = liveOutput;
 
           updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
             ...sessionState,
