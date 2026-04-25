@@ -164,6 +164,15 @@ def _normalize_runtime_messages(runtime_messages: list[Any], worker_name: str | 
         msg_name = getattr(msg, 'name', None) or None
 
         content = str(getattr(msg, 'content', ''))
+
+        # Strip compaction injection prefix from user messages
+        if role == 'user' and content.startswith('[System Injection - Prior Conversation Summary]'):
+            parts = content.split('---', 1)
+            if len(parts) > 1:
+                content = parts[1].strip()
+            else:
+                content = content[60:].strip()  # fallback: skip the header line
+
         attachment_lines: list[str] = []
         for kind in ('images', 'videos', 'files'):
             items = getattr(msg, kind, None) or []

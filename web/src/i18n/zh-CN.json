@@ -78,7 +78,8 @@
     "cancel": "取消",
     "send": "发送",
     "more": "...",
-    "loadingMore": "加载中..."
+    "loadingMore": "加载中...",
+    "tokenMetrics": "上下文: {context} | 输出: {output}"
   },
   "workerList": {
     "title": "工作器",

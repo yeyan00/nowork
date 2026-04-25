@@ -1,10 +1,13 @@
 <div align="center">
 
-# Nowork
+# NoWork
 
-**聊天式多 Agent 桌面应用。每个 Agent / Team 就像一个「联系人」—— 点击即聊。**
+**Agents do the work. You don't have to.**
 
-组建你的 AI 工作团队 —— 规划、编码、审查、调试、文档，一个聊天窗口全搞定。
+一个桌面端 AI Agent 工作空间。每个 Agent 或 Team 都像一个聊天联系人。
+选择一个 Worker，发起对话，然后把规划、编码、审查、调研、文档处理等工作交给它们。
+
+组建你的 AI 工作团队 —— 全部放进一个聊天窗口里。
 
 [English](./README.md)
 
@@ -12,101 +15,83 @@
 
 ---
 
-## 🤔 为什么做 Nowork？
+## 📸 截图
 
-命令行 AI 编码工具功能强大，但交互门槛高。现有的桌面封装方案要么不够稳定，要么不够灵活。
+#### 🖥️ 主界面
+*一个干净的、联系人式的多 Worker 对话工作区。*
+![Main Interface](asserts/main.png)
 
-Nowork 的思路不同：
-
-- **桌面优先，不依赖终端** — 安装即用，无需命令行知识
-- **聊天原生** — 每个 Agent 就是一个联系人，不用写 Prompt 模板，不用配置工作流，直接聊
-- **轻量自包含** — 内置 Python 运行时，终端用户无需配置环境
-- **面向个人和小团队** — 不追求大而全的平台，只做一个安静、可靠的工具
-
-目标很简单：让 AI 处理重复性工作，把时间留给重要的事。
+#### 🚀 示例：构建一个番茄钟应用
+*规划、编码、审查三个 Agent 在同一个桌面应用里协作完成任务。*
+![Demo Task](asserts/demo.png)
 
 ---
 
-## ✨ 亮点
+## NoWork 是什么？
 
-| 特性 | 说明 |
-|------|------|
-| **聊天即工作台** | 每个 Agent / Team 就是一个「联系人」。点击即聊，像用微信一样简单，无需写 Prompt。 |
-| **多 Agent 团队** | 内置 8 个专职 Worker：规划、编码、审查、调试、文档、架构，开箱即用。 |
-| **50+ 模型供应商** | 基于 [Agno](https://github.com/agno-agi/agno) 驱动。OpenAI、Anthropic、Google、DeepSeek、通义千问、Ollama、vLLM 等几十种模型，一个配置切换。 |
-| **智能上下文管理** | 自动对话压缩（Compaction），长对话不爆上下文，关键信息不丢失。 |
-| **安全沙箱** | 文件/Shell 操作受沙箱保护，支持会话级工作区隔离和读写权限控制。 |
-| **文档处理** | 内置 Word、Excel、PPT、PDF 技能 —— 在聊天中直接创建、编辑、分析文档。 |
-| **定时任务** | 设置每日/每周定时执行，让 Agent 在你不在时自动工作。 |
-| **MCP 集成** | 通过 Model Context Protocol 连接外部工具服务器，零代码扩展 Agent 能力。 |
-| **桌面原生** | Tauri (Rust) 外壳，后端进程零配置自动管理，安装即用，无需命令行。 |
-| **双语界面** | English / 简体中文 随时切换，语音输入支持 Web Speech API。 |
+NoWork 是一个**桌面优先的多 Agent 应用**，专注于实际工作场景：
 
-## 🧠 内置 Worker
+- **编码开发** —— 规划、实现、审查、调试
+- **文档处理** —— Word、Excel、PowerPoint、PDF
+- **信息调研** —— 网页浏览、总结提炼、技术研究
+- **持续工作流** —— 长对话、定时任务、可复用 Worker
 
-| Worker | 职责 | 类型 |
-|--------|------|------|
-| Code Agent | 编写、编辑、调试代码 | Agent |
-| Planning Engineer | 需求分析、编写实施计划 | Agent |
-| Implementation Engineer | 按计划逐步执行实现 | Agent |
-| Architecture Reviewer | 只读代码审查与风险分析 | Agent |
-| Code Explorer | 搜索、浏览、理解代码库 | Agent |
-| Documentation Researcher | 编写文档、技术调研 | Agent |
-| Doc Agent | Office/PDF 文档处理 + 网页调研 | Agent |
-| Product R&D Team | 完整团队：规划 → 编码 → 审查 流水线 | Team |
+你不需要在 Prompt、终端、脚本之间来回切换，只需要像和联系人聊天一样，把任务交给不同的 Worker。
 
-> Worker 通过 YAML 配置 —— 无需改代码即可新增、删除或定制。
+---
 
-## 🏗️ 架构
+## 🤔 为什么做 NoWork？
 
-```
-┌─ Tauri 桌面端 (Rust) ──────────────────────────────┐
-│                                                      │
-│  ┌─ React 前端 (Vite + TypeScript) ───────────────┐ │
-│  │  导航栏 │ Worker 列表 │ 聊天工作区              │ │
-│  │  语音   │ 定时任务   │ 设置  │ 帮助             │ │
-│  └────────────────────────────────────────────────┘ │
-│                        HTTP / SSE                    │
-│  ┌─ Python 后端 (FastAPI) ────────────────────────┐ │
-│  │  Agno AgentOS ── Agent / Team / Workflow        │ │
-│  │  CodingTools (沙箱 Shell + 文件操作)            │ │
-│  │  CompactionManager (智能上下文压缩)             │ │
-│  │  MCP 客户端 │ 知识库 │ Skills                   │ │
-│  │  会话持久化 (SQLite)                            │ │
-│  └─────────────────────────────────────────────────┘ │
-│  Tauri 自动管理后端进程生命周期                       │
-└──────────────────────────────────────────────────────┘
-```
+命令行 AI 工具很强，但对很多人来说，使用门槛依然偏高。现有的一些桌面封装要么不够稳定，要么太薄，要么仍然依赖手动配置环境。
 
-## 📸 截图
+NoWork 选择了另一条路：
 
-> *即将更新 —— 设计文档见 [docs/](docs/)。*
+- **桌面优先，而不是终端优先** —— 安装后即可使用，不依赖 CLI 工作流
+- **聊天原生交互** —— 每个 Agent / Team 就是一个联系人，任务委派更自然
+- **内置运行时** —— 应用自带后端和嵌入式 Python 运行时
+- **本地工作区访问** —— Agent 可以在受控目录内直接处理真实文件
+- **适合个人与小团队** —— 提供实用的多 Agent 自动化，而不是复杂的平台系统
 
-## ⚠️ Agno 依赖说明
+目标很简单：让 AI 去处理重复劳动，把你的注意力留给判断和结果。
 
-Nowork 核心依赖 [Agno](https://github.com/agno-agi/agno) 作为 Agent 框架。由于部分自定义修改尚未合入上游，目前使用 fork 版本：
+---
 
-**https://github.com/yeyan00/agno**
+## ✨ 核心能力
 
-安装方式：
+| 能力 | 说明 |
+|---|---|
+| **联系人式 Worker** | 每个 Agent / Team 都像一个聊天联系人，点击即可开始工作。 |
+| **多 Agent 协作** | 内置规划、编码、审查、架构、调研、文档处理等 Worker。 |
+| **50+ 模型供应商** | 基于 [Agno](https://github.com/agno-agi/agno)。支持 OpenAI、Anthropic、Google、DeepSeek、Qwen、Ollama、vLLM 等众多模型。 |
+| **长对话连续性** | 自动上下文压缩（Compaction），帮助长会话持续保留有效状态。 |
+| **安全工作区访问** | 文件与 Shell 操作仅限于配置好的目录和权限范围内。 |
+| **文档处理技能** | 内置 Word、Excel、PowerPoint、PDF 等技能。 |
+| **定时执行** | 支持按计划定时运行 Worker。 |
+| **MCP 集成** | 通过 Model Context Protocol 接入外部工具。 |
+| **桌面原生打包** | 基于 Tauri，内置后端与嵌入式 Python 运行时。 |
+| **双语界面** | 支持 English / 简体中文，即时切换。 |
 
-```bash
-pip install git+https://github.com/yeyan00/agno.git
-```
-
-> 待上游合入相关改动或不再需要这些补丁后，会切回官方版本。
+---
 
 ## 🚀 快速开始
 
-### 1. 配置模型供应商
+### 面向终端用户
 
-创建模型供应商配置文件（以 OpenAI 兼容接口为例）：
+1. **下载** 最新版本：[Releases 页面](https://github.com/yeyan00/nowork/releases)
+2. **安装** 桌面应用
+3. **配置模型供应商**
+4. **选择一个 Worker**
+5. **开始聊天并委派任务**
+
+### 最小模型配置
+
+先创建一个模型供应商配置文件，例如：
 
 ```yaml
 # server/config/models/my-provider.yaml
 provider_id: my-provider
 name: 我的供应商
-base_url: https://api.openai.com/v1      # 或你的自建接口
+base_url: https://api.openai.com/v1
 api_key: sk-xxx
 models:
   - id: gpt-4o
@@ -115,34 +100,44 @@ models:
     video: false
 ```
 
-### 2. 设置默认模型
+然后设置默认模型：
 
 ```yaml
 # server/config/config.yaml
 default_model: my-provider/gpt-4o
 ```
 
-### 3. 启动
+完成后，打开应用，选择一个 Worker，直接开始聊天即可。
 
-```powershell
-# 安装依赖
-pip install -r requirements.txt
-cd web && npm install && cd ..
+---
 
-# 启动开发环境
-powershell -ExecutionPolicy Bypass -File scripts/start-dev.ps1
-```
+## 🧠 内置 Worker
 
-完成。打开应用，选择一个 Worker，开始聊天。
+NoWork 默认内置了一组面向工程与文档工作的实用 Worker。
+
+| Worker | 职责 | 类型 |
+|---|---|---|
+| Code Agent | 编写、编辑、调试代码 | Agent |
+| Planning Engineer | 需求分析与实施方案规划 | Agent |
+| Implementation Engineer | 按计划逐步执行实现 | Agent |
+| Architecture Reviewer | 只读代码审查与风险分析 | Agent |
+| Code Explorer | 搜索、浏览、理解代码库 | Agent |
+| Documentation Researcher | 编写文档与技术调研 | Agent |
+| Doc Agent | Office / PDF 文档处理与网页调研 | Agent |
+| Product R&D Team | 规划 → 编码 → 审查 的团队流水线 | Team |
+
+> Worker 采用 YAML 配置驱动 —— 你可以在不修改应用代码的情况下新增、删除或定制它们。
+
+---
 
 ## ⚙️ 配置
 
 | 文件 | 用途 |
-|------|------|
+|---|---|
 | `server/config/config.yaml` | 全局配置：默认模型、工具、服务设置 |
-| `server/config/models/*.yaml` | 模型供应商定义（API Key、接口、能力） |
-| `server/config/workers/*.yaml` | Worker 定义：指令、工具、工作区、历史 |
-| `server/config/mcp.yaml` | MCP 服务器连接 |
+| `server/config/models/*.yaml` | 模型供应商定义、API Key、接口地址、能力 |
+| `server/config/workers/*.yaml` | Worker 定义：指令、工具、工作区、历史、学习配置 |
+| `server/config/mcp.yaml` | MCP 服务连接配置 |
 
 ### Worker 配置示例
 
@@ -151,7 +146,7 @@ powershell -ExecutionPolicy Bypass -File scripts/start-dev.ps1
 agent:
   id: my-worker
   name: My Worker
-  instructions: 你是一个有用的编程助手。
+  instructions: 你是一个有帮助的编程助手。
 tools:
   - module: app.tools.codingTools
     class: CodingTools
@@ -165,40 +160,100 @@ history:
   enable_compaction: true
 ```
 
-## 🛠️ 开发
+---
+
+## 🏗️ 架构
+
+NoWork 由 Tauri 桌面外壳、React 前端，以及本地运行的 FastAPI + Agno 后端组成，并内置嵌入式 Python 运行时。
+
+```text
+┌─ Tauri 桌面端 (Rust) ─────────────────────────────┐
+│                                                   │
+│  ┌─ React 前端 (Vite + TypeScript) ─────────────┐ │
+│  │  导航栏 │ Worker 列表 │ 聊天工作区            │ │
+│  │  语音   │ 定时任务   │ 设置 │ 帮助            │ │
+│  └──────────────────────────────────────────────┘ │
+│                     HTTP / SSE                    │
+│  ┌─ Python 后端 (FastAPI) ─────────────────────┐ │
+│  │  Agno AgentOS ─ Agent / Team / Workflow     │ │
+│  │  CodingTools（沙箱 Shell + 文件操作）       │ │
+│  │  CompactionManager（上下文管理）            │ │
+│  │  MCP Client │ Knowledge Base │ Skills       │ │
+│  │  Session Persistence (SQLite)               │ │
+│  └─────────────────────────────────────────────┘ │
+│  Tauri 自动管理后端生命周期                      │
+└───────────────────────────────────────────────────┘
+```
+
+---
+
+## 🛠️ 开发运行
 
 ### 环境要求
 
 | 工具 | 版本 |
-|------|------|
+|---|---|
 | Node.js | >= 18 |
 | Python | >= 3.10 |
 | Rust | stable |
 
-### 命令
+### 初始化
 
 ```powershell
-# 前端
-cd web && npm run dev          # 开发服务器（HMR）
+# 安装 Python 依赖
+pip install -r requirements.txt
 
-# 后端
+# 安装前端依赖
+cd web
+npm install
+cd ..
+```
+
+### 启动开发环境
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start-dev.ps1
+```
+
+### 常用命令
+
+```powershell
+# 仅前端
+cd web
+npm run dev
+
+# 仅后端
 conda activate nowork
 $env:PYTHONPATH = "server"
-python -m app.run              # 启动，默认 127.0.0.1:18080
+python -m app.run
 
-# Tauri 桌面端
-npm run tauri:dev              # 完整桌面开发模式
+# 完整桌面应用
+npm run tauri:dev
 ```
 
-## 📦 构建与打包
+---
+
+## 📦 发布打包
 
 ```powershell
-# 一键发布构建
-npm run build:release
-
-# 产物：src-tauri/target/release/bundle/（NSIS 安装程序）
+# 推荐方式
+powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1
 ```
 
+产物目录：
+
+```text
+src-tauri/target/release/bundle/
+```
+
+### 打包说明
+
+- 发布包会内置**嵌入式 Python 运行时**
+- Python 依赖通过**allowlist 过滤复制**，不会打入整个 Conda 环境
+- 终端用户**不需要**额外安装 Python、Conda 或手动安装依赖
+- 服务端代码和资源会直接打进桌面应用中
+
+---
 
 ## 📄 开源协议
 

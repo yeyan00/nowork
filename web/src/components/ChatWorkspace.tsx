@@ -984,7 +984,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                     return (
                       <div className="message-metrics message-metrics-live">
                         <span className="metrics-live-dot" />
-                        <span>上下文: {live.context.toLocaleString()} | 输出: {live.output.toLocaleString()}</span>
+                        <span>{t('chat.tokenMetrics', { context: live.context.toLocaleString(), output: live.output.toLocaleString() })}</span>
                       </div>
                     );
                   }
@@ -1003,7 +1003,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                   return (
                     <div className="message-metrics">
                       <svg className="message-metrics-icon" viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M3 12h2v-4H3v4zm4 0h2V6H7v6zm4 0h2V3h-2v9zM2 14h12V2H2v12z"/></svg>
-                      <span>上下文: {lastContext.toLocaleString()} | 输出: {lastOutput.toLocaleString()}</span>
+                      <span>{t('chat.tokenMetrics', { context: lastContext.toLocaleString(), output: lastOutput.toLocaleString() })}</span>
                     </div>
                   );
                 }

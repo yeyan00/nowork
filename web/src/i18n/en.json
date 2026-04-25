@@ -78,7 +78,8 @@
     "cancel": "Cancel",
     "send": "Send",
     "more": "More",
-    "loadingMore": "Loading..."
+    "loadingMore": "Loading...",
+    "tokenMetrics": "Context: {context} | Output: {output}"
   },
   "workerList": {
     "title": "Workers",

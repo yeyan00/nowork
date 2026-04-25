@@ -1,10 +1,13 @@
 <div align="center">
 
-# Nowork
+# NoWork
 
-**A chat-style multi-agent desktop app. Each Agent / Team acts like a "contact" — click to start chatting.**
+**Agents do the work. You don't have to.**
 
-Build your own AI workforce — plan, code, review, debug, and document — all in one chat window.
+A desktop AI agent workspace where each Agent or Team appears like a chat contact.
+Pick a worker, start a conversation, and let it plan, code, review, research, or process documents for you.
+
+Build your own AI workforce — all in one chat window.
 
 [简体中文](./README.zh-CN.md)
 
@@ -12,101 +15,83 @@ Build your own AI workforce — plan, code, review, debug, and document — all 
 
 ---
 
-## 🤔 Why Nowork?
+## 📸 Screenshots
 
-Command-line AI coding tools are powerful, but the interaction barrier is high. Existing desktop wrappers often feel unstable or inflexible.
+#### 🖥️ Main Interface
+*A clean, contact-style workspace for managing multiple agent conversations.*
+![Main Interface](asserts/main.png)
 
-Nowork takes a different approach:
-
-- **Desktop-first, not terminal-dependent** — install and run, zero CLI knowledge required
-- **Chat-native** — each agent is a contact. No prompt templates, no workflow editors, just talk
-- **Lightweight & self-contained** — Python runtime bundled, no environment setup for end users
-- **Personal & small-team focused** — not trying to be a platform. Just a quiet, reliable tool that works
-
-The goal is simple: let AI handle the repetitive work, so you have more time for what matters.
+#### 🚀 Example: Building a Pomodoro Timer
+*Planning, coding, and review agents collaborating inside one desktop app.*
+![Demo Task](asserts/demo.png)
 
 ---
 
-## ✨ Highlights
+## What is NoWork?
 
-| Feature | Description |
-|---------|-------------|
-| **Chat-as-a-Workspace** | Each Agent / Team is a "contact". Click to chat, just like Slack. No prompt engineering needed. |
-| **Multi-Agent Teams** | Built-in team of 8 specialized workers: planning, coding, review, debugging, documentation, architecture. |
-| **50+ Model Providers** | Powered by [Agno](https://github.com/agno-agi/agno). OpenAI, Anthropic, Google, DeepSeek, Qwen, Ollama, vLLM, and dozens more. One config, any model. |
-| **Smart Context Management** | Automatic conversation compaction keeps long sessions alive without losing context. |
-| **Secure Code Sandbox** | Sandboxed file/shell operations with per-session workspace isolation and read/write permissions. |
-| **Document Processing** | Built-in skills for Word, Excel, PowerPoint, and PDF — create, edit, and analyze documents in chat. |
-| **Scheduled Tasks** | Set daily/weekly recurring agent runs. Your agents work even when you're away. |
-| **MCP Integration** | Connect external tool servers via Model Context Protocol. Extend your agents without code. |
-| **Desktop-Native** | Tauri (Rust) shell with zero-config backend lifecycle. Install and run, no terminal needed. |
-| **Bilingual UI** | English / 简体中文 with instant switching. Voice input via Web Speech API. |
+NoWork is a **desktop-first multi-agent app** built for practical work:
 
-## 🧠 Built-in Workers
+- **Coding** — planning, implementation, review, debugging
+- **Document work** — Word, Excel, PowerPoint, PDF
+- **Research** — web browsing, summarization, technical exploration
+- **Ongoing workflows** — long conversations, scheduled runs, reusable workers
 
-| Worker | Role | Type |
-|--------|------|------|
-| Code Agent | Write, edit, and debug code | Agent |
-| Planning Engineer | Analyze requirements, write implementation plans | Agent |
-| Implementation Engineer | Execute plans step by step | Agent |
-| Architecture Reviewer | Read-only code review and risk analysis | Agent |
-| Code Explorer | Search, navigate, and understand codebases | Agent |
-| Documentation Researcher | Write docs and research technical topics | Agent |
-| Doc Agent | Create and process Office/PDF documents + web research | Agent |
-| Product R&D Team | Full team: planner → coder → reviewer pipeline | Team |
+Instead of juggling prompts, terminals, and scripts, you talk to workers as if they were contacts in a chat app.
 
-> Workers are configured via YAML — add, remove, or customize without touching code.
+---
 
-## 🏗️ Architecture
+## 🤔 Why NoWork?
 
-```
-┌─ Tauri Desktop (Rust) ─────────────────────────────┐
-│                                                      │
-│  ┌─ React Frontend (Vite + TypeScript) ───────────┐ │
-│  │  NavRail │ Worker List │ Chat Workspace         │ │
-│  │  Voice   │ Schedules   │ Settings │ Help        │ │
-│  └────────────────────────────────────────────────┘ │
-│                        HTTP / SSE                    │
-│  ┌─ Python Backend (FastAPI) ────────────────────┐  │
-│  │  Agno AgentOS ── Agent / Team / Workflow       │  │
-│  │  CodingTools (sandboxed shell + file ops)      │  │
-│  │  CompactionManager (smart context compression) │  │
-│  │  MCP Client │ Knowledge Base │ Skills          │  │
-│  │  Session Persistence (SQLite)                  │  │
-│  └────────────────────────────────────────────────┘ │
-│  Tauri auto-manages backend lifecycle               │
-└──────────────────────────────────────────────────────┘
-```
+Command-line AI tools are powerful, but they still create friction for many users. Existing desktop wrappers often feel unstable, too thin, or too dependent on manual environment setup.
 
-## 📸 Screenshots
+NoWork takes a different approach:
 
-> *Coming soon — see [docs/](docs/) for design documents.*
+- **Desktop-first, not terminal-first** — install and run without needing CLI workflows
+- **Chat-native interaction** — every agent or team is a contact, so delegation feels natural
+- **Bundled runtime** — the app ships with its own backend and embedded Python runtime
+- **Local workspace access** — agents can work with real files inside configured directories
+- **Small-team and solo-friendly** — practical multi-agent automation without platform complexity
 
-## ⚠️ Agno Dependency
+The goal is simple: let AI handle repetitive work, so you can stay focused on decisions and results.
 
-Nowork depends on [Agno](https://github.com/agno-agi/agno) as its core agent framework. Due to custom patches and feature adjustments not yet upstreamed, the project currently uses a forked version:
+---
 
-**https://github.com/yeyan00/agno**
+## ✨ Key Capabilities
 
-Install it via:
+| Capability | Description |
+|---|---|
+| **Contact-style workers** | Each Agent / Team appears as a chat contact. Click and start working. |
+| **Multi-agent collaboration** | Built-in planning, coding, review, architecture, research, and document workers. |
+| **50+ model providers** | Powered by [Agno](https://github.com/agno-agi/agno). Supports OpenAI, Anthropic, Google, DeepSeek, Qwen, Ollama, vLLM, and many more. |
+| **Long-session continuity** | Automatic context compaction helps preserve useful state in long conversations. |
+| **Workspace-safe file access** | Sandboxed file and shell operations limited to configured directories and permissions. |
+| **Document processing skills** | Built-in support for Word, Excel, PowerPoint, and PDF workflows. |
+| **Scheduled runs** | Set recurring tasks for workers to run automatically. |
+| **MCP integration** | Connect external tools through Model Context Protocol. |
+| **Desktop-native packaging** | Tauri desktop shell with bundled backend and embedded Python runtime. |
+| **Bilingual UI** | English / 简体中文 support with instant switching. |
 
-```bash
-pip install git+https://github.com/yeyan00/agno.git
-```
-
-> Once the upstream changes are merged or the patches are no longer needed, we will switch back to the official release.
+---
 
 ## 🚀 Quick Start
 
-### 1. Model Provider
+### For end users
 
-Create a model provider config file (e.g. OpenAI-compatible):
+1. **Download** the latest release from the [Releases page](https://github.com/yeyan00/nowork/releases)
+2. **Install** the desktop app
+3. **Configure a model provider**
+4. **Choose a worker**
+5. **Start chatting and delegating work**
+
+### Minimal model configuration
+
+Create a provider file such as:
 
 ```yaml
 # server/config/models/my-provider.yaml
 provider_id: my-provider
 name: My Provider
-base_url: https://api.openai.com/v1      # or your self-hosted endpoint
+base_url: https://api.openai.com/v1
 api_key: sk-xxx
 models:
   - id: gpt-4o
@@ -115,36 +100,46 @@ models:
     video: false
 ```
 
-### 2. Default Model
+Then set the default model:
 
 ```yaml
 # server/config/config.yaml
 default_model: my-provider/gpt-4o
 ```
 
-### 3. Run
+After that, open the app, pick a worker, and start chatting.
 
-```powershell
-# Install dependencies
-pip install -r requirements.txt
-cd web && npm install && cd ..
+---
 
-# Start dev environment
-powershell -ExecutionPolicy Bypass -File scripts/start-dev.ps1
-```
+## 🧠 Built-in Workers
 
-That's it. Open the app, pick a worker, and start chatting.
+NoWork ships with a practical default workforce for common engineering and document tasks.
+
+| Worker | Role | Type |
+|---|---|---|
+| Code Agent | Write, edit, and debug code | Agent |
+| Planning Engineer | Analyze requirements and write implementation plans | Agent |
+| Implementation Engineer | Execute plans step by step | Agent |
+| Architecture Reviewer | Read-only review and risk analysis | Agent |
+| Code Explorer | Search, navigate, and understand codebases | Agent |
+| Documentation Researcher | Write docs and research technical topics | Agent |
+| Doc Agent | Process Office/PDF documents and perform web research | Agent |
+| Product R&D Team | Planner → coder → reviewer pipeline | Team |
+
+> Workers are YAML-driven — add, remove, or customize them without changing application code.
+
+---
 
 ## ⚙️ Configuration
 
 | File | Purpose |
-|------|---------|
+|---|---|
 | `server/config/config.yaml` | Global config: default model, tools, server settings |
-| `server/config/models/*.yaml` | Model provider definitions (API keys, endpoints, capabilities) |
-| `server/config/workers/*.yaml` | Worker definitions: instructions, tools, workspaces, history |
+| `server/config/models/*.yaml` | Model provider definitions, API keys, endpoints, capabilities |
+| `server/config/workers/*.yaml` | Worker definitions: instructions, tools, workspaces, history, learning |
 | `server/config/mcp.yaml` | MCP server connections |
 
-### Example Worker Config
+### Example worker config
 
 ```yaml
 # server/config/workers/my-worker.yaml
@@ -165,40 +160,100 @@ history:
   enable_compaction: true
 ```
 
-## 🛠️ Development
+---
+
+## 🏗️ Architecture
+
+NoWork uses a Tauri desktop shell, a React frontend, and a local FastAPI + Agno backend with an embedded Python runtime.
+
+```text
+┌─ Tauri Desktop (Rust) ─────────────────────────────┐
+│                                                    │
+│  ┌─ React Frontend (Vite + TypeScript) ──────────┐ │
+│  │  NavRail │ Worker List │ Chat Workspace       │ │
+│  │  Voice   │ Schedules   │ Settings │ Help      │ │
+│  └───────────────────────────────────────────────┘ │
+│                      HTTP / SSE                    │
+│  ┌─ Python Backend (FastAPI) ───────────────────┐ │
+│  │  Agno AgentOS ─ Agent / Team / Workflow      │ │
+│  │  CodingTools (sandboxed shell + file ops)    │ │
+│  │  CompactionManager (context management)      │ │
+│  │  MCP Client │ Knowledge Base │ Skills        │ │
+│  │  Session Persistence (SQLite)                │ │
+│  └──────────────────────────────────────────────┘ │
+│  Tauri manages backend lifecycle automatically    │
+└────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🛠️ Run in Development
 
 ### Prerequisites
 
 | Tool | Version |
-|------|---------|
+|---|---|
 | Node.js | >= 18 |
 | Python | >= 3.10 |
 | Rust | stable |
 
-### Commands
+### Setup
 
 ```powershell
-# Frontend
-cd web && npm run dev          # Dev server with HMR
+# Python deps
+pip install -r requirements.txt
 
-# Backend
+# Frontend deps
+cd web
+npm install
+cd ..
+```
+
+### Start development environment
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start-dev.ps1
+```
+
+### Useful commands
+
+```powershell
+# Frontend only
+cd web
+npm run dev
+
+# Backend only
 conda activate nowork
 $env:PYTHONPATH = "server"
-python -m app.run              # Start at 127.0.0.1:18080
+python -m app.run
 
-# Tauri desktop
-npm run tauri:dev              # Full desktop dev mode
+# Full desktop app
+npm run tauri:dev
 ```
 
-## 📦 Build & Package
+---
+
+## 📦 Build Release
 
 ```powershell
-# One-step release build
-npm run build:release
-
-# Output: src-tauri/target/release/bundle/ (NSIS installer)
+# Recommended
+powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1
 ```
 
+Output:
+
+```text
+src-tauri/target/release/bundle/
+```
+
+### Packaging notes
+
+- Release builds bundle an **embedded Python runtime**
+- Python dependencies are copied using a **filtered allowlist**, not a full Conda environment
+- End users do **not** need Python, Conda, or manual dependency installation
+- Server code and resources are packaged into the desktop app directly
+
+---
 
 ## 📄 License
 
