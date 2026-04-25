@@ -24,32 +24,22 @@ def _extract_workspace_permissions(raw: dict[str, Any]) -> dict[str, str] | None
 
 
 def _apply_history(agent_kwargs: dict, history: dict) -> None:
-    """Apply history/compaction settings to agent or team kwargs."""
-    if history.get('enable_compaction'):
-        # Compaction mode: enable_compaction=True, add_history_to_context is ignored
-        agent_kwargs['enable_compaction'] = True
-        try:
-            from agno.compaction import CompactionManager
-            agent_kwargs['compaction_manager'] = CompactionManager(
-                context_usage_threshold=history.get('compaction_context_usage_threshold', 0.75),
-                context_reserve_tokens=history.get('compaction_context_reserve_tokens', 4000),
-                preserve_last_n_messages=history.get('compaction_preserve_last_n_messages', 2),
-            )
-        except ImportError:
-            from agno.utils.log import log_warning
-            log_warning("CompactionManager not available, falling back to history mode")
-            agent_kwargs['add_history_to_context'] = True
-            if history.get('num_history_messages') is not None:
-                agent_kwargs['num_history_messages'] = history['num_history_messages']
-            if history.get('max_tool_calls_from_history') is not None:
-                agent_kwargs['max_tool_calls_from_history'] = history['max_tool_calls_from_history']
-    else:
-        # Classic history mode
-        agent_kwargs['add_history_to_context'] = history.get('add_history_to_context', True)
-        if history.get('num_history_messages') is not None:
-            agent_kwargs['num_history_messages'] = history['num_history_messages']
-        if history.get('max_tool_calls_from_history') is not None:
-            agent_kwargs['max_tool_calls_from_history'] = history['max_tool_calls_from_history']
+    """Apply history settings to agent or team kwargs.
+
+    Since session compaction is now managed at the business layer
+    (session_manager.py), we hard-code agno to:
+    - Always load full history within a segment (num_history_runs=99999)
+    - Never use agno's built-in compaction (enable_compaction=False)
+    This ensures agno is a stateless executor; the Worker layer
+    handles segment boundaries and summary injection.
+    """
+    agent_kwargs['add_history_to_context'] = True
+    agent_kwargs['num_history_runs'] = 99999
+    # Explicitly disable agno's own compaction
+    if 'enable_compaction' in agent_kwargs:
+        del agent_kwargs['enable_compaction']
+    if 'compaction_manager' in agent_kwargs:
+        del agent_kwargs['compaction_manager']
 
 
 def _build_learning(learning_cfg: dict | None, db: Any | None, model: Any | None) -> Any | None:

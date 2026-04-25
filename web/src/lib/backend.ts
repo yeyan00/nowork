@@ -742,3 +742,47 @@ export async function uninstallExtension(extId: string): Promise<{ ok: boolean; 
   }
   return (await response.json()) as { ok: boolean; error: string };
 }
+
+
+// =============================================================================
+// Session Compaction APIs
+// =============================================================================
+
+export interface SessionCompactionConfig {
+  enabled: boolean;
+  context_usage_threshold: number;
+  context_reserve_tokens: number;
+  summary_style: string;
+  preserve_recent_messages: number;
+  max_summaries_injected: number;
+  summary_model: string | null;
+}
+
+export interface SessionConfigResponse {
+  session: {
+    db_file: string;
+    compaction: SessionCompactionConfig;
+  };
+  compaction: SessionCompactionConfig;
+}
+
+export async function getSessionConfig(): Promise<SessionConfigResponse> {
+  const response = await fetchFromApi('/api/session-config');
+  if (!response.ok) throw new Error('Failed to get session config');
+  return (await response.json()) as SessionConfigResponse;
+}
+
+export async function updateSessionConfig(updates: {
+  enabled?: boolean;
+  context_usage_threshold?: number;
+  context_reserve_tokens?: number;
+  preserve_recent_messages?: number;
+  max_summaries_injected?: number;
+}): Promise<{ session: unknown }> {
+  const response = await fetchFromApi('/api/session-config', {
+    method: 'PUT',
+    body: JSON.stringify(updates),
+  });
+  if (!response.ok) throw new Error('Failed to update session config');
+  return (await response.json()) as { session: unknown };
+}

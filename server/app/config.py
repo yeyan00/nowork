@@ -60,6 +60,30 @@ def load_provider_config(provider_name: str) -> dict:
     return {}
 
 
+def get_session_config(config: dict | None = None) -> dict:
+    cfg = config or load_config()
+    return cfg.get('session', {})
+
+
+def get_compaction_config(config: dict | None = None) -> dict:
+    session_cfg = get_session_config(config)
+    return session_cfg.get('compaction', {})
+
+
+def update_compaction_config(updates: dict) -> dict:
+    """Update compaction config in config.yaml. Returns the updated compaction config."""
+    config_path = resolve_config_path()
+    cfg = load_config(config_path)
+    if 'session' not in cfg:
+        cfg['session'] = {}
+    if 'compaction' not in cfg['session']:
+        cfg['session']['compaction'] = {}
+    cfg['session']['compaction'].update(updates)
+    with open(config_path, 'w', encoding='utf-8') as f:
+        yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    return cfg['session']['compaction']
+
+
 def get_default_model_id(config: dict | None = None) -> str:
     cfg = config or load_config()
     model = cfg.get('default_model')

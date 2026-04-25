@@ -50,6 +50,14 @@ from app.services import (
     delete_user_memory_content,
     add_user_memory_content,
     read_log_file,
+    # Session Compaction
+    list_compaction_sessions,
+    create_compaction_session,
+    get_compaction_session,
+    get_session_segments,
+    get_session_config_info,
+    update_session_config_info,
+    trigger_manual_compaction,
 )
 
 logger = logging.getLogger('nowork')
@@ -59,6 +67,7 @@ logger = logging.getLogger('nowork')
 async def lifespan(application: FastAPI):
     from app.config import get_workers_config
     from app.runtime import build_agent_os
+    from app import session_manager
     try:
         workers = get_workers_config()
         application.state.agent_os = await build_agent_os(workers, base_app=application)
@@ -66,6 +75,12 @@ async def lifespan(application: FastAPI):
     except Exception as e:
         logger.exception('Failed to initialize AgentOS: %s', e)
         application.state.agent_os = None
+    # Initialize session compaction DB on startup
+    try:
+        session_manager.ensure_db()
+        logger.info('Session compaction DB initialized')
+    except Exception as e:
+        logger.warning('Failed to initialize session DB: %s', e)
     await schedule_manager.start(getattr(application.state, 'agent_os', None))
     try:
         yield
@@ -523,6 +538,56 @@ async def api_uninstall_extension(ext_id: str) -> dict[str, object]:
         from fastapi import HTTPException
         raise HTTPException(status_code=500, detail=result['error'])
     return result
+
+
+# =============================================================================
+# Session Compaction APIs
+# =============================================================================
+
+
+@app.get('/api/session-config')
+def api_get_session_config() -> dict[str, object]:
+    return get_session_config_info()
+
+
+@app.put('/api/session-config')
+def api_update_session_config(payload: dict[str, object]) -> dict[str, object]:
+    return update_session_config_info(payload)
+
+
+@app.get('/api/workers/{worker_id}/compaction-sessions')
+def api_list_compaction_sessions(worker_id: str) -> list[dict[str, object]]:
+    return list_compaction_sessions(worker_id)
+
+
+@app.post('/api/workers/{worker_id}/compaction-sessions', status_code=201)
+async def api_create_compaction_session(worker_id: str, request: Request) -> dict[str, object]:
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    title = body.get('title', '') if isinstance(body, dict) else ''
+    return create_compaction_session(worker_id, title)
+
+
+@app.get('/api/compaction-sessions/{ws_id}')
+def api_get_compaction_session(ws_id: str) -> dict[str, object]:
+    result = get_compaction_session(ws_id)
+    if result is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail='WorkerSession not found')
+    return result
+
+
+@app.get('/api/compaction-sessions/{ws_id}/segments')
+def api_get_session_segments(ws_id: str) -> list[dict[str, object]]:
+    return get_session_segments(ws_id)
+
+
+@app.post('/api/compaction-sessions/{ws_id}/compact')
+async def api_trigger_compaction(ws_id: str, request: Request) -> dict[str, object]:
+    return await trigger_manual_compaction(ws_id, agent_os=_get_agent_os(request))
 
 
 @app.exception_handler(Exception)

@@ -22,7 +22,17 @@
     "updateError": "检查更新失败",
     "license": "开源协议",
     "licenseHint": "本项目基于 MIT 协议开源",
-    "licenseContent": "MIT License\n\nCopyright (c) 2025 nowork\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE."
+    "licenseContent": "MIT License\n\nCopyright (c) 2025 nowork\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
+    "session": "会话压缩",
+    "sessionHint": "全局会话压缩配置，对所有工作器生效。",
+    "compactionEnabled": "启用会话压缩",
+    "compactionThreshold": "上下文使用阈值",
+    "compactionReserve": "预留 Token 数",
+    "compactionPreserve": "保留最近消息数",
+    "compactionMaxSummaries": "最大注入摘要数",
+    "compactionNote": "当上下文窗口接近阈值时，自动摘要压缩旧的对话片段，保持长会话性能稳定。",
+    "saving": "保存中…",
+    "save": "保存"
   },
   "logs": {
     "title": "服务日志",
@@ -85,8 +95,6 @@
   },
   "workerSettings": {
     "instructions": "指令",
-    "history": "历史",
-    "addHistory": "将历史加入上下文",
     "model": "模型",
     "provider": "提供商",
     "selectProvider": "-- 选择 --",
@@ -115,15 +123,7 @@
     "noMemories": "未找到记忆。",
     "members": "成员",
     "noAgents": "没有可用的智能体。",
-    "unsavedChanges": "有未保存的更改",
-    "compaction": "自动压缩",
-    "historyWindow": "历史窗口",
-    "compactionThreshold": "触发阈值 (%)",
-    "compactionReserve": "预留 Token 数",
-    "compactionPreserve": "保留最近 N 条消息",
-    "compactionHint": "当上下文接近模型限制时自动摘要压缩，适合长会话。",
-    "historyMessages": "历史消息数",
-    "maxToolCalls": "历史工具调用上限"
+    "unsavedChanges": "有未保存的更改"
   },
   "schedules": {
     "title": "定时任务",

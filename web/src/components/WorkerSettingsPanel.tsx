@@ -79,14 +79,6 @@ export function WorkerSettingsPanel({
   const [toolSelections, setToolSelections] = useState<Record<string, ToolSelection>>({});
   const [members, setMembers] = useState<{ agent_id: string; role: string }[]>([]);
 
-  const [historyMode, setHistoryMode] = useState<'history' | 'compaction'>('compaction');
-  const [historyEnabled, setHistoryEnabled] = useState(true);
-  const [historyMessages, setHistoryMessages] = useState(20);
-  const [historyToolCalls, setHistoryToolCalls] = useState(3);
-  const [compactionThreshold, setCompactionThreshold] = useState(0.75);
-  const [compactionReserveTokens, setCompactionReserveTokens] = useState(4000);
-  const [compactionPreserveN, setCompactionPreserveN] = useState(2);
-
   const [learningUserProfile, setLearningUserProfile] = useState(true);
   const [learningUserMemory, setLearningUserMemory] = useState(true);
   const [learningSessionContext, setLearningSessionContext] = useState(false);
@@ -136,16 +128,6 @@ export function WorkerSettingsPanel({
 
     setSelectedMCPs((cfg['mcp'] as string[]) ?? []);
     setSelectedKnowledge((cfg['knowledge'] as string[]) ?? []);
-
-    const history = (cfg['history'] as unknown as Record<string, unknown>) ?? {};
-    const isCompaction = (history['enable_compaction'] as boolean) ?? false;
-    setHistoryMode(isCompaction ? 'compaction' : 'history');
-    setHistoryEnabled((history['add_history_to_context'] as boolean) ?? true);
-    setHistoryMessages((history['num_history_messages'] as number) ?? 20);
-    setHistoryToolCalls((history['max_tool_calls_from_history'] as number) ?? 3);
-    setCompactionThreshold((history['compaction_context_usage_threshold'] as number) ?? 0.75);
-    setCompactionReserveTokens((history['compaction_context_reserve_tokens'] as number) ?? 4000);
-    setCompactionPreserveN((history['compaction_preserve_last_n_messages'] as number) ?? 2);
 
     const learning = (cfg['learning'] as unknown as Record<string, unknown>) ?? {};
     setLearningUserProfile((learning['user_profile'] as boolean) ?? true);
@@ -251,16 +233,13 @@ export function WorkerSettingsPanel({
           members: worker.type === 'Team' && members.length > 0 ? members : undefined,
           mcp: selectedMCPs.length > 0 ? selectedMCPs : undefined,
           knowledge: selectedKnowledge.length > 0 ? selectedKnowledge : undefined,
-          history: historyMode === 'compaction'
-            ? { enable_compaction: true, compaction_context_usage_threshold: compactionThreshold, compaction_context_reserve_tokens: compactionReserveTokens, compaction_preserve_last_n_messages: compactionPreserveN }
-            : { add_history_to_context: historyEnabled, num_history_messages: historyMessages, max_tool_calls_from_history: historyToolCalls },
           learning: { user_profile: learningUserProfile, user_memory: learningUserMemory, session_context: learningSessionContext, entity_memory: learningEntityMemory, decision_log: learningDecisionLog },
         },
       });
       setDirty(false);
       onSave?.(saved);
     } catch (e) { setSaveError(e instanceof Error ? e.message : 'Save failed'); } finally { setSaving(false); }
-  }, [worker.id, worker.type, name, description, modelRef, instructions, selectedSkills, workspaces, buildToolsPayload, members, selectedMCPs, selectedKnowledge, historyMode, historyEnabled, historyMessages, historyToolCalls, compactionThreshold, compactionReserveTokens, compactionPreserveN, learningUserProfile, learningUserMemory, learningSessionContext, learningEntityMemory, learningDecisionLog, onSave]);
+  }, [worker.id, worker.type, name, description, modelRef, instructions, selectedSkills, workspaces, buildToolsPayload, members, selectedMCPs, selectedKnowledge, learningUserProfile, learningUserMemory, learningSessionContext, learningEntityMemory, learningDecisionLog, onSave]);
 
   const selectedProvider = providers.find((p) => modelRef ? modelRef.startsWith(`${p.id}/`) : false);
 
@@ -295,33 +274,6 @@ export function WorkerSettingsPanel({
             </div>
             <h3 className="settings-section-title">{t('workerSettings.instructions')}</h3>
             <textarea className="settings-textarea" value={instructions} onChange={(e) => { setInstructions(e.target.value); markDirty(); }} placeholder="Agent instructions (system prompt)..." rows={8} />
-            <h3 className="settings-section-title" style={{ marginTop: '1.5rem' }}>{t('workerSettings.history')}</h3>
-            <div className="segmented-control">
-              <button type="button" className={historyMode === 'compaction' ? 'segment active' : 'segment'} onClick={() => { setHistoryMode('compaction'); markDirty(); }}>{t('workerSettings.compaction')}</button>
-              <button type="button" className={historyMode === 'history' ? 'segment active' : 'segment'} onClick={() => { setHistoryMode('history'); markDirty(); }}>{t('workerSettings.historyWindow')}</button>
-            </div>
-            {historyMode === 'compaction' ? (
-              <div className="settings-form">
-                <label className="settings-label">{t('workerSettings.compactionThreshold')}
-                  <div className="slider-row">
-                    <input type="range" className="settings-slider" min={10} max={95} step={5} value={Math.round(compactionThreshold * 100)} onChange={(e) => { setCompactionThreshold(Number(e.target.value) / 100); markDirty(); }} />
-                    <span className="slider-value">{Math.round(compactionThreshold * 100)}%</span>
-                  </div>
-                </label>
-                <label className="settings-label">{t('workerSettings.compactionReserve')}<input type="number" className="settings-input" min={500} max={50000} step={500} value={compactionReserveTokens} onChange={(e) => { setCompactionReserveTokens(Number(e.target.value) || 4000); markDirty(); }} /></label>
-                <label className="settings-label">{t('workerSettings.compactionPreserve')}<input type="number" className="settings-input" min={0} max={20} value={compactionPreserveN} onChange={(e) => { setCompactionPreserveN(Number(e.target.value) || 2); markDirty(); }} /></label>
-                <p className="helper-text">{t('workerSettings.compactionHint')}</p>
-              </div>
-            ) : (
-              <div className="settings-form">
-                <label className="settings-label" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
-                  <input type="checkbox" checked={historyEnabled} onChange={(e) => { setHistoryEnabled(e.target.checked); markDirty(); }} />
-                  <span>{t('workerSettings.addHistory')}</span>
-                </label>
-                <label className="settings-label">{t('workerSettings.historyMessages')}<input type="number" className="settings-input" min={1} max={200} value={historyMessages} onChange={(e) => { setHistoryMessages(Number(e.target.value) || 20); markDirty(); }} disabled={!historyEnabled} /></label>
-                <label className="settings-label">{t('workerSettings.maxToolCalls')}<input type="number" className="settings-input" min={0} max={100} value={historyToolCalls} onChange={(e) => { setHistoryToolCalls(Number(e.target.value) || 3); markDirty(); }} disabled={!historyEnabled} /></label>
-              </div>
-            )}
           </div>
         )}
 

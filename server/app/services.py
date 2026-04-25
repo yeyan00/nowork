@@ -12,6 +12,7 @@ from fastapi import HTTPException
 
 from app.executor import run_worker, _find_agent_os_worker
 from app import repository
+from app import session_manager
 
 logger = logging.getLogger('nowork')
 
@@ -177,8 +178,8 @@ def _normalize_runtime_messages(runtime_messages: list[Any], worker_name: str | 
             'id': f'runtime-{idx}',
             'role': role,
             'content': content,
-            'tokenInput': token_input,
-            'tokenOutput': token_output,
+            'contextSize': token_input,
+            'outputTokens': token_output,
             'toolCalls': normalized_tools,
             'reasoning': str(reasoning),
             'senderName': msg_name if role == 'worker' and msg_name else (worker_name if role == 'worker' else None),
@@ -212,6 +213,12 @@ def update_worker(worker_id: str, payload: dict[str, Any]) -> dict[str, Any]:
 def list_sessions(worker_id: str, agent_os: Any | None = None) -> list[dict[str, Any]]:
     get_worker(worker_id)
 
+    # Read from nowork_sessions.db (WorkerSession table)
+    ws_rows = session_manager.list_worker_sessions(worker_id)
+    ws_by_id = {ws['id']: ws for ws in ws_rows}
+
+    # Read from agno DB for metadata (workspaces, updatedAt)
+    agno_sessions: dict[str, dict] = {}
     if agent_os is not None:
         runtime = _resolve_runtime_agent(worker_id, agent_os)
         if runtime is not None:
@@ -221,40 +228,85 @@ def list_sessions(worker_id: str, agent_os: Any | None = None) -> list[dict[str,
                 worker = repository.get_worker(worker_id)
                 session_type = SessionType.TEAM if worker['type'] == 'Team' else SessionType.AGENT
                 try:
-                    sessions = db.get_sessions(
-                        session_type=session_type,
-                        component_id=worker_id,
-                    )
+                    for s in db.get_sessions(session_type=session_type, component_id=worker_id):
+                        agno_sessions[str(getattr(s, 'session_id', ''))] = s
                 except Exception:
-                    return []
-                sessions = sorted(
-                    sessions,
-                    key=lambda s: getattr(s, 'updated_at', None) or getattr(s, 'created_at', None) or 0,
-                    reverse=True,
-                )
-                return [
-                    {
-                        'id': str(getattr(s, 'session_id', '')),
-                        'workerId': worker_id,
-                        'title': getattr(s, 'session_data', {}).get('title', 'Untitled') if isinstance(getattr(s, 'session_data', None), dict) else 'Untitled',
-                        'workspaces': _extract_session_workspaces(s),
-                        'createdAt': str(getattr(s, 'created_at', '')),
-                        'updatedAt': str(getattr(s, 'updated_at', '') or getattr(s, 'created_at', '')),
-                    }
-                    for s in sessions
-                ]
+                    pass
 
-    return []
+    # Build agno_session_id → WorkerSession mapping
+    # so we can match agno sessions to their WorkerSession
+    agno_to_ws: dict[str, dict] = {}
+    for ws in ws_rows:
+        seg = session_manager.get_active_segment(ws['id'])
+        if seg:
+            agno_to_ws[seg['agno_session_id']] = ws
+
+    results: list[dict[str, Any]] = []
+    seen_ws_ids: set[str] = set()
+
+    # 1. WorkerSession entries (with agno metadata enrichment)
+    for ws in ws_rows:
+        seen_ws_ids.add(ws['id'])
+        seg = session_manager.get_active_segment(ws['id'])
+        agno_sid = seg['agno_session_id'] if seg else None
+        agno_s = agno_sessions.get(agno_sid) if agno_sid else None
+
+        results.append({
+            'id': ws['id'],
+            'workerId': worker_id,
+            'title': ws.get('title', '') or 'Untitled',
+            'workspaces': _extract_session_workspaces(agno_s) if agno_s else None,
+            'createdAt': ws.get('created_at', ''),
+            'updatedAt': str(getattr(agno_s, 'updated_at', '')) if agno_s and getattr(agno_s, 'updated_at', None) else ws.get('updated_at', ''),
+        })
+
+    # 2. Legacy sessions in agno DB that have no WorkerSession — auto-migrate
+    for agno_sid, agno_s in agno_sessions.items():
+        if agno_sid in agno_to_ws:
+            continue  # already covered above
+        # Check if this agno session is a segment of an existing WorkerSession
+        seg = session_manager.resolve_segment(agno_sid)
+        if seg and seg['worker_session_id'] in seen_ws_ids:
+            continue
+
+        # Auto-migrate this legacy session
+        try:
+            title = ''
+            sd = getattr(agno_s, 'session_data', None)
+            if isinstance(sd, dict):
+                title = sd.get('title', '')
+            session_manager.migrate_legacy_session(agno_sid, title=title)
+            seen_ws_ids.add(agno_sid)
+            results.append({
+                'id': agno_sid,
+                'workerId': worker_id,
+                'title': title or 'Untitled',
+                'workspaces': _extract_session_workspaces(agno_s),
+                'createdAt': str(getattr(agno_s, 'created_at', '')),
+                'updatedAt': str(getattr(agno_s, 'updated_at', '') or getattr(agno_s, 'created_at', '')),
+            })
+        except Exception as e:
+            logger.warning('Auto-migrate legacy session %s failed: %s', agno_sid, e)
+
+    # Sort by updatedAt desc
+    results.sort(key=lambda r: r.get('updatedAt', '') or '', reverse=True)
+    return results
 
 
 def create_session(worker_id: str, title: str, workspaces: list[str] | None = None, agent_os: Any | None = None) -> dict[str, Any]:
     get_worker(worker_id)
-    session_id = repository.make_session_id(worker_id)
+
+    # Create WorkerSession via session_manager (business layer)
+    ws = session_manager.create_worker_session(worker_id, title=title)
+    session_id = ws['id']
+    agno_session_id = ws['agno_session_id']
+
     now = datetime.now(timezone.utc).isoformat()
     session_data: dict[str, Any] = {'title': title}
     if workspaces:
         session_data['workspaces'] = workspaces
 
+    # Also create the agno-side session so agno's DB is populated
     if agent_os is not None:
         runtime = _resolve_runtime_agent(worker_id, agent_os)
         if runtime is not None:
@@ -265,14 +317,14 @@ def create_session(worker_id: str, title: str, workspaces: list[str] | None = No
                     if worker['type'] == 'Team':
                         from agno.session import TeamSession
                         session_obj = TeamSession(
-                            session_id=session_id,
+                            session_id=agno_session_id,
                             team_id=worker_id,
                             session_data=session_data,
                         )
                     else:
                         from agno.session import AgentSession
                         session_obj = AgentSession(
-                            session_id=session_id,
+                            session_id=agno_session_id,
                             agent_id=worker_id,
                             session_data=session_data,
                         )
@@ -383,10 +435,14 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
     if worker is None:
         raise HTTPException(status_code=404, detail='Session not found')
 
+    # Resolve agno session_id from WorkerSession's active segment
+    segment = session_manager.resolve_segment(session_id)
+    agno_session_id = segment['agno_session_id'] if segment is not None else session_id
+
     if agent_os is not None:
         runtime = _resolve_runtime_agent(worker_id, agent_os)
         if runtime is not None and hasattr(runtime, 'get_chat_history'):
-            history = runtime.get_chat_history(session_id=session_id)
+            history = runtime.get_chat_history(session_id=agno_session_id)
             if history is not None:
                 normalized = _normalize_runtime_messages(history, worker_name=worker.get('name'))
                 total = len(normalized)
@@ -522,15 +578,19 @@ async def create_message(session_id: str, content: str, attachments: list[dict[s
     if worker is None:
         raise HTTPException(status_code=404, detail='Session not found')
 
+    # Resolve agno session_id from WorkerSession's active segment
+    segment = session_manager.resolve_segment(session_id)
+    agno_session_id = segment['agno_session_id'] if segment is not None else session_id
+
     runtime_worker = _resolve_runtime_agent(worker['id'], agent_os) if agent_os is not None else None
-    media_kwargs, normalized_attachments = _build_media_kwargs(session_id, worker, runtime_worker, attachments)
+    media_kwargs, normalized_attachments = _build_media_kwargs(agno_session_id, worker, runtime_worker, attachments)
     display_content = _format_user_message_content(content, normalized_attachments)
 
     if agent_os is not None and worker['type'] == 'Agent':
         runtime_agent = _find_agent_os_worker(agent_os, worker['id'], 'Agent')
         if runtime_agent is not None and hasattr(runtime_agent, 'run'):
-            with _bind_runtime_session_workspace(runtime_agent, session_id):
-                result = await run_worker(worker, content, session_id=session_id, agent_os=agent_os, media_kwargs=media_kwargs)
+            with _bind_runtime_session_workspace(runtime_agent, agno_session_id):
+                result = await run_worker(worker, content, session_id=agno_session_id, agent_os=agent_os, media_kwargs=media_kwargs)
             user_message = {
                 'id': f'runtime-user-{session_id}',
                 'role': 'user',
@@ -563,8 +623,8 @@ async def create_message(session_id: str, content: str, attachments: list[dict[s
 
     if worker['type'] in {'Team', 'Workflow'}:
         runtime_worker = _find_agent_os_worker(agent_os, worker['id'], worker['type']) if agent_os is not None else None
-        with (_bind_runtime_session_workspace(runtime_worker, session_id) if runtime_worker is not None else nullcontext()):
-            result = await run_worker(worker, content, session_id=session_id, agent_os=agent_os, media_kwargs=media_kwargs)
+        with (_bind_runtime_session_workspace(runtime_worker, agno_session_id) if runtime_worker is not None else nullcontext()):
+            result = await run_worker(worker, content, session_id=agno_session_id, agent_os=agent_os, media_kwargs=media_kwargs)
         return {
             'userMessage': {
                 'id': f'placeholder-user-{session_id}',
@@ -593,8 +653,8 @@ async def create_message(session_id: str, content: str, attachments: list[dict[s
             },
         }
 
-    with (_bind_runtime_session_workspace(runtime_worker, session_id) if runtime_worker is not None else nullcontext()):
-        result = await run_worker(worker, content, session_id=session_id, agent_os=agent_os, media_kwargs=media_kwargs)
+    with (_bind_runtime_session_workspace(runtime_worker, agno_session_id) if runtime_worker is not None else nullcontext()):
+        result = await run_worker(worker, content, session_id=agno_session_id, agent_os=agent_os, media_kwargs=media_kwargs)
     return {
         'userMessage': {
             'id': f'user-{session_id}',
@@ -705,6 +765,10 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
         yield f"data: {json.dumps({'event': 'RunError', 'content': 'Session not found'})}\n\n"
         return
 
+    # Resolve agno session_id from WorkerSession's active segment
+    segment = session_manager.resolve_segment(session_id)
+    agno_session_id = segment['agno_session_id'] if segment else session_id
+
     worker_type = worker.get('type', 'Agent')
     runtime = _find_agent_os_worker(agent_os, worker['id'], worker_type)
     if runtime is None or not hasattr(runtime, 'run'):
@@ -712,17 +776,147 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
         yield f"data: {json.dumps({'event': 'RunError', 'content': f'{worker_type} runtime not available'})}\n\n"
         return
 
-    logger.info('stream_message: session=%s worker=%s type=%s content_len=%d', session_id, worker_id, worker_type, len(content))
+    logger.info('stream_message: session=%s agno_session=%s worker=%s type=%s content_len=%d', session_id, agno_session_id, worker_id, worker_type, len(content))
 
-    media_kwargs, _normalized_attachments = _build_media_kwargs(session_id, worker, runtime, attachments)
+    media_kwargs, _normalized_attachments = _build_media_kwargs(agno_session_id, worker, runtime, attachments)
+
+    # Inject compaction summaries into user message if available
+    actual_content = content
+    if segment is not None:
+        summaries = session_manager.get_compaction_summaries(session_id)
+        if summaries:
+            actual_content = session_manager.wrap_with_compaction(content, summaries)
 
     accumulated_content = ''
     accumulated_reasoning = ''
     current_tools: list[dict[str, Any]] = []
+    last_input_tokens = 0
+    need_compact = False
+
+    # For Team workers, only the TeamModelRequestCompleted (orchestrator) reflects
+    # overall context size. Member-agent ModelRequestCompleted events are irrelevant.
+    is_team = worker_type == 'Team'
+
+    async def _pre_run_compaction_check(seg: dict, agno_sid: str, ws_sid: str, rt: Any, team: bool) -> bool:
+        """Check if context is already over threshold before starting a new run.
+        Returns True if compaction was performed.
+        """
+        cfg = session_manager.get_compaction_config()
+        if not cfg.get('enabled', True):
+            return False
+
+        # Get the last run's input_tokens from agno DB
+        db = getattr(rt, 'db', None)
+        if db is None or not hasattr(db, 'get_session'):
+            return False
+
+        from agno.db.base import SessionType
+        session_type = SessionType.TEAM if team else SessionType.AGENT
+        try:
+            session_obj = db.get_session(session_id=agno_sid, session_type=session_type)
+        except Exception:
+            return False
+        if session_obj is None:
+            return False
+
+        runs = getattr(session_obj, 'runs', None) or []
+        # Find the last run's metrics
+        last_input = 0
+        for run in reversed(runs):
+            metrics = getattr(run, 'metrics', None)
+            if metrics:
+                last_input = getattr(metrics, 'input_tokens', 0) or 0
+                if last_input > 0:
+                    break
+
+        if last_input <= 0:
+            return False
+
+        model = getattr(rt, 'model', None)
+        context_window = None
+        if model is not None:
+            context_window = getattr(model, 'context_window', None)
+            if context_window is None:
+                context_window = getattr(model, '_context_window', None)
+
+        threshold = cfg.get('context_usage_threshold', 0.75)
+        reserve = cfg.get('context_reserve_tokens', 4000)
+        limit = int(context_window * threshold - reserve) if context_window and context_window > 0 else 25000
+
+        if last_input < limit:
+            return False
+
+        logger.info('Pre-run compaction: last_input_tokens=%d >= limit=%d, compacting session %s', last_input, limit, ws_sid)
+        updated_seg = session_manager.resolve_segment(ws_sid)
+        if updated_seg:
+            await session_manager.compact_segment(ws_sid, updated_seg, runs=list(runs), model=model)
+            return True
+        return False
+
+    def _check_compaction_threshold(input_tokens: int):
+        """Check if input_tokens exceeded compaction limit. Called at ModelRequestCompleted."""
+        nonlocal need_compact
+        if segment is None or input_tokens <= 0:
+            return
+        try:
+            cfg = session_manager.get_compaction_config()
+            if not cfg.get('enabled', True):
+                return
+            model = getattr(runtime, 'model', None)
+            context_window = None
+            if model is not None:
+                context_window = getattr(model, 'context_window', None)
+                if context_window is None:
+                    context_window = getattr(model, '_context_window', None)
+            threshold = cfg.get('context_usage_threshold', 0.75)
+            reserve = cfg.get('context_reserve_tokens', 4000)
+            limit = int(context_window * threshold - reserve) if context_window and context_window > 0 else 25000
+            if input_tokens >= limit:
+                need_compact = True
+                logger.info('Compaction flag set: input_tokens=%d >= limit=%d (context_window=%s, threshold=%.0f%%)',
+                            input_tokens, limit, context_window, threshold * 100)
+        except Exception as e:
+            logger.debug('Compaction threshold check failed: %s', e)
+
+    async def _execute_compaction():
+        """Execute compaction if flagged. Called in finally block after stream ends."""
+        if not need_compact or segment is None:
+            return
+        try:
+            updated_segment = session_manager.resolve_segment(session_id)
+            if updated_segment:
+                db = getattr(runtime, 'db', None)
+                runs = []
+                if db and hasattr(db, 'get_session'):
+                    try:
+                        from agno.db.base import SessionType
+                        session_type = SessionType.TEAM if is_team else SessionType.AGENT
+                        session_obj = db.get_session(session_id=agno_session_id, session_type=session_type)
+                        if session_obj and hasattr(session_obj, 'runs'):
+                            runs = session_obj.runs or []
+                    except Exception:
+                        pass
+                model = getattr(runtime, 'model', None)
+                await session_manager.compact_segment(session_id, updated_segment, runs=runs, model=model)
+                logger.info('Auto-compacted session %s: input_tokens=%d', session_id, last_input_tokens)
+        except Exception as e:
+            logger.warning('Auto-compaction execution failed for session %s: %s', session_id, e)
+
+    # Pre-run compaction check: if the last run's input_tokens already exceeds
+    # threshold, compact BEFORE starting the new run.
+    if segment is not None:
+        try:
+            pre_compact_done = await _pre_run_compaction_check(segment, agno_session_id, session_id, runtime, is_team)
+            if pre_compact_done:
+                # Refresh segment and agno_session_id after compaction
+                segment = session_manager.resolve_segment(session_id)
+                agno_session_id = segment['agno_session_id'] if segment else agno_session_id
+        except Exception as e:
+            logger.warning('Pre-run compaction check failed for session %s: %s', session_id, e)
 
     try:
-        with _bind_runtime_session_workspace(runtime, session_id):
-            async for event in runtime.arun(content, session_id=session_id, stream=True, stream_events=True, **media_kwargs):
+        with _bind_runtime_session_workspace(runtime, agno_session_id):
+            async for event in runtime.arun(actual_content, session_id=agno_session_id, stream=True, stream_events=True, **media_kwargs):
                 event_data = _serialize_event(event)
                 raw_event_type = _get_event_type(event)
                 event_type = _normalize_event_type(raw_event_type)
@@ -767,9 +961,22 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
 
                 if event_type == 'ModelRequestCompleted' or event_type == 'TeamModelRequestCompleted':
                     # Forward per-request token metrics for live display
+                    input_tokens = getattr(event, 'input_tokens', 0) or 0
+                    output_tokens = getattr(event, 'output_tokens', 0) or 0
+
+                    # For compaction: Team only checks TeamModelRequestCompleted (orchestrator),
+                    # Agent only checks ModelRequestCompleted.
+                    is_orchestrator_event = (
+                        (is_team and event_type == 'TeamModelRequestCompleted') or
+                        (not is_team and event_type == 'ModelRequestCompleted')
+                    )
+                    if is_orchestrator_event:
+                        last_input_tokens = input_tokens
+                        _check_compaction_threshold(input_tokens)
+
                     event_data['metrics'] = {
-                        'input_tokens': getattr(event, 'input_tokens', 0) or 0,
-                        'output_tokens': getattr(event, 'output_tokens', 0) or 0,
+                        'input_tokens': input_tokens,
+                        'output_tokens': output_tokens,
                         'total_tokens': getattr(event, 'total_tokens', 0) or 0,
                     }
 
@@ -791,6 +998,14 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
     except Exception as exc:
         logger.exception('stream_message error: session=%s %s', session_id, exc)
         yield f"data: {json.dumps({'event': 'RunError', 'content': str(exc)})}\n\n"
+    finally:
+        # Post-stream: increment run count and execute compaction if needed
+        if segment is not None:
+            try:
+                session_manager.increment_segment_run_count(segment['id'])
+            except Exception:
+                pass
+            await _execute_compaction()
 
 
 async def cancel_run(run_id: str) -> bool:
@@ -1551,3 +1766,96 @@ def add_user_memory_content(worker_id: str, user_id: str, memory_content: str, a
         'memory_id': new_memory.memory_id,
         'created': created.to_dict() if hasattr(created, 'to_dict') else created,
     }
+
+
+# =============================================================================
+# Session Compaction Services
+# =============================================================================
+
+
+def list_compaction_sessions(worker_id: str) -> list[dict[str, Any]]:
+    """List all WorkerSessions (logical sessions) for a worker."""
+    return session_manager.list_worker_sessions(worker_id)
+
+
+def create_compaction_session(worker_id: str, title: str = '') -> dict[str, Any]:
+    """Create a new WorkerSession with its first segment."""
+    return session_manager.create_worker_session(worker_id, title)
+
+
+def get_compaction_session(ws_id: str) -> dict[str, Any] | None:
+    """Get a WorkerSession by ID."""
+    return session_manager.get_worker_session(ws_id)
+
+
+def get_session_segments(ws_id: str) -> list[dict[str, Any]]:
+    """Get all segments for a WorkerSession."""
+    return session_manager.get_all_segments(ws_id)
+
+
+def get_session_config_info() -> dict[str, Any]:
+    """Get the current session compaction configuration."""
+    from app.config import get_compaction_config, get_session_config
+    return {
+        'session': get_session_config(),
+        'compaction': get_compaction_config(),
+    }
+
+
+def update_session_config_info(updates: dict[str, Any]) -> dict[str, Any]:
+    """Update session compaction config. Returns updated config."""
+    from app.config import update_compaction_config, get_session_config
+    compaction_fields = {}
+    if 'enabled' in updates:
+        compaction_fields['enabled'] = updates['enabled']
+    if 'context_usage_threshold' in updates:
+        compaction_fields['context_usage_threshold'] = updates['context_usage_threshold']
+    if 'context_reserve_tokens' in updates:
+        compaction_fields['context_reserve_tokens'] = updates['context_reserve_tokens']
+    if 'summary_style' in updates:
+        compaction_fields['summary_style'] = updates['summary_style']
+    if 'preserve_recent_messages' in updates:
+        compaction_fields['preserve_recent_messages'] = updates['preserve_recent_messages']
+    if 'max_summaries_injected' in updates:
+        compaction_fields['max_summaries_injected'] = updates['max_summaries_injected']
+    if 'summary_model' in updates:
+        compaction_fields['summary_model'] = updates['summary_model']
+    update_compaction_config(compaction_fields)
+    return get_session_config()
+
+
+async def trigger_manual_compaction(ws_id: str, agent_os: Any | None) -> dict[str, Any]:
+    """Manually trigger compaction for a WorkerSession.
+
+    Loads runs from agno, generates summary, creates new segment.
+    """
+    ws = session_manager.get_worker_session(ws_id)
+    if ws is None:
+        raise HTTPException(status_code=404, detail='WorkerSession not found')
+
+    segment = session_manager.resolve_segment(ws_id)
+    if segment is None:
+        raise HTTPException(status_code=400, detail='No active segment to compact')
+
+    worker_id = ws['worker_id']
+    model = None
+    runs = []
+
+    if agent_os is not None:
+        runtime = _resolve_runtime_agent(worker_id, agent_os)
+        if runtime:
+            model = getattr(runtime, 'model', None)
+            db = getattr(runtime, 'db', None)
+            if db and hasattr(db, 'get_session'):
+                runs = session_manager._load_runs_from_agno(db, segment['agno_session_id'])
+
+    new_segment = await session_manager.compact_segment(
+        ws_id, segment, runs=runs, model=model
+    )
+
+    return {
+        'ok': True,
+        'old_segment': segment,
+        'new_segment': new_segment,
+    }
+
