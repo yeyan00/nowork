@@ -18,12 +18,20 @@
 ## 📸 截图
 
 #### 🖥️ 主界面
-*一个干净的、联系人式的多 Worker 对话工作区。*
-![Main Interface](asserts/main.png)
+
+<p align="center">
+  <img src="asserts/main.png" alt="Main Interface" />
+</p>
+
+<p align="center"><em>一个干净的、联系人式的多 Worker 对话工作区。</em></p>
 
 #### 🚀 示例：构建一个番茄钟应用
-*规划、编码、审查三个 Agent 在同一个桌面应用里协作完成任务。*
-![Demo Task](asserts/demo.png)
+
+<p align="center">
+  <img src="asserts/demo.png" alt="Demo Task" />
+</p>
+
+<p align="center"><em>规划、编码、审查三个 Agent 在同一个桌面应用里协作完成任务。</em></p>
 
 ---
 

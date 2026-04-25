@@ -18,12 +18,20 @@ Build your own AI workforce — all in one chat window.
 ## 📸 Screenshots
 
 #### 🖥️ Main Interface
-*A clean, contact-style workspace for managing multiple agent conversations.*
-![Main Interface](asserts/main.png)
+
+<p align="center">
+  <img src="asserts/main.png" alt="Main Interface" />
+</p>
+
+<p align="center"><em>A clean, contact-style workspace for managing multiple agent conversations.</em></p>
 
 #### 🚀 Example: Building a Pomodoro Timer
-*Planning, coding, and review agents collaborating inside one desktop app.*
-![Demo Task](asserts/demo.png)
+
+<p align="center">
+  <img src="asserts/demo.png" alt="Demo Task" />
+</p>
+
+<p align="center"><em>Planning, coding, and review agents collaborating inside one desktop app.</em></p>
 
 ---
 
