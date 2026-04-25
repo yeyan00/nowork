@@ -1,8 +1,8 @@
 import type { ChatMessage, SessionSummary, TokenUsage } from '../types';
 
 export interface LiveTokenUsage {
-  input: number;
-  output: number;
+  context: number;   // current context size (input_tokens)
+  output: number;    // latest output tokens
 }
 
 export interface CachedSessionState {

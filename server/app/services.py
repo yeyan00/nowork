@@ -647,7 +647,9 @@ _TEAM_EVENT_MAP = {
     'TeamReasoningStep': 'ReasoningStep',
     'TeamReasoningContentDelta': 'ReasoningContentDelta',
     'TeamReasoningCompleted': 'ReasoningCompleted',
-    'TeamModelRequestCompleted': 'ModelRequestCompleted',
+    # TeamModelRequestCompleted is NOT mapped — keep it separate so the
+    # frontend can distinguish Team-orchestrator context from member-agent context.
+    # 'TeamModelRequestCompleted': 'ModelRequestCompleted',
     'TeamModelRequestStarted': 'ModelRequestStarted',
 }
 
@@ -763,7 +765,7 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
                                 break
                     event_data['toolCalls'] = current_tools
 
-                if event_type == 'ModelRequestCompleted':
+                if event_type == 'ModelRequestCompleted' or event_type == 'TeamModelRequestCompleted':
                     # Forward per-request token metrics for live display
                     event_data['metrics'] = {
                         'input_tokens': getattr(event, 'input_tokens', 0) or 0,

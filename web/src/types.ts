@@ -42,8 +42,8 @@ export interface ChatMessage {
   role: 'user' | 'worker' | 'system';
   content: string;
   meta?: string;
-  tokenInput?: number;
-  tokenOutput?: number;
+  contextSize?: number;     // last ModelRequestCompleted.input_tokens (context window size)
+  outputTokens?: number;    // last ModelRequestCompleted.output_tokens
   toolCalls?: ToolCall[];
   reasoning?: string;
   streaming?: boolean;

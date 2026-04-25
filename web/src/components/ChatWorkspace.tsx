@@ -637,6 +637,12 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
       let liveOutput = 0;
       let msgCounter = 0;
 
+      // Determine which ModelRequestCompleted event to listen to:
+      // - Agent worker → 'ModelRequestCompleted'
+      // - Team worker  → 'TeamModelRequestCompleted' (ignore member events)
+      const isTeamWorker = worker.type === 'Team';
+      const contextEventName = isTeamWorker ? 'TeamModelRequestCompleted' : 'ModelRequestCompleted';
+
       await sendMessageStream(sessionId, userContent, outgoingAttachments, (event: AgentEvent) => {
         const eventType = event.event;
 
@@ -647,19 +653,23 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           }));
         }
 
-        // Live token tracking: overwrite with latest ModelRequestCompleted
-        // input_tokens is the full context size (not incremental), so last = peak
-        // output_tokens is per-call, but we show latest for simplicity
-        if (eventType === 'ModelRequestCompleted') {
+        // Live token tracking: show latest context size & output tokens
+        // For Team workers, only listen to TeamModelRequestCompleted (orchestrator),
+        // ignoring member-agent ModelRequestCompleted events.
+        if (eventType === contextEventName) {
           const m = event.metrics;
           if (m) {
             liveInput = m.input_tokens ?? 0;
             liveOutput = m.output_tokens ?? 0;
             updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
               ...sessionState,
-              liveTokenUsage: { input: liveInput, output: liveOutput },
+              liveTokenUsage: { context: liveInput, output: liveOutput },
             }));
           }
+          return;
+        }
+        // Ignore member-agent ModelRequestCompleted when inside a Team worker
+        if (isTeamWorker && eventType === 'ModelRequestCompleted') {
           return;
         }
 
@@ -740,8 +750,8 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           if (event.reasoning && event.reasoning.length >= accumulatedReasoning.length) accumulatedReasoning = event.reasoning;
           if (event.toolCalls) accumulatedTools = event.toolCalls;
 
-          // Use accumulated tokens from ModelRequestCompleted events directly
-          const finalInput = liveInput;
+          // Store last context size & output tokens on the message
+          const finalContext = liveInput;
           const finalOutput = liveOutput;
 
           updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
@@ -749,12 +759,6 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
             isStreaming: false,
             runId: null,
             liveTokenUsage: null,
-            tokenUsage: event.metrics ? {
-              input: finalInput,
-              output: finalOutput,
-              total: event.metrics.total_tokens ?? finalInput + finalOutput,
-              duration: event.metrics.duration ?? 0,
-            } : sessionState.tokenUsage,
             messages: sessionState.messages.map((message) => message.id === currentWorkerMsgId ? {
               id: currentWorkerMsgId,
               role: 'worker',
@@ -763,8 +767,8 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
               reasoning: accumulatedReasoning || undefined,
               streaming: false,
               senderName: senderName || undefined,
-              tokenInput: finalInput || undefined,
-              tokenOutput: finalOutput || undefined,
+              contextSize: finalContext || undefined,
+              outputTokens: finalOutput || undefined,
             } : message),
           }));
           return;
@@ -969,39 +973,37 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                 ? <div className="message-body"><MarkdownContent content={message.content} /></div>
                 : <div className="message-body">{message.content}</div>}
               {message.role === 'worker' && (() => {
-                // Last worker message in a consecutive group → show cumulative tokens
+                // Last worker message in a consecutive group → show tokens
                 const isLastInGroup = index === messages.length - 1 || messages[index + 1]?.role !== 'worker';
                 if (!isLastInGroup) return null;
 
                 // Live tokens during streaming (last message only)
                 if (message.streaming && index === messages.length - 1) {
                   const live = currentSessionState?.liveTokenUsage;
-                  if (live && (live.input > 0 || live.output > 0)) {
+                  if (live && (live.context > 0 || live.output > 0)) {
                     return (
                       <div className="message-metrics message-metrics-live">
                         <span className="metrics-live-dot" />
-                        <span>Tokens: {live.input.toLocaleString()} / {live.output.toLocaleString()}</span>
+                        <span>上下文: {live.context.toLocaleString()} | 输出: {live.output.toLocaleString()}</span>
                       </div>
                     );
                   }
                   return null;
                 }
 
-                // Cumulative tokens across worker group
-                // input: max across group = peak context size (each call sends full history)
-                // output: sum across group = total tokens generated
-                let groupInput = 0;
-                let groupOutput = 0;
+                // Completed message: show last context & output from this group
+                let lastContext = 0;
+                let lastOutput = 0;
                 for (let i = index; i >= 0; i--) {
                   if (messages[i].role !== 'worker') break;
-                  groupInput = Math.max(groupInput, messages[i].tokenInput ?? 0);
-                  groupOutput += messages[i].tokenOutput ?? 0;
+                  if (messages[i].contextSize) lastContext = messages[i].contextSize!;
+                  if (messages[i].outputTokens) lastOutput = messages[i].outputTokens!;
                 }
-                if (groupInput > 0 || groupOutput > 0) {
+                if (lastContext > 0 || lastOutput > 0) {
                   return (
                     <div className="message-metrics">
                       <svg className="message-metrics-icon" viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M3 12h2v-4H3v4zm4 0h2V6H7v6zm4 0h2V3h-2v9zM2 14h12V2H2v12z"/></svg>
-                      <span>Tokens: {groupInput.toLocaleString()} / {groupOutput.toLocaleString()}</span>
+                      <span>上下文: {lastContext.toLocaleString()} | 输出: {lastOutput.toLocaleString()}</span>
                     </div>
                   );
                 }
