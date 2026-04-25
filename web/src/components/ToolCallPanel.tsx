@@ -35,40 +35,41 @@ function formatToolSummary(toolName: string, args: Record<string, unknown>): str
       const path = shortPath(getPath());
       const offset = args.offset != null ? `:${args.offset}` : '';
       const limit = args.limit != null ? `-${Number(args.offset || 0) + Number(args.limit)}` : '';
-      return path ? `${path}${offset}${limit || ''}` : toolName;
+      return path ? `${toolName} ${path}${offset}${limit || ''}` : toolName;
     }
     case 'edit_file':
     case 'edit': {
       const path = shortPath(getPath());
       const oldText = String(args.oldText ?? args.old_text ?? '');
       const preview = oldText.split('\n')[0]?.trim().substring(0, 35) || '';
-      return preview ? `${path} — ${preview}${oldText.length > 35 ? '…' : ''}` : (path || toolName);
+      const detail = preview ? ` — ${preview}${oldText.length > 35 ? '…' : ''}` : '';
+      return `${toolName} ${path}${detail}` || toolName;
     }
     case 'write_file':
     case 'write': {
       const path = shortPath(getPath());
       const contentLen = String(args.content ?? args.contents ?? '').length;
-      return path ? `${path} (${contentLen.toLocaleString()} chars)` : toolName;
+      return path ? `${toolName} ${path} (${contentLen.toLocaleString()} chars)` : toolName;
     }
     case 'run_shell':
     case 'shell':
     case 'bash':
     case 'execute_shell': {
       const cmd = String(args.command ?? args.cmd ?? '').split('\n')[0] ?? '';
-      return cmd ? (cmd.length > 60 ? cmd.substring(0, 57) + '…' : cmd) : toolName;
+      return cmd ? (cmd.length > 60 ? `${toolName} ${cmd.substring(0, 47)}…` : `${toolName} ${cmd}`) : toolName;
     }
     case 'grep':
     case 'search': {
       const pattern = String(args.pattern ?? args.query ?? args.search_string ?? '');
       const path = shortPath(String(args.path ?? args.file_path ?? '.'));
-      return pattern ? `/${pattern}/ in ${path}` : toolName;
+      return pattern ? `${toolName} /${pattern}/ in ${path}` : toolName;
     }
     case 'find':
     case 'list_dir':
     case 'ls': {
       const path = shortPath(String(args.path ?? args.directory ?? '.'));
       const name = args.name ? ` "${args.name}"` : '';
-      return `${path}${name}`;
+      return `${toolName} ${path}${name}`;
     }
     default: {
       // Generic: show tool_name + key args (skip large text fields)
