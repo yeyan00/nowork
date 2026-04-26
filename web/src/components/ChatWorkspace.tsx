@@ -1143,14 +1143,10 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                   return null;
                 }
 
-                // Completed message: show last context & output from this group
-                let lastContext = 0;
-                let lastOutput = 0;
-                for (let i = index; i >= 0; i--) {
-                  if (messages[i].role !== 'worker') break;
-                  if (messages[i].contextSize) lastContext = messages[i].contextSize!;
-                  if (messages[i].outputTokens) lastOutput = messages[i].outputTokens!;
-                }
+                // Completed message: show context & output from this message
+                // agno's input_tokens is cumulative — the last message has the largest value
+                const lastContext = message.contextSize || 0;
+                const lastOutput = message.outputTokens || 0;
                 if (lastContext > 0 || lastOutput > 0) {
                   return (
                     <div className="message-metrics">
