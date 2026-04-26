@@ -76,3 +76,8 @@ tests
 server/config/config.yaml
 server/config/models/*.yaml
 !server/config/models/*.example.yamlnul
+
+# === Local scripts with machine-specific paths ===
+scripts/build-local.ps1
+scripts/build-local.ps1
+scripts/build-local.cmd
