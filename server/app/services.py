@@ -1578,6 +1578,8 @@ def update_provider(provider_id: str, payload: dict[str, Any]) -> dict[str, Any]
                 'image': m.get('image', legacy_vision),
                 'video': m.get('video', legacy_vision),
             }
+            if m.get('contextWindow'):
+                models_cfg[local_id]['context_window'] = int(m['contextWindow'])
         cfg['models'] = models_cfg
     save_provider_config(provider_id, cfg)
     # Auto-set default_model if currently empty and this provider has models

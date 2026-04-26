@@ -450,11 +450,10 @@ def should_compact(segment: dict[str, Any], model: Any = None) -> bool:
     threshold = cfg.get('context_usage_threshold', 0.75)
     reserve = cfg.get('context_reserve_tokens', 4000)
 
-    if context_window is not None and context_window > 0:
-        token_limit = int(context_window * threshold - reserve)
-    else:
-        # Fallback: fixed run count limit
-        token_limit = 128000  # default 128K context window
+    if not context_window:
+        context_window = 128000  # default context window if not specified
+
+    token_limit = int(context_window * threshold - reserve)  # default 128K context window
 
     estimated_tokens = estimate_segment_tokens_by_count(
         segment.get('run_count', 0)

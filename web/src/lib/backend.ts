@@ -374,6 +374,7 @@ export interface ModelInfo {
   name: string;
   image: boolean;
   video: boolean;
+  contextWindow?: number;
 }
 
 export interface ProviderInfo {

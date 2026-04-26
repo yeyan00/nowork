@@ -189,6 +189,7 @@
     "modelName": "名称",
     "image": "图片",
     "video": "视频",
+    "contextWindow": "上下文",
     "noModels": "暂无模型。点击「从 API 获取」或「+ 添加模型」。",
     "unsavedChanges": "有未保存的更改",
     "selectProvider": "选择一个提供商或新增。",

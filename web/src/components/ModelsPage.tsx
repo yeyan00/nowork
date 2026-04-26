@@ -15,6 +15,7 @@ interface ModelEntry {
   name: string;
   image: boolean;
   video: boolean;
+  contextWindow?: number;
 }
 
 interface ProviderForm {
@@ -50,6 +51,7 @@ function providerToForm(p: ProviderInfo): ProviderForm {
       name: m.name,
       image: m.image || false,
       video: m.video || false,
+      contextWindow: m.contextWindow || undefined,
     })),
   };
 }
@@ -169,7 +171,7 @@ export function ModelsPage() {
         const merged = [...form.models];
         for (const rm of remoteModels) {
           if (!existing.has(rm.id)) {
-            merged.push({ localId: rm.id, name: rm.name || rm.id, image: false, video: false });
+            merged.push({ localId: rm.id, name: rm.name || rm.id, image: false, video: false, contextWindow: undefined });
           }
         }
         setForm((f) => ({ ...f, models: merged }));
@@ -180,7 +182,7 @@ export function ModelsPage() {
     }
   }, [form.baseUrl, form.apiKey, form.models]);
 
-  const updateModel = useCallback((idx: number, field: keyof ModelEntry, value: string | boolean) => {
+  const updateModel = useCallback((idx: number, field: keyof ModelEntry, value: string | boolean | number | undefined) => {
     setForm((f) => {
       const models = f.models.map((m, i) => (i === idx ? { ...m, [field]: value } : m));
       return { ...f, models };
@@ -196,7 +198,7 @@ export function ModelsPage() {
   const addModel = useCallback(() => {
     setForm((f) => ({
       ...f,
-      models: [...f.models, { localId: '', name: '', image: false, video: false }],
+      models: [...f.models, { localId: '', name: '', image: false, video: false, contextWindow: undefined }],
     }));
     setDirty(true);
   }, []);
@@ -330,6 +332,7 @@ export function ModelsPage() {
                     <span className="col-name">{t('models.modelName')}</span>
                     <span className="col-vision">{t('models.image')}</span>
                     <span className="col-vision">{t('models.video')}</span>
+                    <span className="col-ctx">{t('models.contextWindow')}</span>
                     <span className="col-action"></span>
                   </div>
                   {form.models.map((m, idx) => {
@@ -374,6 +377,13 @@ export function ModelsPage() {
                         />
                         <span>{m.video ? 'Yes' : 'No'}</span>
                       </label>
+                      <input
+                        className="settings-input col-ctx"
+                        type="number"
+                        value={m.contextWindow ?? ''}
+                        onChange={(e) => updateModel(idx, 'contextWindow', e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                        placeholder="128000"
+                      />
                       <button type="button" className="ws-remove" onClick={() => removeModel(idx)}>
                         ✕
                       </button>

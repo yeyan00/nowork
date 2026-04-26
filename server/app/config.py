@@ -301,6 +301,7 @@ def _serialize_provider(provider_id: str, provider_cfg: dict) -> dict:
             'name': model_info.get('name', model_id),
             'image': model_info.get('image', legacy_vision),
             'video': model_info.get('video', legacy_vision),
+            'contextWindow': model_info.get('context_window'),
         })
     return {
         'id': provider_id,
