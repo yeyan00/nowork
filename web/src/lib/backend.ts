@@ -132,6 +132,8 @@ export async function createWorker(params: {
     body: JSON.stringify({
       type: params.type,
       name: params.name,
+      description: '',
+      status: 'active',
       clone_from: params.cloneFrom || null,
     }),
   });
