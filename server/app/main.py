@@ -118,7 +118,10 @@ def api_list_workers(type: str | None = None) -> list[dict[str, object]]:
 
 @app.get('/api/workers/{worker_id}')
 def api_get_worker(worker_id: str) -> dict[str, object]:
-    return get_worker(worker_id)
+    result = get_worker(worker_id)
+    if result:
+        result.pop('_raw', None)
+    return result
 
 
 @app.post('/api/workers', status_code=201)
@@ -138,12 +141,15 @@ async def api_create_worker(payload: WorkerCreatePayload, request: Request) -> d
             logger.info('Worker %s added to agent_os', result['id'])
         except Exception as e:
             logger.warning('Failed to add worker %s to agent_os: %s', result['id'], e)
+    # Strip internal fields that may not serialize cleanly
+    result.pop('_raw', None)
     return result
 
 
 @app.put('/api/workers/{worker_id}')
 async def api_update_worker(worker_id: str, payload: WorkerUpdatePayload, request: Request) -> dict[str, object]:
     result = update_worker(worker_id, payload.model_dump())
+    result.pop('_raw', None)
     agent_os = _get_agent_os(request)
     if agent_os is not None:
         try:
