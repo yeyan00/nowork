@@ -302,6 +302,7 @@ def _build_team_messages(runtime: Any, agno_session_id: str, worker_name: str | 
 
     for run in team_runs:
         run_id = str(getattr(run, 'run_id', ''))
+        run_tools = getattr(run, 'tools', None) or []
         members = member_map.get(run_id, [])
 
         if members:
@@ -310,12 +311,30 @@ def _build_team_messages(runtime: Any, agno_session_id: str, worker_name: str | 
                 'activities': members,
             })
 
-        for msg in (run.messages or []):
-            if msg.role in skip_roles:
-                continue
+        run_messages = run.messages or []
 
-            messages.append(_normalize_single_message(msg, idx, worker_name))
+        # CANCELLED runs may have empty messages but tools still hold data.
+        # Reconstruct assistant messages from tools so the user can see
+        # delegate calls and results even for cancelled runs.
+        if not run_messages and run_tools:
+            run_content = str(getattr(run, 'content', '') or '')
+            if not run_content:
+                run_content = '(cancelled)'
+            messages.append({
+                'id': f'{run_id}-cancel',
+                'role': 'worker',
+                'content': run_content,
+                'senderName': worker_name,
+                'toolCalls': [_normalize_tool_call(t) for t in run_tools],
+            })
             idx += 1
+        else:
+            for msg in run_messages:
+                if msg.role in skip_roles:
+                    continue
+
+                messages.append(_normalize_single_message(msg, idx, worker_name))
+                idx += 1
 
     return {
         'messages': messages,
