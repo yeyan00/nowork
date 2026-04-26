@@ -573,30 +573,43 @@ def _format_runs_for_summary(runs: list[Any], max_total_chars: int = 20000) -> s
     if not runs:
         return ''
 
-    # First pass: format all messages with generous limits
+    # First pass: extract all messages from runs, flattening Run→messages
     raw_lines: list[tuple[int, str]] = []
-    for idx, run in enumerate(runs):
-        role = getattr(run, 'role', 'unknown')
-        content = str(getattr(run, 'content', ''))
-        reasoning = str(getattr(run, 'reasoning_content', '') or '')
+    msg_idx = 0
+    skip_roles = {'system', 'tool'}
+    for run in runs:
+        run_messages = getattr(run, 'messages', None)
+        if run_messages is None:
+            # Not a Run object — treat as a single message (legacy agent runs)
+            role = getattr(run, 'role', 'unknown')
+            content = str(getattr(run, 'content', ''))
+            reasoning = str(getattr(run, 'reasoning_content', '') or '')
+            parts = []
+            if content:
+                parts.append(content)
+            if reasoning and len(reasoning) < 500:
+                parts.append(f'(reasoning: {reasoning[:200]})')
+            line_content = ' | '.join(parts)
+            raw_lines.append((msg_idx, line_content))
+            msg_idx += 1
+        else:
+            # Run object — flatten its messages
+            for msg in run_messages:
+                role = getattr(msg, 'role', 'unknown')
+                if role in skip_roles:
+                    continue
+                content = str(getattr(msg, 'content', ''))
+                reasoning = str(getattr(msg, 'reasoning_content', '') or '')
 
-        # Also try to get user input for assistant runs
-        user_input = ''
-        if role == 'assistant':
-            inp = getattr(run, 'input', None)
-            if inp:
-                user_input = str(inp) if not isinstance(inp, list) else str(inp[-1] if inp else '')
+                parts = []
+                if content:
+                    parts.append(content)
+                if reasoning and len(reasoning) < 500:
+                    parts.append(f'(reasoning: {reasoning[:200]})')
 
-        # Build line content
-        parts = []
-        if user_input and len(user_input) < 500:
-            parts.append(f'User asked: {user_input[:200]}')
-        parts.append(content)
-        if reasoning and len(reasoning) < 500:
-            parts.append(f'(reasoning: {reasoning[:200]})')
-
-        line_content = ' | '.join(parts)
-        raw_lines.append((idx, line_content))
+                line_content = ' | '.join(parts)
+                raw_lines.append((msg_idx, line_content))
+                msg_idx += 1
 
     total_runs = len(raw_lines)
     split_point = int(total_runs * 0.7)  # Older = first 70%, recent = last 30%
@@ -653,8 +666,25 @@ def _format_runs_for_summary(runs: list[Any], max_total_chars: int = 20000) -> s
 
 def _generate_simple_summary(runs: list[Any], conversation_text: str) -> dict[str, Any]:
     """Simple fallback summary without LLM."""
-    user_msgs = sum(1 for r in runs if getattr(r, 'role', '') == 'user')
-    assistant_msgs = sum(1 for r in runs if getattr(r, 'role', '') == 'assistant')
+    # Count messages across all runs (runs may contain sub-messages)
+    user_msgs = 0
+    assistant_msgs = 0
+    for run in runs:
+        run_messages = getattr(run, 'messages', None)
+        if run_messages is None:
+            # Legacy single-message run
+            role = getattr(run, 'role', '')
+            if role == 'user':
+                user_msgs += 1
+            elif role == 'assistant':
+                assistant_msgs += 1
+        else:
+            for msg in run_messages:
+                role = getattr(msg, 'role', '')
+                if role == 'user':
+                    user_msgs += 1
+                elif role == 'assistant':
+                    assistant_msgs += 1
 
     # Take last 1500 chars as key context, but extract key lines
     tail = conversation_text[-1500:] if len(conversation_text) > 1500 else conversation_text
