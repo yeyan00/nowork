@@ -76,17 +76,36 @@ pub fn resolve_paths(app: &AppHandle) -> BundledBackendPaths {
     // NOTE: BaseDirectory::Resource resolves to target/debug/resources/ in dev mode,
     // NOT src-tauri/resources/ — so parent-counting is fragile.
     // Use CARGO_MANIFEST_DIR (= src-tauri/) instead for a reliable path to the project root.
-    let server_directory = if cfg!(debug_assertions) {
+    let (server_directory, python_executable, site_packages_directory) = if cfg!(debug_assertions) {
         let src_tauri_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let project_root = src_tauri_dir.parent().expect("src-tauri should have a parent");
         let source_server = project_root.join("server");
-        if source_server.join("app").exists() {
+
+        // Prefer NOWORK_PYTHON env var (conda env) for dev mode — avoids stale packages
+        // in resources/python/Lib/site-packages. Falls back to bundled python.
+        let dev_python = std::env::var("NOWORK_PYTHON")
+            .ok()
+            .map(|p| PathBuf::from(p).join("python.exe"))
+            .filter(|p| p.exists());
+
+        let (py, sp) = if let Some(python) = dev_python {
+            let site_pkgs = python.parent().unwrap().join("Lib").join("site-packages");
+            (python, site_pkgs)
+        } else if source_server.join("app").exists() {
+            (python_executable, site_packages_directory)
+        } else {
+            (python_executable, site_packages_directory)
+        };
+
+        let srv = if source_server.join("app").exists() {
             source_server
         } else {
             resource_server
-        }
+        };
+
+        (srv, py, sp)
     } else {
-        resource_server
+        (resource_server, python_executable, site_packages_directory)
     };
 
     BundledBackendPaths {
