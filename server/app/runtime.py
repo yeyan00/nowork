@@ -190,12 +190,16 @@ def _build_model(model_ref: str | None) -> Any | None:
     model_id = model_cfg.get('id')
     if not model_id:
         raise ValueError(f"模型配置中缺少 id 字段: {model_cfg}")
-    return OpenAILike(
+    model = OpenAILike(
         id=model_id,
         name=model_cfg.get('provider', model_id),
         base_url=model_cfg.get('base_url'),
         api_key=model_cfg.get('api_key'),
     )
+    # Set context_window dynamically — agno Model doesn't have this field
+    if model_cfg.get('context_window'):
+        model.context_window = model_cfg['context_window']
+    return model
 
 
 async def _build_mcp_tools(mcp_names: list[str] | None) -> list[Any]:

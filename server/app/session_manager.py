@@ -454,7 +454,7 @@ def should_compact(segment: dict[str, Any], model: Any = None) -> bool:
         token_limit = int(context_window * threshold - reserve)
     else:
         # Fallback: fixed run count limit
-        token_limit = 50 * 500  # 50 runs * ~500 tokens avg
+        token_limit = 128000  # default 128K context window
 
     estimated_tokens = estimate_segment_tokens_by_count(
         segment.get('run_count', 0)
@@ -467,7 +467,7 @@ def should_compact(segment: dict[str, Any], model: Any = None) -> bool:
 # Compaction Execution
 # =============================================================================
 
-async def generate_compaction_summary(runs: list[Any], model: Any = None) -> dict[str, Any]:
+async def generate_compaction_summary(runs: list[Any], model: Any = None, is_team: bool = False) -> dict[str, Any]:
     """Generate a structured summary from runs using LLM.
 
     Returns:
@@ -485,7 +485,7 @@ async def generate_compaction_summary(runs: list[Any], model: Any = None) -> dic
     summary_style = cfg.get('summary_style', 'structured')
 
     # Format runs for summarization
-    conversation_text = _format_runs_for_summary(runs)
+    conversation_text = _format_runs_for_summary(runs, is_team=is_team)
 
     if model is None:
         # Try to build a model from config
@@ -558,7 +558,7 @@ Output JSON only, no other text."""
         return _generate_simple_summary(runs, conversation_text)
 
 
-def _format_runs_for_summary(runs: list[Any], max_total_chars: int = 20000) -> str:
+def _format_runs_for_summary(runs: list[Any], max_total_chars: int = 20000, is_team: bool = False) -> str:
     """Format agno run objects into a readable conversation text.
 
     Captures ALL messages with smart truncation:
@@ -569,6 +569,7 @@ def _format_runs_for_summary(runs: list[Any], max_total_chars: int = 20000) -> s
     Args:
         runs: List of agno run/message objects
         max_total_chars: Maximum total characters for the formatted text
+        is_team: If True, only include team-level runs (skip member runs)
     """
     if not runs:
         return ''
@@ -578,6 +579,12 @@ def _format_runs_for_summary(runs: list[Any], max_total_chars: int = 20000) -> s
     msg_idx = 0
     skip_roles = {'system', 'tool'}
     for run in runs:
+        # For Team sessions, skip member runs — only summarize team-level conversation
+        if is_team:
+            agent_id = getattr(run, 'agent_id', None) or (run.get('agent_id') if isinstance(run, dict) else None)
+            if agent_id:
+                continue
+
         run_messages = getattr(run, 'messages', None)
         if run_messages is None:
             # Not a Run object — treat as a single message (legacy agent runs)
@@ -703,7 +710,8 @@ def _generate_simple_summary(runs: list[Any], conversation_text: str) -> dict[st
 
 
 async def compact_segment(ws_id: str, old_segment: dict[str, Any],
-                          runs: list[Any] = None, model: Any = None) -> dict[str, Any]:
+                          runs: list[Any] = None, model: Any = None,
+                          is_team: bool = False) -> dict[str, Any]:
     """Execute compaction: summarize old segment, create new segment.
 
     Args:
@@ -711,12 +719,13 @@ async def compact_segment(ws_id: str, old_segment: dict[str, Any],
         old_segment: The active segment to compact
         runs: Optional pre-loaded runs (if None, will try to load from agno)
         model: Optional model for summary generation
+        is_team: If True, only summarize team-level runs (skip member runs)
 
     Returns:
         New segment dict
     """
     # Generate summary
-    summary = await generate_compaction_summary(runs or [], model)
+    summary = await generate_compaction_summary(runs or [], model, is_team=is_team)
 
     now = datetime.now(timezone.utc)
     db = get_db_session()

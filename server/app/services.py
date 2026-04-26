@@ -1068,7 +1068,7 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
 
         threshold = cfg.get('context_usage_threshold', 0.75)
         reserve = cfg.get('context_reserve_tokens', 4000)
-        limit = int(context_window * threshold - reserve) if context_window and context_window > 0 else 25000
+        limit = int(context_window * threshold - reserve) if context_window and context_window > 0 else 128000
 
         if last_input < limit:
             return False
@@ -1076,7 +1076,7 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
         logger.info('Pre-run compaction: last_input_tokens=%d >= limit=%d, compacting session %s', last_input, limit, ws_sid)
         updated_seg = session_manager.resolve_segment(ws_sid)
         if updated_seg:
-            await session_manager.compact_segment(ws_sid, updated_seg, runs=list(runs), model=model)
+            await session_manager.compact_segment(ws_sid, updated_seg, runs=list(runs), model=model, is_team=is_team)
             return True
         return False
 
@@ -1097,7 +1097,7 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
                     context_window = getattr(model, '_context_window', None)
             threshold = cfg.get('context_usage_threshold', 0.75)
             reserve = cfg.get('context_reserve_tokens', 4000)
-            limit = int(context_window * threshold - reserve) if context_window and context_window > 0 else 25000
+            limit = int(context_window * threshold - reserve) if context_window and context_window > 0 else 128000
             if input_tokens >= limit:
                 need_compact = True
                 logger.info('Compaction flag set: input_tokens=%d >= limit=%d (context_window=%s, threshold=%.0f%%)',
@@ -1124,7 +1124,7 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
                     except Exception:
                         pass
                 model = getattr(runtime, 'model', None)
-                await session_manager.compact_segment(session_id, updated_segment, runs=runs, model=model)
+                await session_manager.compact_segment(session_id, updated_segment, runs=runs, model=model, is_team=is_team)
                 logger.info('Auto-compacted session %s: input_tokens=%d', session_id, last_input_tokens)
         except Exception as e:
             logger.warning('Auto-compaction execution failed for session %s: %s', session_id, e)
@@ -2142,6 +2142,8 @@ async def trigger_manual_compaction(ws_id: str, agent_os: Any | None) -> dict[st
         raise HTTPException(status_code=400, detail='No active segment to compact')
 
     worker_id = ws['worker_id']
+    worker = repository.get_worker(worker_id) or {}
+    is_team = worker.get('type') == 'Team'
     model = None
     runs = []
 
@@ -2154,7 +2156,7 @@ async def trigger_manual_compaction(ws_id: str, agent_os: Any | None) -> dict[st
                 runs = session_manager._load_runs_from_agno(db, segment['agno_session_id'])
 
     new_segment = await session_manager.compact_segment(
-        ws_id, segment, runs=runs, model=model
+        ws_id, segment, runs=runs, model=model, is_team=is_team
     )
 
     return {

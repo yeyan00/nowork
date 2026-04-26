@@ -116,6 +116,13 @@ def get_full_model_config(model_ref: str | None = None, config: dict | None = No
     provider_name, model_id = _parse_model_ref(ref)
     provider_cfg = load_provider_config(provider_name)
     provider_cfg['id'] = model_id
+    # Merge model-level fields (e.g. context_window) from models map
+    models = provider_cfg.get('models', {}) if isinstance(provider_cfg, dict) else {}
+    model_info = models.get(model_id, {}) if isinstance(models, dict) else {}
+    if isinstance(model_info, dict):
+        for key in ('context_window',):
+            if key in model_info:
+                provider_cfg[key] = model_info[key]
     return provider_cfg
 
 
