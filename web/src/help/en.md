@@ -85,6 +85,16 @@ The format is `{Provider ID}/{Model ID}`. Save and restart the server.
 - Click the ⚙ gear icon in the chat header to open a settings sidebar for the current Worker
 - You can modify the system prompt, model, tools, and other configuration
 
+**Token Usage:**
+- Below the chat area, context and output token counts are displayed in real time
+- This helps monitor token consumption during long conversations
+
+**Team Member Activities:**
+- When chatting with a **Team** Worker, a 👥 button appears in the chat header
+- Click it to open the Member Activity sidebar, which shows each member agent's progress in real time
+- Each member section can be expanded to view output content and tool call details
+- The tool list within each member section can be collapsed independently
+
 ### 👷 Workers
 
 Workers are the core execution units in NoWork. They can be:
@@ -158,6 +168,12 @@ Configure Model Context Protocol server connections to provide Workers with exte
 ### ⚙️ Settings
 
 - **Language**: Switch between English and Chinese interface
+- **Session Compaction**: Configure automatic conversation context management
+  - **Enable**: Turn compaction on or off
+  - **Context Usage Threshold**: Trigger compaction when context usage reaches this percentage (e.g., 80%)
+  - **Reserve Tokens**: Number of tokens to keep free after compaction
+  - **Preserve Recent Messages**: Number of recent messages to keep unsummarized
+  - **Max Injected Summaries**: Maximum number of past summaries injected into the context
 - **Version**: View current version and check for updates
 - **License**: View the MIT License
 
