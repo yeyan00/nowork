@@ -678,7 +678,22 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
 
         if (eventType === 'ToolCallStarted' || eventType === 'ToolCallCompleted' || eventType === 'ToolCallError') {
           if (event.toolCalls) {
-            accumulatedTools = event.toolCalls;
+            // Backend sends a cumulative toolCalls list for the entire stream.
+            // We track tools per-message: append on Started, update on Completed/Error.
+            if (eventType === 'ToolCallStarted' && event.toolCalls.length > 0) {
+              const newTool = event.toolCalls[event.toolCalls.length - 1];
+              accumulatedTools = [...accumulatedTools, newTool];
+            } else if (eventType === 'ToolCallCompleted' && event.toolCalls) {
+              accumulatedTools = accumulatedTools.map(tc => {
+                const updated = event.toolCalls!.find((t: ToolCall) => t.toolCallId === tc.toolCallId);
+                return updated ? { ...tc, result: updated.result } : tc;
+              });
+            } else if (eventType === 'ToolCallError' && event.toolCalls) {
+              accumulatedTools = accumulatedTools.map(tc => {
+                const updated = event.toolCalls!.find((t: ToolCall) => t.toolCallId === tc.toolCallId);
+                return updated ? { ...tc, error: updated.error } : tc;
+              });
+            }
           }
 
           updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
@@ -875,7 +890,14 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           const senderName = String(event.agent_name || event.team_name || '') || accumulatedSenderName;
           if (event.content && event.content.length >= accumulatedContent.length) accumulatedContent = event.content;
           if (event.reasoning && event.reasoning.length >= accumulatedReasoning.length) accumulatedReasoning = event.reasoning;
-          if (event.toolCalls) accumulatedTools = event.toolCalls;
+          if (event.toolCalls) {
+            // Merge results from backend's cumulative list into local per-message list
+            accumulatedTools = accumulatedTools.map(tc => {
+              const updated = (event.toolCalls as ToolCall[]).find((t: ToolCall) => t.toolCallId === tc.toolCallId);
+              if (updated) return { ...tc, result: updated.result, error: updated.error ?? tc.error };
+              return tc;
+            });
+          }
 
           // Store last context size & output tokens on the message
           const finalContext = liveInput;
