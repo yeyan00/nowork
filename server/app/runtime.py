@@ -26,20 +26,12 @@ def _extract_workspace_permissions(raw: dict[str, Any]) -> dict[str, str] | None
 def _apply_history(agent_kwargs: dict, history: dict) -> None:
     """Apply history settings to agent or team kwargs.
 
-    Since session compaction is now managed at the business layer
-    (session_manager.py), we hard-code agno to:
-    - Always load full history within a segment (num_history_runs=99999)
-    - Never use agno's built-in compaction (enable_compaction=False)
-    This ensures agno is a stateless executor; the Worker layer
-    handles segment boundaries and summary injection.
+    Session compaction is managed at the business layer (session_manager.py),
+    so we hard-code agno to always load full history within a segment.
+    The Worker layer handles segment boundaries and summary injection.
     """
     agent_kwargs['add_history_to_context'] = True
     agent_kwargs['num_history_runs'] = 99999
-    # Explicitly disable agno's own compaction
-    if 'enable_compaction' in agent_kwargs:
-        del agent_kwargs['enable_compaction']
-    if 'compaction_manager' in agent_kwargs:
-        del agent_kwargs['compaction_manager']
 
 
 def _build_learning(learning_cfg: dict | None, db: Any | None, model: Any | None) -> Any | None:
