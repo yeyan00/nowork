@@ -3763,12 +3763,12 @@ button {
 }
 
 .modal-content {
-  background: var(--bg-primary);
+  background: #f7f9fc;
   border-radius: 16px;
   padding: 24px 28px;
   width: 420px;
   max-width: 90vw;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 12px 40px rgba(15, 22, 38, 0.12);
   animation: modal-slide-in 0.2s ease-out;
 }
 
