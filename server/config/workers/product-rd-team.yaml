@@ -136,7 +136,7 @@ skills: []
 
 
 history:
-  member_history_runs: 0
+  member_history_runs: 1
 learning:
   user_profile: true
   user_memory: true
