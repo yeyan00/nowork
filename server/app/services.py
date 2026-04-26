@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+import copy
 import dataclasses
 import json
 import logging
+import time
 from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +20,20 @@ from app import repository
 from app import session_manager
 
 logger = logging.getLogger('nowork')
+
+
+@dataclasses.dataclass
+class SessionRuntimeEntry:
+    worker_id: str
+    worker_type: str
+    model_ref: str
+    runtime: Any
+    created_at: float
+    last_used_at: float
+
+
+_SESSION_RUNTIME_CACHE: dict[str, SessionRuntimeEntry] = {}
+_SESSION_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 def _resolve_worker_id_from_session(session_id: str, agent_os: Any) -> str | None:
@@ -78,6 +95,70 @@ def _extract_session_workspaces(session_obj: Any) -> list[str] | None:
     if isinstance(workspace, str) and workspace.strip():
         return [workspace.strip()]
     return None
+
+
+def _get_session_lock(session_id: str) -> asyncio.Lock:
+    lock = _SESSION_LOCKS.get(session_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _SESSION_LOCKS[session_id] = lock
+    return lock
+
+
+def clear_session_runtime_cache(session_id: str) -> None:
+    _SESSION_RUNTIME_CACHE.pop(session_id, None)
+
+
+def clear_worker_session_runtime_cache(worker_id: str) -> None:
+    stale = [sid for sid, entry in _SESSION_RUNTIME_CACHE.items() if entry.worker_id == worker_id]
+    for sid in stale:
+        _SESSION_RUNTIME_CACHE.pop(sid, None)
+
+
+async def _build_runtime_for_session(worker: dict[str, Any], model_ref: str, agent_os: Any | None) -> Any:
+    from app.runtime import _build_single_agent, _build_single_team
+
+    raw = worker.get('_raw', worker)
+    raw_copy = copy.deepcopy(raw)
+    raw_copy['model'] = model_ref
+    worker_type = worker.get('type', 'Agent')
+
+    if worker_type == 'Team':
+        existing_agents = list(getattr(agent_os, 'agents', []) or []) if agent_os is not None else []
+        return await _build_single_team(raw_copy, existing_agents)
+    return await _build_single_agent(raw_copy)
+
+
+async def _resolve_runtime_for_session(worker: dict[str, Any], session_id: str, agent_os: Any | None) -> Any | None:
+    model_ref = None
+    ws = session_manager.get_worker_session(session_id)
+    if ws is not None:
+        model_ref = ws.get('model_override')
+
+    if not model_ref:
+        if agent_os is None:
+            return None
+        return _find_agent_os_worker(agent_os, worker['id'], worker.get('type', 'Agent'))
+
+    now = time.time()
+    cached = _SESSION_RUNTIME_CACHE.get(session_id)
+    if cached is not None and cached.model_ref == model_ref:
+        cached.last_used_at = now
+        return cached.runtime
+
+    runtime = await _build_runtime_for_session(worker, str(model_ref), agent_os)
+    if runtime is None:
+        return None
+
+    _SESSION_RUNTIME_CACHE[session_id] = SessionRuntimeEntry(
+        worker_id=str(worker['id']),
+        worker_type=str(worker.get('type', 'Agent')),
+        model_ref=str(model_ref),
+        runtime=runtime,
+        created_at=now,
+        last_used_at=now,
+    )
+    return runtime
 
 
 def _collect_skill_dirs(runtime: Any) -> list[str]:
@@ -429,6 +510,7 @@ def update_worker(worker_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     worker = repository.update_worker(worker_id, payload)
     if worker is None:
         raise HTTPException(status_code=404, detail='Worker not found')
+    clear_worker_session_runtime_cache(worker_id)
     return worker
 
 
@@ -478,6 +560,7 @@ def list_sessions(worker_id: str, agent_os: Any | None = None) -> list[dict[str,
             'workerId': worker_id,
             'title': ws.get('title', '') or 'Untitled',
             'workspaces': _extract_session_workspaces(agno_s) if agno_s else None,
+            'modelOverride': ws.get('model_override'),
             'createdAt': ws.get('created_at', ''),
             'updatedAt': str(getattr(agno_s, 'updated_at', '')) if agno_s and getattr(agno_s, 'updated_at', None) else ws.get('updated_at', ''),
         })
@@ -504,6 +587,7 @@ def list_sessions(worker_id: str, agent_os: Any | None = None) -> list[dict[str,
                 'workerId': worker_id,
                 'title': title or 'Untitled',
                 'workspaces': _extract_session_workspaces(agno_s),
+                'modelOverride': None,
                 'createdAt': str(getattr(agno_s, 'created_at', '')),
                 'updatedAt': str(getattr(agno_s, 'updated_at', '') or getattr(agno_s, 'created_at', '')),
             })
@@ -559,94 +643,103 @@ def create_session(worker_id: str, title: str, workspaces: list[str] | None = No
         'workerId': worker_id,
         'title': title,
         'workspaces': workspaces,
+        'modelOverride': None,
         'createdAt': now,
     }
 
 
 def get_session(session_id: str, agent_os: Any | None = None) -> dict[str, Any] | None:
-    worker_id = repository.extract_worker_id(session_id)
+    ws = session_manager.get_worker_session(session_id)
+    worker_id = ws['worker_id'] if ws is not None else repository.extract_worker_id(session_id)
     worker = repository.get_worker(worker_id)
     if worker is None:
         return None
+
+    title = ws.get('title', 'Untitled') if ws is not None else 'Untitled'
+    model_override = ws.get('model_override') if ws is not None else None
+    created_at = ws.get('created_at', '') if ws is not None else ''
+    updated_at = ws.get('updated_at', '') if ws is not None else ''
+    workspaces = None
 
     if agent_os is not None:
         runtime = _resolve_runtime_agent(worker_id, agent_os)
         if runtime is not None:
             try:
-                agent_session = runtime.get_session(session_id=session_id)
+                seg = session_manager.resolve_segment(session_id)
+                runtime_session_id = seg['agno_session_id'] if seg is not None else session_id
+                agent_session = runtime.get_session(session_id=runtime_session_id)
                 if agent_session is not None:
-                    return {
-                        'id': session_id,
-                        'workerId': worker_id,
-                        'title': getattr(agent_session, 'session_data', {}).get('title', 'Untitled') if isinstance(getattr(agent_session, 'session_data', None), dict) else 'Untitled',
-                        'workspaces': _extract_session_workspaces(agent_session),
-                        'createdAt': str(getattr(agent_session, 'created_at', '')),
-                    }
+                    session_data = getattr(agent_session, 'session_data', {}) if isinstance(getattr(agent_session, 'session_data', None), dict) else {}
+                    title = session_data.get('title', title) or 'Untitled'
+                    workspaces = _extract_session_workspaces(agent_session)
+                    created_at = str(getattr(agent_session, 'created_at', '')) or created_at
+                    updated_at = str(getattr(agent_session, 'updated_at', '') or getattr(agent_session, 'created_at', '')) or updated_at
             except Exception:
                 pass
 
     return {
         'id': session_id,
         'workerId': worker_id,
-        'title': 'Untitled',
-        'workspaces': None,
-        'createdAt': '',
+        'title': title,
+        'workspaces': workspaces,
+        'modelOverride': model_override,
+        'createdAt': created_at,
+        'updatedAt': updated_at,
     }
 
 
 def update_session(session_id: str, payload: dict[str, Any], agent_os: Any | None = None) -> dict[str, Any] | None:
-    worker_id = repository.extract_worker_id(session_id)
+    ws = session_manager.get_worker_session(session_id)
+    worker_id = ws['worker_id'] if ws is not None else repository.extract_worker_id(session_id)
     worker = repository.get_worker(worker_id)
     if worker is None:
         return None
-    if agent_os is None:
-        return get_session(session_id, agent_os=agent_os)
 
-    runtime = _resolve_runtime_agent(worker_id, agent_os)
-    if runtime is None:
-        return None
-    db = getattr(runtime, 'db', None)
-    if db is None or not hasattr(db, 'upsert_session'):
-        return None
-
-    session_obj = _get_runtime_session(runtime, session_id)
-    if session_obj is None:
-        return None
-
-    session_data = getattr(session_obj, 'session_data', None)
-    if not isinstance(session_data, dict):
-        session_data = {}
-    else:
-        session_data = dict(session_data)
-
+    session_updates: dict[str, Any] = {}
     if 'title' in payload and payload.get('title') is not None:
-        session_data['title'] = str(payload['title'])
+        session_updates['title'] = str(payload['title'])
+    if 'modelOverride' in payload:
+        model_override = payload.get('modelOverride')
+        session_updates['model_override'] = str(model_override).strip() if model_override else None
+        clear_session_runtime_cache(session_id)
 
-    if 'workspaces' in payload:
-        workspaces = payload.get('workspaces')
-        if isinstance(workspaces, list) and len(workspaces) > 0:
-            session_data['workspaces'] = [str(w).strip() for w in workspaces if str(w).strip()]
-        else:
-            session_data.pop('workspaces', None)
-        # Also clean up legacy single-workspace key
-        session_data.pop('workspace', None)
+    if ws is not None and session_updates:
+        session_manager.update_worker_session(session_id, **session_updates)
 
-    setattr(session_obj, 'session_data', session_data)
+    runtime = _resolve_runtime_agent(worker_id, agent_os) if agent_os is not None else None
+    db = getattr(runtime, 'db', None) if runtime is not None else None
 
-    try:
-        db.upsert_session(session_obj)
-    except Exception as e:
-        logger.warning('Failed to update session %s: %s', session_id, e)
-        return None
+    if db is not None and hasattr(db, 'upsert_session'):
+        seg = session_manager.resolve_segment(session_id)
+        runtime_session_id = seg['agno_session_id'] if seg is not None else session_id
+        session_obj = _get_runtime_session(runtime, runtime_session_id)
+        if session_obj is not None:
+            session_data = getattr(session_obj, 'session_data', None)
+            if not isinstance(session_data, dict):
+                session_data = {}
+            else:
+                session_data = dict(session_data)
 
-    return {
-        'id': session_id,
-        'workerId': worker_id,
-        'title': session_data.get('title', 'Untitled'),
-        'workspaces': session_data.get('workspaces'),
-        'createdAt': str(getattr(session_obj, 'created_at', '')),
-        'updatedAt': str(getattr(session_obj, 'updated_at', '') or getattr(session_obj, 'created_at', '')),
-    }
+            if 'title' in payload and payload.get('title') is not None:
+                session_data['title'] = str(payload['title'])
+
+            if 'workspaces' in payload:
+                workspaces = payload.get('workspaces')
+                if isinstance(workspaces, list) and len(workspaces) > 0:
+                    session_data['workspaces'] = [str(w).strip() for w in workspaces if str(w).strip()]
+                else:
+                    session_data.pop('workspaces', None)
+                session_data.pop('workspace', None)
+
+            setattr(session_obj, 'session_data', session_data)
+
+            try:
+                db.upsert_session(session_obj)
+            except Exception as e:
+                logger.warning('Failed to update session %s: %s', session_id, e)
+                return None
+
+    return get_session(session_id, agent_os=agent_os)
 
 
 def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: Any | None = None) -> dict[str, Any]:
@@ -891,63 +984,37 @@ def _format_user_message_content(content: str, attachments: list[dict[str, str]]
 
 
 async def create_message(session_id: str, content: str, attachments: list[dict[str, Any]] | None = None, agent_os: Any | None = None) -> dict[str, Any]:
-    worker_id = _resolve_worker_id(session_id, agent_os)
-    if worker_id is None:
-        raise HTTPException(status_code=404, detail='Session not found')
-    worker = repository.get_worker(worker_id)
-    if worker is None:
-        raise HTTPException(status_code=404, detail='Session not found')
+    async with _get_session_lock(session_id):
+        worker_id = _resolve_worker_id(session_id, agent_os)
+        if worker_id is None:
+            raise HTTPException(status_code=404, detail='Session not found')
+        worker = repository.get_worker(worker_id)
+        if worker is None:
+            raise HTTPException(status_code=404, detail='Session not found')
 
-    # Resolve agno session_id from WorkerSession's active segment
-    segment = session_manager.resolve_segment(session_id)
-    agno_session_id = segment['agno_session_id'] if segment is not None else session_id
+        # Resolve agno session_id from WorkerSession's active segment
+        segment = session_manager.resolve_segment(session_id)
+        agno_session_id = segment['agno_session_id'] if segment is not None else session_id
 
-    runtime_worker = _resolve_runtime_agent(worker['id'], agent_os) if agent_os is not None else None
-    media_kwargs, normalized_attachments = _build_media_kwargs(agno_session_id, worker, runtime_worker, attachments)
-    display_content = _format_user_message_content(content, normalized_attachments)
+        runtime_worker = await _resolve_runtime_for_session(worker, session_id, agent_os)
+        media_kwargs, normalized_attachments = _build_media_kwargs(agno_session_id, worker, runtime_worker, attachments)
+        display_content = _format_user_message_content(content, normalized_attachments)
 
-    if agent_os is not None and worker['type'] == 'Agent':
-        runtime_agent = _find_agent_os_worker(agent_os, worker['id'], 'Agent')
-        if runtime_agent is not None and hasattr(runtime_agent, 'run'):
-            with _bind_runtime_session_workspace(runtime_agent, agno_session_id):
-                result = await run_worker(worker, content, session_id=agno_session_id, agent_os=agent_os, media_kwargs=media_kwargs)
-            user_message = {
-                'id': f'runtime-user-{session_id}',
-                'role': 'user',
-                'content': display_content,
-                'meta': '',
-                'tokenInput': 0,
-                'tokenOutput': 0,
-                'toolCalls': [],
-                'reasoning': '',
-            }
-            worker_message = {
-                'id': f'runtime-worker-{session_id}',
-                'role': 'worker',
-                'content': str(result['content']),
-                'meta': '',
-                'tokenInput': int(result['tokenInput']),
-                'tokenOutput': int(result['tokenOutput']),
-                'toolCalls': result.get('toolCalls', []),
-                'reasoning': result.get('reasoning', ''),
-            }
-            return {
-                'userMessage': user_message,
-                'workerMessage': worker_message,
-                'tokenUsage': {
-                    'input': int(result['tokenInput']),
-                    'output': int(result['tokenOutput']),
-                    'total': int(result['tokenInput']) + int(result['tokenOutput']),
-                },
-            }
-
-    if worker['type'] in {'Team', 'Workflow'}:
-        runtime_worker = _find_agent_os_worker(agent_os, worker['id'], worker['type']) if agent_os is not None else None
         with (_bind_runtime_session_workspace(runtime_worker, agno_session_id) if runtime_worker is not None else nullcontext()):
-            result = await run_worker(worker, content, session_id=agno_session_id, agent_os=agent_os, media_kwargs=media_kwargs)
+            result = await run_worker(
+                worker,
+                content,
+                session_id=agno_session_id,
+                agent_os=agent_os,
+                media_kwargs=media_kwargs,
+                runtime_worker=runtime_worker,
+            )
+
+        user_prefix = 'runtime-user' if runtime_worker is not None and worker['type'] == 'Agent' else 'placeholder-user' if worker['type'] in {'Team', 'Workflow'} else 'user'
+        worker_prefix = 'runtime-worker' if runtime_worker is not None and worker['type'] == 'Agent' else 'placeholder-worker' if worker['type'] in {'Team', 'Workflow'} else 'worker'
         return {
             'userMessage': {
-                'id': f'placeholder-user-{session_id}',
+                'id': f'{user_prefix}-{session_id}',
                 'role': 'user',
                 'content': display_content,
                 'meta': '',
@@ -957,7 +1024,7 @@ async def create_message(session_id: str, content: str, attachments: list[dict[s
                 'reasoning': '',
             },
             'workerMessage': {
-                'id': f'placeholder-worker-{session_id}',
+                'id': f'{worker_prefix}-{session_id}',
                 'role': 'worker',
                 'content': str(result['content']),
                 'meta': '',
@@ -972,36 +1039,6 @@ async def create_message(session_id: str, content: str, attachments: list[dict[s
                 'total': int(result['tokenInput']) + int(result['tokenOutput']),
             },
         }
-
-    with (_bind_runtime_session_workspace(runtime_worker, agno_session_id) if runtime_worker is not None else nullcontext()):
-        result = await run_worker(worker, content, session_id=agno_session_id, agent_os=agent_os, media_kwargs=media_kwargs)
-    return {
-        'userMessage': {
-            'id': f'user-{session_id}',
-            'role': 'user',
-            'content': display_content,
-            'meta': '',
-            'tokenInput': 0,
-            'tokenOutput': 0,
-            'toolCalls': [],
-            'reasoning': '',
-        },
-        'workerMessage': {
-            'id': f'worker-{session_id}',
-            'role': 'worker',
-            'content': str(result['content']),
-            'meta': '',
-            'tokenInput': int(result['tokenInput']),
-            'tokenOutput': int(result['tokenOutput']),
-            'toolCalls': result.get('toolCalls', []),
-            'reasoning': result.get('reasoning', ''),
-        },
-        'tokenUsage': {
-            'input': int(result['tokenInput']),
-            'output': int(result['tokenOutput']),
-            'total': int(result['tokenInput']) + int(result['tokenOutput']),
-        },
-    }
 
 
 def _get_event_type(event: Any) -> str:
@@ -1093,14 +1130,19 @@ def _serialize_event(event: Any) -> dict[str, Any]:
 
 
 async def stream_message(session_id: str, content: str, attachments: list[dict[str, Any]] | None, agent_os: Any) -> AsyncIterator[str]:
+    lock = _get_session_lock(session_id)
+    await lock.acquire()
+
     worker_id = _resolve_worker_id(session_id, agent_os)
     if worker_id is None:
         logger.warning('stream_message: session not found %s', session_id)
+        lock.release()
         yield f"data: {json.dumps({'event': 'RunError', 'content': 'Session not found'})}\n\n"
         return
     worker = repository.get_worker(worker_id)
     if worker is None:
         logger.warning('stream_message: worker not found %s', worker_id)
+        lock.release()
         yield f"data: {json.dumps({'event': 'RunError', 'content': 'Session not found'})}\n\n"
         return
 
@@ -1109,9 +1151,10 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
     agno_session_id = segment['agno_session_id'] if segment else session_id
 
     worker_type = worker.get('type', 'Agent')
-    runtime = _find_agent_os_worker(agent_os, worker['id'], worker_type)
+    runtime = await _resolve_runtime_for_session(worker, session_id, agent_os)
     if runtime is None or not hasattr(runtime, 'run'):
         logger.error('stream_message: runtime not available for worker %s type %s', worker['id'], worker_type)
+        lock.release()
         yield f"data: {json.dumps({'event': 'RunError', 'content': f'{worker_type} runtime not available'})}\n\n"
         return
 
@@ -1430,6 +1473,8 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
             except Exception:
                 pass
             await _execute_compaction()
+        if lock.locked():
+            lock.release()
 
 
 async def cancel_run(run_id: str) -> bool:

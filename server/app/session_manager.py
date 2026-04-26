@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine, Index
+from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine, Index, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.config import get_compaction_config, get_session_config, resolve_server_root, load_config
@@ -38,6 +38,7 @@ class WorkerSessionRow(Base):
     title = Column(String, default='')
     worker_id = Column(String, nullable=False, index=True)
     status = Column(String, default='active')  # active / archived
+    model_override = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
@@ -80,6 +81,18 @@ def _get_db_path() -> Path:
     return db_path
 
 
+def _migrate_schema(engine) -> None:
+    """Apply lightweight schema migrations for the session DB."""
+    try:
+        with engine.begin() as conn:
+            cols = [row[1] for row in conn.execute(text('PRAGMA table_info(worker_sessions)')).fetchall()]
+            if 'model_override' not in cols:
+                conn.execute(text('ALTER TABLE worker_sessions ADD COLUMN model_override VARCHAR'))
+    except Exception as e:
+        logger.warning('Session DB schema migration skipped/failed: %s', e)
+
+
+
 def _get_engine():
     global _engine
     if _engine is None:
@@ -87,6 +100,7 @@ def _get_engine():
         db_path.parent.mkdir(parents=True, exist_ok=True)
         _engine = create_engine(f'sqlite:///{db_path}', echo=False)
         Base.metadata.create_all(_engine)
+        _migrate_schema(_engine)
     return _engine
 
 
@@ -150,6 +164,7 @@ def migrate_legacy_session(session_id: str, title: str = '') -> dict[str, Any] |
             title=title,
             worker_id=worker_id,
             status='active',
+            model_override=None,
             created_at=now,
             updated_at=now,
         )
@@ -191,6 +206,7 @@ def create_worker_session(worker_id: str, title: str = '') -> dict[str, Any]:
             title=title,
             worker_id=worker_id,
             status='active',
+            model_override=None,
             created_at=now,
             updated_at=now,
         )
@@ -215,6 +231,7 @@ def create_worker_session(worker_id: str, title: str = '') -> dict[str, Any]:
             'worker_id': worker_id,
             'title': title,
             'status': 'active',
+            'model_override': None,
             'agno_session_id': agno_session_id,
             'segment_id': seg.id,
             'created_at': now.isoformat(),
@@ -304,6 +321,7 @@ def _serialize_worker_session(ws: WorkerSessionRow) -> dict[str, Any]:
         'worker_id': ws.worker_id,
         'title': ws.title or '',
         'status': ws.status,
+        'model_override': ws.model_override,
         'created_at': ws.created_at.isoformat() if ws.created_at else '',
         'updated_at': ws.updated_at.isoformat() if ws.updated_at else '',
     }

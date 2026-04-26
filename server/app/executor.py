@@ -55,27 +55,28 @@ def _extract_reasoning(result: Any) -> str:
     return ''
 
 
-async def run_worker(worker: dict[str, object], message: str, session_id: str | None = None, agent_os: Any | None = None, media_kwargs: dict[str, object] | None = None) -> dict[str, object]:
+async def run_worker(worker: dict[str, object], message: str, session_id: str | None = None, agent_os: Any | None = None, media_kwargs: dict[str, object] | None = None, runtime_worker: Any | None = None) -> dict[str, object]:
     worker_type = str(worker['type'])
 
-    if agent_os is not None:
+    if runtime_worker is None and agent_os is not None:
         runtime_worker = _find_agent_os_worker(agent_os, str(worker['id']), worker_type)
-        if runtime_worker is not None and hasattr(runtime_worker, 'arun'):
-            run_kwargs: dict[str, object] = {}
-            if session_id:
-                run_kwargs['session_id'] = session_id
-            if media_kwargs:
-                run_kwargs.update(media_kwargs)
 
-            result = await runtime_worker.arun(message, **run_kwargs)
-            content = _extract_response_content(result)
-            return {
-                'content': content or f"{worker['name']} processed the request",
-                'tokenInput': len(message.split()),
-                'tokenOutput': max(len((content or '').split()), 1),
-                'toolCalls': _extract_tool_calls(result),
-                'reasoning': _extract_reasoning(result),
-            }
+    if runtime_worker is not None and hasattr(runtime_worker, 'arun'):
+        run_kwargs: dict[str, object] = {}
+        if session_id:
+            run_kwargs['session_id'] = session_id
+        if media_kwargs:
+            run_kwargs.update(media_kwargs)
+
+        result = await runtime_worker.arun(message, **run_kwargs)
+        content = _extract_response_content(result)
+        return {
+            'content': content or f"{worker['name']} processed the request",
+            'tokenInput': len(message.split()),
+            'tokenOutput': max(len((content or '').split()), 1),
+            'toolCalls': _extract_tool_calls(result),
+            'reasoning': _extract_reasoning(result),
+        }
 
     if worker_type in {'Team', 'Workflow'}:
         return {

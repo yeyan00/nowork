@@ -75,6 +75,8 @@
     "voice": "Voice",
     "stopListening": "Stop listening",
     "voiceInput": "Voice Input",
+    "modelSelect": "Session model",
+    "modelDefault": "Default model",
     "cancel": "Cancel",
     "send": "Send",
     "more": "More",

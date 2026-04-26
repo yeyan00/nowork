@@ -27,6 +27,7 @@ class SessionCreatePayload(BaseModel):
 class SessionUpdatePayload(BaseModel):
     title: Optional[str] = None
     workspaces: Optional[list[str]] = None
+    modelOverride: Optional[str] = None
 
 
 class AttachmentPayload(BaseModel):

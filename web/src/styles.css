@@ -866,6 +866,38 @@ button {
   gap: 8px;
 }
 
+.composer-model-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.composer-model-select {
+  min-width: 180px;
+  max-width: 240px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(132, 146, 170, 0.24);
+  background: #f4f7fb;
+  color: #31415d;
+  font-size: 12px;
+}
+
+.composer-model-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.composer-model-badge {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(76, 120, 255, 0.12);
+  color: #3f61d7;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 /* Workspace dropdown inside composer tools */
 .composer-ws-dropdown-wrapper {
   position: relative;

@@ -75,6 +75,8 @@
     "voice": "语音",
     "stopListening": "停止录音",
     "voiceInput": "语音输入",
+    "modelSelect": "会话模型",
+    "modelDefault": "默认模型",
     "cancel": "取消",
     "send": "发送",
     "more": "...",

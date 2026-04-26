@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
-import { cancelRun, createSession, listMessages, listSessions, sendMessageStream, updateSession } from '../lib/backend';
-import type { AgentEvent } from '../lib/backend';
+import { cancelRun, createSession, listMessages, listModels, listSessions, sendMessageStream, updateSession } from '../lib/backend';
+import type { AgentEvent, ProviderInfo } from '../lib/backend';
 import type { ChatAttachment, ChatMessage, MemberActivity, ToolCall, WorkerSummary, WorkspaceBinding } from '../types';
 import type { CachedSessionState, CachedWorkerState } from './chatState';
 import { createEmptyWorkerState, ensureSessionState, getVisibleAndOverflowSessionIds, type MemberActivitiesByRun } from './chatState';
@@ -147,6 +147,8 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
   const [showWsDropdown, setShowWsDropdown] = useState(false);
   const [pendingSessionWorkspaces, setPendingSessionWorkspaces] = useState<Record<string, string>>({});
   const [draftAttachments, setDraftAttachments] = useState<Record<string, ChatAttachment[]>>({});
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [defaultModelRef, setDefaultModelRef] = useState('');
   const [isListening, setIsListening] = useState(false);
   const messageListRef = useRef<HTMLDivElement>(null);
   const speechRef = useRef<{ recognition: SpeechRecognition; preamble: string } | null>(null);
@@ -197,12 +199,25 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
   const currentSessionState = activeSessionId && currentWorkerState
     ? currentWorkerState.sessionStates[activeSessionId] ?? createSessionState(activeSessionId)
     : null;
+  const isStreaming = currentSessionState?.isStreaming === true;
   const composerSessionId = activeSessionId ?? DRAFT_SESSION_ID;
   const composerSessionState = currentWorkerState
     ? currentWorkerState.sessionStates[composerSessionId] ?? createSessionState(composerSessionId)
     : createSessionState(DRAFT_SESSION_ID);
   const currentSession = currentWorkerState?.sessions.find((session) => session.id === activeSessionId) ?? null;
   const workerWorkspaces = useMemo(() => getWorkerWorkspaces(worker), [worker]);
+  const workerDefaultModelRef = useMemo(() => {
+    const cfg = worker?.config as Record<string, unknown> | undefined;
+    return typeof cfg?.model === 'string' ? cfg.model : '';
+  }, [worker]);
+  const selectedModelRef = currentSession?.modelOverride ?? (workerDefaultModelRef || defaultModelRef);
+  const selectedModelLabel = useMemo(() => {
+    for (const provider of providers) {
+      const model = provider.models.find((m) => m.id === selectedModelRef);
+      if (model) return `${provider.name} / ${model.name}`;
+    }
+    return selectedModelRef || '';
+  }, [providers, selectedModelRef]);
 
   /** Compute the effective set of workspace paths for the current context. */
   const effectiveWorkspaces = useMemo((): string[] => {
@@ -266,6 +281,22 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
     }
     onRequestedSessionHandled?.();
   }, [activateSession, currentWorkerState?.activeSessionId, currentWorkerState?.sessions, currentWorkerState?.sessionsLoaded, onRequestedSessionHandled, requestedSessionId, worker]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listModels().then((data) => {
+      if (cancelled) return;
+      setProviders(data.providers);
+      setDefaultModelRef(data.default_model || '');
+    }).catch(() => {
+      if (cancelled) return;
+      setProviders([]);
+      setDefaultModelRef('');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const PAGE_SIZE = 20;
 
@@ -444,6 +475,36 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
       }));
     });
   }, [activeSessionId, allWorkspacePaths, currentSession, updateSessionState, updateWorkerState, worker]);
+
+  const handleModelChange = useCallback((nextValue: string) => {
+    if (!worker || !activeSessionId || !currentSession || isStreaming) return;
+
+    const baselineModelRef = workerDefaultModelRef || defaultModelRef;
+    const nextOverride = nextValue && nextValue !== baselineModelRef ? nextValue : null;
+    const previousOverride = currentSession.modelOverride ?? null;
+
+    updateWorkerState(worker.id, (workerState) => {
+      workerState.sessions = workerState.sessions.map((session) => (
+        session.id === activeSessionId
+          ? { ...session, modelOverride: nextOverride }
+          : session
+      ));
+      return workerState;
+    });
+
+    void updateSession(activeSessionId, { modelOverride: nextOverride }).catch(() => {
+      updateWorkerState(worker.id, (workerState) => {
+        workerState.sessions = workerState.sessions.map((session) => (
+          session.id === activeSessionId ? { ...session, modelOverride: previousOverride } : session
+        ));
+        return workerState;
+      });
+      updateSessionState(worker.id, activeSessionId, (sessionState) => ({
+        ...sessionState,
+        error: 'Failed to update model',
+      }));
+    });
+  }, [activeSessionId, currentSession, defaultModelRef, isStreaming, updateSessionState, updateWorkerState, worker, workerDefaultModelRef]);
 
   const addAttachments = useCallback(async (kind: ChatAttachment['kind']) => {
     if (!worker) return;
@@ -983,7 +1044,6 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
 
   const messages = currentSessionState?.messages ?? [];
   const isLoading = !currentWorkerState?.sessionsLoaded || currentSessionState?.isLoading === true;
-  const isStreaming = currentSessionState?.isStreaming === true;
   const error = currentSessionState?.error ?? composerSessionState.error;
   const draft = composerSessionState.draft;
   const workerState = currentWorkerState ?? createEmptyWorkerState(worker.id);
@@ -1256,6 +1316,29 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           </div>
 
           <div className="composer-actions">
+            <div className="composer-model-picker" title={selectedModelLabel || selectedModelRef || t('chat.modelDefault')}>
+              <select
+                className="composer-model-select"
+                value={selectedModelRef}
+                onChange={(event) => handleModelChange(event.target.value)}
+                disabled={isStreaming || !activeSessionId || providers.length === 0}
+                aria-label={t('chat.modelSelect')}
+              >
+                {!workerDefaultModelRef && defaultModelRef && (
+                  <option value={defaultModelRef}>{t('chat.modelDefault')}</option>
+                )}
+                {providers.map((provider) => (
+                  <optgroup key={provider.id} label={provider.name}>
+                    {provider.models.map((model) => (
+                      <option key={model.id} value={model.id}>{model.name}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              {currentSession?.modelOverride && (
+                <span className="composer-model-badge">override</span>
+              )}
+            </div>
             {isStreaming ? (
               <button type="button" className="cancel-button" onClick={handleCancel}>
                 {t('chat.cancel')}

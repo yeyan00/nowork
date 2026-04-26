@@ -68,6 +68,7 @@ export interface SessionSummary {
   workerId: string;
   title: string;
   workspaces?: string[] | null;
+  modelOverride?: string | null;
   createdAt: string;
   updatedAt?: string;
 }
