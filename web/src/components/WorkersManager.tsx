@@ -3,26 +3,25 @@
  * Uses the shared WorkerSettingsPanel for the settings area.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useI18n } from '../i18n';
 import {
+  createWorker,
   listWorkers,
 } from '../lib/backend';
 import type { WorkerSummary } from '../types';
 import { WorkerSettingsPanel } from './WorkerSettingsPanel';
 
-type WorkerTab = 'Agents' | 'Teams' | 'Workflows';
+type WorkerTab = 'Agents' | 'Teams';
 
 const workerTypeMap: Record<WorkerTab, WorkerSummary['type']> = {
   Agents: 'Agent',
   Teams: 'Team',
-  Workflows: 'Workflow',
 };
 
 const tabI18nKeys: Record<WorkerTab, string> = {
   Agents: 'workers.agents',
   Teams: 'workers.teams',
-  Workflows: 'workers.workflows',
 };
 
 interface WorkersManagerProps {
@@ -36,18 +35,64 @@ export function WorkersManager({ onWorkerUpdate }: WorkersManagerProps) {
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const [allAgents, setAllAgents] = useState<WorkerSummary[]>([]);
 
-  useEffect(() => {
+  // Create dialog state
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [cloneFromId, setCloneFromId] = useState<string>('');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+
+  const reloadWorkers = useCallback((selectId?: string) => {
     void listWorkers(workerTypeMap[tab]).then((w) => {
       setWorkers(w);
-      setSelectedWorkerId(w.length > 0 ? w[0].id : null);
+      setSelectedWorkerId(selectId ?? (w.length > 0 ? w[0].id : null));
     });
   }, [tab]);
+
+  useEffect(() => {
+    reloadWorkers();
+  }, [reloadWorkers]);
 
   useEffect(() => {
     void listWorkers('Agent').then(setAllAgents).catch(() => {});
   }, []);
 
   const selectedWorker = workers.find((item) => item.id === selectedWorkerId) ?? null;
+
+  const handleCreate = useCallback(async () => {
+    const name = newName.trim();
+    if (!name) return;
+    setCreating(true);
+    setCreateError('');
+    try {
+      const created = await createWorker({
+        type: workerTypeMap[tab],
+        name,
+        cloneFrom: cloneFromId || undefined,
+      });
+      setShowCreate(false);
+      setNewName('');
+      setCloneFromId('');
+      // Reload and select the new worker
+      void listWorkers(workerTypeMap[tab]).then((w) => {
+        setWorkers(w);
+        setSelectedWorkerId(created.id);
+      });
+      // Refresh agent list in case a new Agent was created
+      void listWorkers('Agent').then(setAllAgents).catch(() => {});
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : 'Failed to create');
+    } finally {
+      setCreating(false);
+    }
+  }, [newName, cloneFromId, tab]);
+
+  const openCreate = useCallback(() => {
+    setNewName('');
+    setCloneFromId(workers.length > 0 ? workers[0].id : '');
+    setCreateError('');
+    setShowCreate(true);
+  }, [workers]);
 
   return (
     <section className="page-frame workers-frame">
@@ -59,7 +104,7 @@ export function WorkersManager({ onWorkerUpdate }: WorkersManagerProps) {
       </header>
 
       <div className="tabs" role="tablist">
-        {(['Agents', 'Teams', 'Workflows'] as WorkerTab[]).map((item) => (
+        {(['Agents', 'Teams'] as WorkerTab[]).map((item) => (
           <button
             key={item}
             type="button"
@@ -75,6 +120,14 @@ export function WorkersManager({ onWorkerUpdate }: WorkersManagerProps) {
 
       <div className="workers-settings-layout">
         <div className="workers-list-panel">
+          <button
+            type="button"
+            className="worker-add-btn"
+            onClick={openCreate}
+          >
+            + {t('workers.add')}
+          </button>
+
           {workers.map((w) => (
             <button
               key={w.id}
@@ -123,6 +176,57 @@ export function WorkersManager({ onWorkerUpdate }: WorkersManagerProps) {
           </div>
         )}
       </div>
+
+      {/* Create dialog */}
+      {showCreate && (
+        <div className="modal-overlay" onClick={() => setShowCreate(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>{t('workers.createTitle')}</h3>
+
+            <label className="modal-field">
+              <span>{t('workers.nameLabel')} *</span>
+              <input
+                className="settings-input"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder={t('workers.namePlaceholder')}
+                autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate(); }}
+              />
+            </label>
+
+            <label className="modal-field">
+              <span>{t('workers.cloneLabel')}</span>
+              <select
+                className="settings-input"
+                value={cloneFromId}
+                onChange={(e) => setCloneFromId(e.target.value)}
+              >
+                <option value="">{t('workers.cloneNone')}</option>
+                {workers.map((w) => (
+                  <option key={w.id} value={w.id}>{w.name}</option>
+                ))}
+              </select>
+            </label>
+
+            {createError && <p className="modal-error">{createError}</p>}
+
+            <div className="modal-actions">
+              <button type="button" className="btn-secondary" onClick={() => setShowCreate(false)}>
+                {t('workers.cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={!newName.trim() || creating}
+                onClick={() => void handleCreate()}
+              >
+                {creating ? '...' : t('workers.createBtn')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

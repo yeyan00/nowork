@@ -118,21 +118,44 @@ def _get_worker_raw(worker_id: str) -> dict[str, Any] | None:
 
 def create_worker(payload: dict[str, Any]) -> dict[str, Any]:
     worker_type = payload.get('type', 'Agent')
-    worker_id = payload.get('id') or f"{worker_type.lower()}-{uuid.uuid4().hex[:8]}"
-    ref = payload.get('name', worker_id).lower().replace(' ', '-')
+    worker_id = f"{worker_type.lower()}-{uuid.uuid4().hex[:8]}"
+    name = payload.get('name', '').strip()
+    if not name:
+        raise ValueError('Worker name is required')
+    ref = name.lower().replace(' ', '-')
+
+    # Ensure unique ref (would overwrite existing YAML otherwise)
+    all_workers = list_workers()
+    existing_refs = {w.get('_ref', '') for w in all_workers}
+    existing_names = {w.get('name', '').lower() for w in all_workers}
+    if name.lower() in existing_names:
+        raise ValueError(f'Worker name "{name}" already exists')
+    if ref in existing_refs:
+        ref = f'{ref}-{uuid.uuid4().hex[:4]}'
+
     block_key = {
         'Agent': 'agent',
         'Team': 'team',
         'Workflow': 'workflow',
     }.get(worker_type, 'agent')
 
+    # Clone from source worker if specified
+    clone_source_id = payload.get('clone_from')
+    clone_cfg: dict[str, Any] = {}
+    if clone_source_id:
+        source_raw = _get_worker_raw(clone_source_id)
+        if source_raw:
+            # Clone all config except identity fields
+            clone_cfg = {k: v for k, v in source_raw.items() if k not in ('_ref', '_raw')}
+
     new_cfg: dict[str, Any] = {
+        **clone_cfg,
         block_key: {
             'id': worker_id,
-            'name': payload.get('name', ''),
+            'name': name,
             'description': payload.get('description', ''),
         },
-        'model': payload.get('config', {}).get('model'),
+        'model': payload.get('config', {}).get('model') or clone_cfg.get('model'),
     }
 
     save_worker_config(ref, new_cfg)

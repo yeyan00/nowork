@@ -123,7 +123,10 @@ def api_get_worker(worker_id: str) -> dict[str, object]:
 
 @app.post('/api/workers', status_code=201)
 async def api_create_worker(payload: WorkerCreatePayload, request: Request) -> dict[str, object]:
-    result = create_worker(payload.model_dump())
+    try:
+        result = create_worker(payload.model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     agent_os = _get_agent_os(request)
     if agent_os is not None:
         try:

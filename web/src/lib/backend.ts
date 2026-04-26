@@ -122,6 +122,31 @@ export async function listWorkers(type?: string): Promise<WorkerSummary[]> {
   return (await response.json()) as WorkerSummary[];
 }
 
+export async function createWorker(params: {
+  type: string;
+  name: string;
+  cloneFrom?: string;
+}): Promise<WorkerSummary> {
+  const response = await fetchFromApi('/api/workers', {
+    method: 'POST',
+    body: JSON.stringify({
+      type: params.type,
+      name: params.name,
+      clone_from: params.cloneFrom || null,
+    }),
+  });
+
+  if (response.status === 409) {
+    const detail = await response.json().catch(() => ({}));
+    throw new Error((detail as { detail?: string }).detail || 'Name already exists');
+  }
+  if (!response.ok) {
+    throw new Error('Failed to create worker');
+  }
+
+  return (await response.json()) as WorkerSummary;
+}
+
 export async function updateWorker(workerId: string, payload: Partial<WorkerSummary>): Promise<WorkerSummary> {
   const response = await fetchFromApi(`/api/workers/${workerId}`, {
     method: 'PUT',

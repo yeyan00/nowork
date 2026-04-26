@@ -97,7 +97,15 @@
     "agents": "智能体",
     "teams": "团队",
     "workflows": "工作流",
-    "noItems": "暂无{type}"
+    "noItems": "暂无{type}",
+    "add": "新建",
+    "createTitle": "新建 Worker",
+    "nameLabel": "名称",
+    "namePlaceholder": "新 Worker 名称",
+    "cloneLabel": "基于",
+    "cloneNone": "（无 — 从空白创建）",
+    "cancel": "取消",
+    "createBtn": "创建"
   },
   "workerSettings": {
     "instructions": "指令",

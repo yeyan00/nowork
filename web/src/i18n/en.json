@@ -97,7 +97,15 @@
     "agents": "Agents",
     "teams": "Teams",
     "workflows": "Workflows",
-    "noItems": "No {type}"
+    "noItems": "No {type}",
+    "add": "New",
+    "createTitle": "New Worker",
+    "nameLabel": "Name",
+    "namePlaceholder": "My New Worker",
+    "cloneLabel": "Clone from",
+    "cloneNone": "(None — start blank)",
+    "cancel": "Cancel",
+    "createBtn": "Create"
   },
   "workerSettings": {
     "instructions": "Instructions",

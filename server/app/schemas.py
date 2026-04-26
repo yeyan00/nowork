@@ -6,9 +6,10 @@ from pydantic import BaseModel, Field
 class WorkerCreatePayload(BaseModel):
     type: str
     name: str
-    description: str
-    status: str
+    description: str = ''
+    status: str = 'active'
     config: dict[str, Any] = Field(default_factory=dict)
+    clone_from: Optional[str] = None
 
 
 class WorkerUpdatePayload(BaseModel):
