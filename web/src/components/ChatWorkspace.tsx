@@ -706,50 +706,98 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
               let activities: MemberActivity[];
 
               if (runIdx >= 0) {
-                activities = existing[runIdx].activities.map(a => ({ ...a }));
+                activities = existing[runIdx].activities.map(a => ({ ...a, toolCalls: [...a.toolCalls] }));
               } else {
                 activities = [];
               }
 
-              const agentIdx = activities.findIndex(a => a.agentId === delta.agentId);
+              // For non-started events, find the LAST running entry for this agentId
+              // (same agent can be called multiple times; we want the active one)
+              const findActiveAgentIdx = () => {
+                for (let i = activities.length - 1; i >= 0; i--) {
+                  if (activities[i].agentId === delta.agentId && activities[i].status === 'running') return i;
+                }
+                // Fallback: last entry with this agentId
+                for (let i = activities.length - 1; i >= 0; i--) {
+                  if (activities[i].agentId === delta.agentId) return i;
+                }
+                return -1;
+              };
+
+              let agentIdx: number;
               let agent: MemberActivity;
-              if (agentIdx >= 0) {
-                agent = { ...activities[agentIdx], toolCalls: [...activities[agentIdx].toolCalls] };
-              } else {
-                agent = { agentName: '', agentId: delta.agentId, status: 'running', toolCalls: [], content: '' };
-              }
 
               switch (delta.type) {
-                case 'member_started':
-                  agent.agentName = (delta.agentName as string) || '';
+                case 'member_started': {
+                  // If an entry with same agentId exists and is completed/error,
+                  // this is a new invocation — create a fresh entry
+                  const prevIdx = activities.findIndex(a => a.agentId === delta.agentId);
+                  if (prevIdx >= 0 && (activities[prevIdx].status === 'completed' || activities[prevIdx].status === 'error')) {
+                    agentIdx = -1; // will append
+                  } else if (prevIdx >= 0) {
+                    agentIdx = prevIdx; // reuse running entry
+                  } else {
+                    agentIdx = -1; // first time, append
+                  }
+                  agent = agentIdx >= 0
+                    ? { ...activities[agentIdx] }
+                    : { agentName: (delta.agentName as string) || '', agentId: delta.agentId, status: 'running', toolCalls: [], content: '' };
+                  agent.agentName = (delta.agentName as string) || agent.agentName;
                   agent.status = 'running';
                   break;
+                }
                 case 'member_completed': {
+                  agentIdx = findActiveAgentIdx();
+                  agent = agentIdx >= 0
+                    ? { ...activities[agentIdx] }
+                    : { agentName: '', agentId: delta.agentId, status: 'running', toolCalls: [], content: '' };
                   const newContent = delta.content as string | undefined;
                   if (newContent !== undefined) agent.content = newContent;
                   agent.status = delta.error ? 'error' : 'completed';
                   break;
                 }
-                case 'content':
+                case 'content': {
+                  agentIdx = findActiveAgentIdx();
+                  agent = agentIdx >= 0
+                    ? { ...activities[agentIdx] }
+                    : { agentName: '', agentId: delta.agentId, status: 'running', toolCalls: [], content: '' };
                   agent.content += (delta.content as string) || '';
                   break;
-                case 'tool_started':
+                }
+                case 'tool_started': {
+                  agentIdx = findActiveAgentIdx();
+                  agent = agentIdx >= 0
+                    ? { ...activities[agentIdx], toolCalls: [...activities[agentIdx].toolCalls] }
+                    : { agentName: '', agentId: delta.agentId, status: 'running', toolCalls: [], content: '' };
                   agent.toolCalls.push(delta.toolCall as ToolCall);
                   break;
-                case 'tool_completed':
+                }
+                case 'tool_completed': {
+                  agentIdx = findActiveAgentIdx();
+                  agent = agentIdx >= 0
+                    ? { ...activities[agentIdx], toolCalls: [...activities[agentIdx].toolCalls] }
+                    : { agentName: '', agentId: delta.agentId, status: 'running', toolCalls: [], content: '' };
                   agent.toolCalls = agent.toolCalls.map(tc =>
                     tc.toolCallId === delta.toolCallId
                       ? { ...tc, result: delta.result, status: 'completed' as const }
                       : tc
                   );
                   break;
-                case 'tool_error':
+                }
+                case 'tool_error': {
+                  agentIdx = findActiveAgentIdx();
+                  agent = agentIdx >= 0
+                    ? { ...activities[agentIdx], toolCalls: [...activities[agentIdx].toolCalls] }
+                    : { agentName: '', agentId: delta.agentId, status: 'running', toolCalls: [], content: '' };
                   agent.toolCalls = agent.toolCalls.map(tc =>
                     tc.toolCallId === delta.toolCallId
                       ? { ...tc, error: delta.error as string || 'Error', status: 'error' as const }
                       : tc
                   );
                   break;
+                }
+                default:
+                  return sessionState;
               }
 
               if (agentIdx >= 0) {
@@ -1264,9 +1312,15 @@ function MemberActivitySidebar({ memberActivitiesByRun, onClose }: { memberActiv
           {memberActivitiesByRun.length === 0 && (
             <div className="member-sidebar-empty">{t('chat.noMemberActivities')}</div>
           )}
-          {memberActivitiesByRun.map((run, ri) => (
+          {memberActivitiesByRun.map((run, ri) => {
+            // Count occurrences of each agentName for disambiguation
+            const nameCount: Record<string, number> = {};
+            return (
             <div key={run.runId || ri} className="member-run-group">
               {run.activities.map((activity, ai) => {
+                const baseName = activity.agentName || activity.agentId;
+                const seq = (nameCount[baseName] = (nameCount[baseName] || 0) + 1);
+                const displayName = seq > 1 ? `${baseName} #${seq}` : baseName;
                 const memberKey = `${run.runId}-${ai}`;
                 const isMemberOpen = openMembers.has(memberKey);
                 const toolsKey = `${memberKey}-tools`;
@@ -1275,7 +1329,7 @@ function MemberActivitySidebar({ memberActivitiesByRun, onClose }: { memberActiv
                   <div key={memberKey} className="member-activity-item">
                     <button type="button" className="member-activity-item-header" onClick={() => setOpenMembers(prev => toggle(prev, memberKey))}>
                       <span>{activity.status === 'completed' ? '✅' : activity.status === 'error' ? '❌' : '⏳'}</span>
-                      <span className="member-activity-agent">{activity.agentName}</span>
+                      <span className="member-activity-agent">{displayName}</span>
                       {activity.toolCalls.length > 0 && <span className="member-activity-tool-count">{activity.toolCalls.length} tools</span>}
                       <span className="member-activity-toggle">{isMemberOpen ? '▾' : '▸'}</span>
                     </button>
@@ -1303,7 +1357,8 @@ function MemberActivitySidebar({ memberActivitiesByRun, onClose }: { memberActiv
                 );
               })}
             </div>
-          ))}
+            );
+          })}
         </div>
       </aside>
     </div>

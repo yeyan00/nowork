@@ -172,8 +172,6 @@ tools:
 workspaces:
   - path: C:/Users/me/projects
     permission: read-write
-history:
-  enable_compaction: true
 ```
 
 ---
