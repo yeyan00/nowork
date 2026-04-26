@@ -229,6 +229,74 @@ def _normalize_runtime_messages(runtime_messages: list[Any], worker_name: str | 
     return [_normalize_single_message(msg, idx, worker_name) for idx, msg in enumerate(runtime_messages)]
 
 
+def _extract_final_run_summary(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """From a compacted segment's full message list, extract only the last run's
+    user message and final assistant message (skip intermediate tool calls).
+
+    This is used when the active segment is empty (all segments compacted).
+    The user sees their last question and the assistant's final answer.
+    """
+    if not messages:
+        return []
+
+    # Walk backwards to find the last user message (run boundary)
+    last_user_idx = -1
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].get('role') == 'user':
+            last_user_idx = i
+            break
+
+    if last_user_idx < 0:
+        # No user message found — return as-is
+        return messages
+
+    # Walk backwards from end to find the last assistant/worker message
+    last_assistant_idx = -1
+    for i in range(len(messages) - 1, last_user_idx, -1):
+        if messages[i].get('role') in ('assistant', 'worker'):
+            last_assistant_idx = i
+            break
+
+    result = []
+    result.append(messages[last_user_idx])
+    if last_assistant_idx >= 0:
+        result.append(messages[last_assistant_idx])
+    return result
+
+
+def _load_compacted_agent_messages(runtime: Any, seg_agno_id: str) -> list[dict[str, Any]]:
+    """Load all messages from a compacted Agent segment via agno DB.
+    Returns normalized message dicts. Used when active segment is empty.
+    """
+    try:
+        from agno.db.base import SessionType
+        db = getattr(runtime, 'db', None)
+        if not db or not hasattr(db, 'get_session'):
+            return []
+        session_obj = db.get_session(session_id=seg_agno_id, session_type=SessionType.AGENT)
+        if not session_obj or not hasattr(session_obj, 'runs'):
+            return []
+        normalized: list[dict[str, Any]] = []
+        for run in (session_obj.runs or []):
+            for msg in (getattr(run, 'messages', []) or []):
+                role = getattr(msg, 'role', '')
+                if role in ('system', 'tool'):
+                    continue
+                raw_content = str(getattr(msg, 'content', ''))
+                if role == 'user':
+                    raw_content = session_manager.unwrap_compaction_injection(raw_content)
+                normalized.append({
+                    'id': getattr(msg, 'id', f'{seg_agno_id}-{role}'),
+                    'role': role,
+                    'content': raw_content,
+                    'senderName': None,
+                    'toolCalls': [],
+                })
+        return normalized
+    except Exception:
+        return []
+
+
 def _build_team_messages(runtime: Any, agno_session_id: str, worker_name: str | None = None) -> list[dict[str, Any]]:
     """Build message list for a Team session, including member agent activities as collapsible entries."""
     from agno.db.base import SessionType
@@ -597,12 +665,17 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
         runtime = _resolve_runtime_agent(worker_id, agent_os)
         if runtime is not None:
             if worker.get('type') == 'Team':
-                # Team: build messages with member activities at top level
-                # Load active segments normally; for compacted segments, only
-                # extract user messages (so the user's original input is preserved).
+                # Team: load messages from segments
+                # - Active segment with content → return only active (compacted info
+                #   already injected into it via summary prefix)
+                # - Active segment empty → return last compacted segment's final run
+                #   (user + last assistant message, skip intermediate tool calls)
                 all_segments = session_manager.get_all_segments(session_id)
-                team_messages: list[dict[str, Any]] = []
-                team_members: list[dict[str, Any]] = []
+
+                # Collect per-segment data
+                active_result = None
+                last_compacted_result = None
+                last_compacted_seg = None
 
                 for seg in all_segments:
                     seg_agno_id = seg.get('agno_session_id', '')
@@ -612,31 +685,49 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                     try:
                         seg_result = _build_team_messages(runtime, seg_agno_id, worker_name=worker.get('name'))
                     except Exception:
-                        # Compacted or new segments may not be loadable via runtime
                         continue
-                    if is_compacted:
-                        for msg in seg_result['messages']:
-                            if msg.get('role') == 'user':
-                                team_messages.append(msg)
-                    else:
-                        team_messages.extend(seg_result['messages'])
-                        team_members.extend(seg_result.get('memberActivitiesByRun', []))
 
-                if team_messages:
-                    total = len(team_messages)
+                    if is_compacted:
+                        if seg_result.get('messages'):
+                            last_compacted_result = seg_result
+                            last_compacted_seg = seg
+                    else:
+                        active_result = seg_result
+
+                # Prefer active segment if it has content
+                if active_result and active_result.get('messages'):
+                    msgs = active_result['messages']
+                    total = len(msgs)
                     start = max(0, total - offset - limit)
                     end = total - offset
                     return {
-                        'messages': team_messages[start:end],
+                        'messages': msgs[start:end],
                         'total': total,
                         'has_more': start > 0,
-                        'memberActivitiesByRun': team_members,
+                        'memberActivitiesByRun': active_result.get('memberActivitiesByRun', []),
                     }
-                return {'messages': [], 'total': 0, 'has_more': False, 'memberActivitiesByRun': team_members}
+
+                # Active segment empty: show last compacted segment's final run only
+                if last_compacted_result:
+                    msgs = _extract_final_run_summary(last_compacted_result['messages'])
+                    total = len(msgs)
+                    start = max(0, total - offset - limit)
+                    end = total - offset
+                    return {
+                        'messages': msgs[start:end],
+                        'total': total,
+                        'has_more': start > 0,
+                        'memberActivitiesByRun': last_compacted_result.get('memberActivitiesByRun', []),
+                    }
+
+                return {'messages': [], 'total': 0, 'has_more': False, 'memberActivitiesByRun': []}
             else:
-                # Agent: load active segments normally; compacted segments only extract user messages
+                # Agent: load messages from segments
+                # Same logic as Team — active with content wins, else last compacted's final run
                 all_segments = session_manager.get_all_segments(session_id)
-                normalized: list[dict[str, Any]] = []
+
+                active_messages: list[dict[str, Any]] = []
+                last_compacted_messages: list[dict[str, Any]] = []
 
                 for seg in all_segments:
                     seg_agno_id = seg.get('agno_session_id', '')
@@ -644,46 +735,44 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                         continue
                     is_compacted = seg.get('status') == 'compacted'
                     if is_compacted:
-                        # Compacted segment: read directly from agno DB (runtime.get_chat_history
-                        # may fail because agno no longer considers this an active session)
-                        try:
-                            from agno.db.base import SessionType
-                            db = getattr(runtime, 'db', None)
-                            if db and hasattr(db, 'get_session'):
-                                session_obj = db.get_session(session_id=seg_agno_id, session_type=SessionType.AGENT)
-                                if session_obj and hasattr(session_obj, 'runs'):
-                                    for run in (session_obj.runs or []):
-                                        for msg in (getattr(run, 'messages', []) or []):
-                                            role = getattr(msg, 'role', '')
-                                            if role == 'user':
-                                                raw_content = str(getattr(msg, 'content', ''))
-                                                # Strip compaction injection prefix
-                                                normalized.append({
-                                                    'id': getattr(msg, 'id', f'{seg_agno_id}-user'),
-                                                    'role': 'user',
-                                                    'content': session_manager.unwrap_compaction_injection(raw_content),
-                                                    'senderName': None,
-                                                    'toolCalls': [],
-                                                })
-                        except Exception:
-                            pass
-                    elif hasattr(runtime, 'get_chat_history'):
-                        try:
-                            history = runtime.get_chat_history(session_id=seg_agno_id)
-                        except Exception:
-                            history = None
-                        if history is not None:
-                            normalized.extend(_normalize_runtime_messages(history, worker_name=worker.get('name')))
+                        # Compacted: read directly from agno DB
+                        seg_msgs = _load_compacted_agent_messages(runtime, seg_agno_id)
+                        if seg_msgs:
+                            last_compacted_messages = seg_msgs
+                    else:
+                        # Active segment: load normally
+                        if hasattr(runtime, 'get_chat_history'):
+                            try:
+                                history = runtime.get_chat_history(session_id=seg_agno_id)
+                            except Exception:
+                                history = None
+                            if history is not None:
+                                active_messages = _normalize_runtime_messages(history, worker_name=worker.get('name'))
 
-                if normalized:
-                    total = len(normalized)
+                # Prefer active segment if it has content
+                if active_messages:
+                    total = len(active_messages)
                     start = max(0, total - offset - limit)
                     end = total - offset
                     return {
-                        'messages': normalized[start:end],
+                        'messages': active_messages[start:end],
                         'total': total,
                         'has_more': start > 0,
                     }
+
+                # Active segment empty: show last compacted segment's final run only
+                if last_compacted_messages:
+                    msgs = _extract_final_run_summary(last_compacted_messages)
+                    total = len(msgs)
+                    start = max(0, total - offset - limit)
+                    end = total - offset
+                    return {
+                        'messages': msgs[start:end],
+                        'total': total,
+                        'has_more': start > 0,
+                    }
+
+                return {'messages': [], 'total': 0, 'has_more': False}
 
     return {'messages': [], 'total': 0, 'has_more': False}
 
