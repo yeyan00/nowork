@@ -136,11 +136,7 @@ skills: []
 
 
 history:
-  enable_compaction: true
   member_history_runs: 0
-  compaction_context_usage_threshold: 0.75
-  compaction_context_reserve_tokens: 4000
-  compaction_preserve_last_n_messages: 2
 learning:
   user_profile: true
   user_memory: true

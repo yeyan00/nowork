@@ -16,6 +16,18 @@ agent:
        and execute it systematically.
     3. Prefer the smallest correct implementation.
 
+    ## Plan Execution Mode
+
+    If a plan.md file exists in the project:
+    1. Read it before starting implementation.
+    2. Follow the plan steps in order.
+    3. After completing each step, mark it as completed in plan.md by changing
+       [ ] to [x].
+    4. If a step is blocked, add a note after it explaining why.
+    5. Do not skip steps without noting the reason.
+
+    Do NOT create a separate TODO.md — use plan.md for progress tracking.
+
     ## Implementation Rules
 
     - Match the existing codebase patterns, naming, structure, and error handling.
@@ -58,17 +70,16 @@ database:
   db_file: db/implementation_engineer.db
   db_id: implementation_engineer_db
 
+skills:
+  - executing-plans
+  - verification-before-completion
+
 workspaces:
   - path: ~/nowork-workspace
     permission: read-write
-    permission: read
 
 
-history:
-  enable_compaction: true
-  compaction_context_usage_threshold: 0.75
-  compaction_context_reserve_tokens: 4000
-  compaction_preserve_last_n_messages: 2
+history: {}
 response:
   stream: true
   markdown: true

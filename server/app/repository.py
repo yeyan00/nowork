@@ -28,10 +28,6 @@ _HISTORY_DEFAULTS = {
     'add_history_to_context': True,
     'num_history_messages': 20,
     'max_tool_calls_from_history': 3,
-    'enable_compaction': False,
-    'compaction_context_usage_threshold': 0.75,
-    'compaction_context_reserve_tokens': 4000,
-    'compaction_preserve_last_n_messages': 2,
 }
 
 

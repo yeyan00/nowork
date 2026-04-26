@@ -74,17 +74,15 @@ database:
   db_file: db/architecture_reviewer.db
   db_id: architecture_reviewer_db
 
+skills:
+  - code-review
+
 workspaces:
   - path: ~/nowork-workspace
-    permission: read-only
     permission: read
 
 
-history:
-  enable_compaction: true
-  compaction_context_usage_threshold: 0.75
-  compaction_context_reserve_tokens: 4000
-  compaction_preserve_last_n_messages: 2
+history: {}
 response:
   stream: true
   markdown: true

@@ -42,11 +42,7 @@ skills:
 - pptx
 - xlsx
 - browser-use
-history:
-  enable_compaction: true
-  compaction_context_usage_threshold: 0.75
-  compaction_context_reserve_tokens: 4000
-  compaction_preserve_last_n_messages: 2
+history: {}
 learning:
   user_profile: true
   user_memory: true
