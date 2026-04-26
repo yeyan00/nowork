@@ -127,6 +127,9 @@ async def api_create_worker(payload: WorkerCreatePayload, request: Request) -> d
         result = create_worker(payload.model_dump())
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        logger.exception('create_worker failed: %s', e)
+        raise HTTPException(status_code=500, detail=str(e))
     agent_os = _get_agent_os(request)
     if agent_os is not None:
         try:
