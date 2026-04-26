@@ -329,6 +329,8 @@ class LocalShellOperations:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 env=get_shell_env(),
                 # Create a new process group so we can kill the entire tree
                 **({'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else
