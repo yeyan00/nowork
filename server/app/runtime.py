@@ -397,6 +397,16 @@ async def build_agent_os(workers: list[dict[str, Any]], base_app: Any | None = N
             history = _merge_history(raw)
             _apply_history(team_kwargs, history)
 
+            # Override member history when delegating through this team.
+            # member_history_runs: 0 = no history, N = last N runs, unset = member default
+            member_history_runs = history.get('member_history_runs', None)
+            if member_history_runs is not None:
+                if member_history_runs == 0:
+                    team_kwargs['override_member_history'] = False
+                else:
+                    team_kwargs['override_member_history'] = True
+                    team_kwargs['override_member_num_history_runs'] = member_history_runs
+
             learning_cfg = _merge_learning(raw)
             model_for_learning = team_kwargs.get('model')
             learning = _build_learning(learning_cfg, db, model_for_learning)

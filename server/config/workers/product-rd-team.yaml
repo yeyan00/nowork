@@ -56,6 +56,19 @@ team:
 
     Keep each delegation atomic and outcome-focused.
 
+    ## Plan File Protocol
+
+    When the task involves planning followed by implementation:
+    1. Delegate to Planning Engineer with explicit instruction: "Write the plan
+       to plan.md in the project root."
+    2. After Planning Engineer completes, verify plan.md exists and is well-structured.
+    3. When delegating implementation, include in the MUST DO section:
+       "Read plan.md first. Follow steps in order. Mark each completed step by
+       changing [ ] to [x] in plan.md."
+    4. After implementation, verify plan.md shows all items checked or noted as blocked.
+    5. If the task is planning-only, instruct Planning Engineer to write plan.md
+       and report completion — no implementation delegation needed.
+
     ## Verification Rules
 
     After a member responds, verify:
@@ -114,19 +127,17 @@ members:
 team_workspaces:
   - path: ~/nowork-workspace
     permission: read-write
-    permission: read
 
 team_knowledge:
   - Nowork Product Docs
   - Reference Agent Patterns
 
-skills:
-  - writing-plans
-  - code-review
+skills: []
 
 
 history:
   enable_compaction: true
+  member_history_runs: 0
   compaction_context_usage_threshold: 0.75
   compaction_context_reserve_tokens: 4000
   compaction_preserve_last_n_messages: 2
