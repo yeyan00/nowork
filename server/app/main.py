@@ -5,7 +5,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -132,18 +132,30 @@ async def api_create_worker(payload: WorkerCreatePayload, request: Request) -> d
         raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.exception('create_worker failed: %s', e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f'create_worker error: {type(e).__name__}: {e}')
+
+    logger.info('create_worker returned: id=%s', result.get('id'))
+
+    # Strip internal fields before any further processing
+    result.pop('_raw', None)
+
     agent_os = _get_agent_os(request)
     if agent_os is not None:
-        try:
-            from app.runtime import add_worker_to_os
-            await add_worker_to_os(agent_os, result['id'])
-            logger.info('Worker %s added to agent_os', result['id'])
-        except Exception as e:
-            logger.warning('Failed to add worker %s to agent_os: %s', result['id'], e)
-    # Strip internal fields that may not serialize cleanly
-    result.pop('_raw', None)
+        import asyncio
+        async def _bg_add():
+            try:
+                from app.runtime import add_worker_to_os
+                await add_worker_to_os(agent_os, result['id'])
+                logger.info('Worker %s added to agent_os', result['id'])
+            except Exception as e:
+                logger.warning('Failed to add worker %s to agent_os: %s', result['id'], e)
+        asyncio.create_task(_bg_add())
+
+    logger.info('api_create_worker returning id=%s', result.get('id'))
     return result
+
+
+@staticmethod
 
 
 @app.put('/api/workers/{worker_id}')
