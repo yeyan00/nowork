@@ -609,15 +609,16 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                     if not seg_agno_id:
                         continue
                     is_compacted = seg.get('status') == 'compacted'
-                    if is_compacted:
-                        # Extract only user messages from compacted segment
+                    try:
                         seg_result = _build_team_messages(runtime, seg_agno_id, worker_name=worker.get('name'))
+                    except Exception:
+                        # Compacted or new segments may not be loadable via runtime
+                        continue
+                    if is_compacted:
                         for msg in seg_result['messages']:
                             if msg.get('role') == 'user':
                                 team_messages.append(msg)
-                        team_members.extend(seg_result.get('memberActivitiesByRun', []))
                     else:
-                        seg_result = _build_team_messages(runtime, seg_agno_id, worker_name=worker.get('name'))
                         team_messages.extend(seg_result['messages'])
                         team_members.extend(seg_result.get('memberActivitiesByRun', []))
 
@@ -639,18 +640,38 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
 
                 for seg in all_segments:
                     seg_agno_id = seg.get('agno_session_id', '')
-                    if not seg_agno_id or not hasattr(runtime, 'get_chat_history'):
+                    if not seg_agno_id:
                         continue
-                    history = runtime.get_chat_history(session_id=seg_agno_id)
-                    if history is None:
-                        continue
-                    seg_msgs = _normalize_runtime_messages(history, worker_name=worker.get('name'))
-                    if seg.get('status') == 'compacted':
-                        for msg in seg_msgs:
-                            if msg.get('role') == 'user':
-                                normalized.append(msg)
-                    else:
-                        normalized.extend(seg_msgs)
+                    is_compacted = seg.get('status') == 'compacted'
+                    if is_compacted:
+                        # Compacted segment: read directly from agno DB (runtime.get_chat_history
+                        # may fail because agno no longer considers this an active session)
+                        try:
+                            from agno.db.base import SessionType
+                            db = getattr(runtime, 'db', None)
+                            if db and hasattr(db, 'get_session'):
+                                session_obj = db.get_session(session_id=seg_agno_id, session_type=SessionType.AGENT)
+                                if session_obj and hasattr(session_obj, 'runs'):
+                                    for run in (session_obj.runs or []):
+                                        for msg in (getattr(run, 'messages', []) or []):
+                                            role = getattr(msg, 'role', '')
+                                            if role == 'user':
+                                                normalized.append({
+                                                    'id': getattr(msg, 'id', f'{seg_agno_id}-user'),
+                                                    'role': 'user',
+                                                    'content': str(getattr(msg, 'content', '')),
+                                                    'senderName': None,
+                                                    'toolCalls': [],
+                                                })
+                        except Exception:
+                            pass
+                    elif hasattr(runtime, 'get_chat_history'):
+                        try:
+                            history = runtime.get_chat_history(session_id=seg_agno_id)
+                        except Exception:
+                            history = None
+                        if history is not None:
+                            normalized.extend(_normalize_runtime_messages(history, worker_name=worker.get('name')))
 
                 if normalized:
                     total = len(normalized)
@@ -1068,7 +1089,9 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
 
         threshold = cfg.get('context_usage_threshold', 0.75)
         reserve = cfg.get('context_reserve_tokens', 4000)
-        limit = int(context_window * threshold - reserve) if context_window and context_window > 0 else 128000
+        if context_window is None or context_window <= 0:
+            context_window = 128000  # default context window
+        limit = int(context_window * threshold - reserve)
 
         if last_input < limit:
             return False
@@ -1097,13 +1120,19 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
                     context_window = getattr(model, '_context_window', None)
             threshold = cfg.get('context_usage_threshold', 0.75)
             reserve = cfg.get('context_reserve_tokens', 4000)
-            limit = int(context_window * threshold - reserve) if context_window and context_window > 0 else 128000
+            if context_window is None or context_window <= 0:
+                context_window = 128000  # default context window
+            limit = int(context_window * threshold - reserve)
+            if input_tokens >= limit:
+                need_compact = True
+                logger.info('Compaction flag set: input_tokens=%d >= limit=%d (context_window=%s, threshold=%.0f%%)',
+                            input_tokens, limit, context_window, threshold * 100)
             if input_tokens >= limit:
                 need_compact = True
                 logger.info('Compaction flag set: input_tokens=%d >= limit=%d (context_window=%s, threshold=%.0f%%)',
                             input_tokens, limit, context_window, threshold * 100)
         except Exception as e:
-            logger.debug('Compaction threshold check failed: %s', e)
+            logger.warning('Compaction threshold check failed: %s', e)
 
     async def _execute_compaction():
         """Execute compaction if flagged. Called in finally block after stream ends."""

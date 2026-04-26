@@ -574,7 +574,7 @@ def _format_runs_for_summary(runs: list[Any], max_total_chars: int = 20000, is_t
         return ''
 
     # First pass: extract all messages from runs, flattening Run→messages
-    raw_lines: list[tuple[int, str]] = []
+    raw_lines: list[tuple[int, str, str]] = []  # (idx, content, role)
     msg_idx = 0
     skip_roles = {'system', 'tool'}
     for run in runs:
@@ -596,7 +596,7 @@ def _format_runs_for_summary(runs: list[Any], max_total_chars: int = 20000, is_t
             if reasoning and len(reasoning) < 500:
                 parts.append(f'(reasoning: {reasoning[:200]})')
             line_content = ' | '.join(parts)
-            raw_lines.append((msg_idx, line_content))
+            raw_lines.append((msg_idx, line_content, role))
             msg_idx += 1
         else:
             # Run object — flatten its messages
@@ -614,7 +614,7 @@ def _format_runs_for_summary(runs: list[Any], max_total_chars: int = 20000, is_t
                     parts.append(f'(reasoning: {reasoning[:200]})')
 
                 line_content = ' | '.join(parts)
-                raw_lines.append((msg_idx, line_content))
+                raw_lines.append((msg_idx, line_content, role))
                 msg_idx += 1
 
     total_runs = len(raw_lines)
@@ -623,13 +623,12 @@ def _format_runs_for_summary(runs: list[Any], max_total_chars: int = 20000, is_t
     # Second pass: apply per-line truncation based on position
     lines: list[str] = []
     total_chars = 0
-    for idx, line_content in raw_lines:
+    for idx, line_content, role in raw_lines:
         if idx < split_point:
             per_line_limit = 300
         else:
             per_line_limit = 1200
 
-        role = getattr(runs[idx], 'role', 'unknown')
         if len(line_content) > per_line_limit:
             line_content = line_content[:per_line_limit] + '...'
 
