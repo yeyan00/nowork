@@ -380,8 +380,14 @@ export function ModelsPage() {
                       <input
                         className="settings-input col-ctx"
                         type="number"
+                        min={32000}
+                        max={100000000}
+                        step={1000}
                         value={m.contextWindow ?? ''}
-                        onChange={(e) => updateModel(idx, 'contextWindow', e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                        onChange={(e) => {
+                          const v = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                          updateModel(idx, 'contextWindow', v && v < 32000 ? 32000 : v);
+                        }}
                         placeholder="128000"
                       />
                       <button type="button" className="ws-remove" onClick={() => removeModel(idx)}>
