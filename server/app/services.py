@@ -491,8 +491,20 @@ def _build_team_messages(runtime: Any, agno_session_id: str, worker_name: str | 
     }
 
 
-def list_workers(worker_type: str | None = None) -> list[dict[str, Any]]:
-    return repository.list_workers(worker_type)
+def list_workers(worker_type: str | None = None, agent_os: Any | None = None) -> list[dict[str, Any]]:
+    workers = repository.list_workers(worker_type)
+    for worker in workers:
+        sessions = list_sessions(str(worker.get('id', '')), agent_os=agent_os)
+        worker['recent'] = next(
+            (
+                session.get('updatedAt') or ''
+                for session in sessions
+                if int(session.get('runCount') or 0) > 0 and (session.get('updatedAt') or '')
+            ),
+            '',
+        )
+    workers.sort(key=lambda worker: (str(worker.get('recent') or ''), str(worker.get('name') or '')), reverse=True)
+    return workers
 
 
 def get_worker(worker_id: str) -> dict[str, Any]:
@@ -563,6 +575,7 @@ def list_sessions(worker_id: str, agent_os: Any | None = None) -> list[dict[str,
             'modelOverride': ws.get('model_override'),
             'createdAt': ws.get('created_at', ''),
             'updatedAt': str(getattr(agno_s, 'updated_at', '')) if agno_s and getattr(agno_s, 'updated_at', None) else ws.get('updated_at', ''),
+            'runCount': int((seg or {}).get('run_count') or len(getattr(agno_s, 'runs', None) or [])),
         })
 
     # 2. Legacy sessions in agno DB that have no WorkerSession — auto-migrate
@@ -590,6 +603,7 @@ def list_sessions(worker_id: str, agent_os: Any | None = None) -> list[dict[str,
                 'modelOverride': None,
                 'createdAt': str(getattr(agno_s, 'created_at', '')),
                 'updatedAt': str(getattr(agno_s, 'updated_at', '') or getattr(agno_s, 'created_at', '')),
+                'runCount': len(getattr(agno_s, 'runs', None) or []),
             })
         except Exception as e:
             logger.warning('Auto-migrate legacy session %s failed: %s', agno_sid, e)
@@ -1012,6 +1026,8 @@ async def create_message(session_id: str, content: str, attachments: list[dict[s
 
         user_prefix = 'runtime-user' if runtime_worker is not None and worker['type'] == 'Agent' else 'placeholder-user' if worker['type'] in {'Team', 'Workflow'} else 'user'
         worker_prefix = 'runtime-worker' if runtime_worker is not None and worker['type'] == 'Agent' else 'placeholder-worker' if worker['type'] in {'Team', 'Workflow'} else 'worker'
+        session_manager.update_worker_session(session_id, status='active')
+
         return {
             'userMessage': {
                 'id': f'{user_prefix}-{session_id}',
@@ -1470,6 +1486,7 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
         if segment is not None:
             try:
                 session_manager.increment_segment_run_count(segment['id'])
+                session_manager.update_worker_session(session_id, status='active')
             except Exception:
                 pass
             await _execute_compaction()

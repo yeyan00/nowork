@@ -90,8 +90,10 @@
   },
   "workerList": {
     "title": "工作器",
-    "subtitle": "全部工作器",
-    "filter": "筛选"
+    "subtitle": "按最近对话时间排序",
+    "search": "搜索",
+    "searchPlaceholder": "搜索工作器名称、描述或类型",
+    "noMatch": "没有匹配的工作器"
   },
   "workers": {
     "title": "工作台",

@@ -90,8 +90,10 @@
   },
   "workerList": {
     "title": "Workers",
-    "subtitle": "All workers",
-    "filter": "Filter"
+    "subtitle": "Sorted by recent conversation activity",
+    "search": "Search",
+    "searchPlaceholder": "Search by worker name, description, or type",
+    "noMatch": "No workers match your search."
   },
   "workers": {
     "title": "Worker Studio",

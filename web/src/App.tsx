@@ -19,6 +19,24 @@ import { listWorkers } from './lib/backend';
 import type { AppPage, WorkerSummary } from './types';
 import type { CachedWorkerState } from './components/chatState';
 
+function parseRecentTime(value?: string | null): number {
+  if (!value) return 0;
+  const numeric = Number(value);
+  if (!Number.isNaN(numeric) && numeric > 0) {
+    return numeric > 1e12 ? numeric : numeric * 1000;
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function getCachedWorkerRecentTime(workerState?: CachedWorkerState | null): number {
+  if (!workerState) return 0;
+  return Object.values(workerState.sessionStates).reduce(
+    (latest, sessionState) => Math.max(latest, sessionState.lastActiveAt || 0),
+    0,
+  );
+}
+
 export default function App() {
   const [activePage, setActivePage] = useState<AppPage>('Chat');
   const [workers, setWorkers] = useState<WorkerSummary[]>([]);
@@ -96,7 +114,18 @@ export default function App() {
     dragging.current = false;
   }, []);
 
-  const activeWorker = workers.find((worker) => worker.id === activeWorkerId) ?? null;
+  const sortedWorkers = useMemo(() => {
+    return [...workers].sort((left, right) => {
+      const rightRecent = Math.max(parseRecentTime(right.recent), getCachedWorkerRecentTime(chatStates[right.id]));
+      const leftRecent = Math.max(parseRecentTime(left.recent), getCachedWorkerRecentTime(chatStates[left.id]));
+      if (rightRecent !== leftRecent) {
+        return rightRecent - leftRecent;
+      }
+      return left.name.localeCompare(right.name);
+    });
+  }, [chatStates, workers]);
+
+  const activeWorker = sortedWorkers.find((worker) => worker.id === activeWorkerId) ?? null;
   const runningWorkerIds = useMemo(() => getRunningWorkerIds(chatStates), [chatStates]);
 
   const openChatSession = useCallback((workerId: string, sessionId?: string | null) => {
@@ -112,7 +141,7 @@ export default function App() {
       <div className="chat-layout">
         <div className="chat-sidebar" style={{ width: sidebarWidth }}>
           <WorkerList
-            workers={workers}
+            workers={sortedWorkers}
             activeWorkerId={activeWorkerId ?? undefined}
             runningWorkerIds={runningWorkerIds}
             onSelect={setActiveWorkerId}

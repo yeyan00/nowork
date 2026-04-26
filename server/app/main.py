@@ -112,8 +112,8 @@ def health() -> dict[str, object]:
 
 
 @app.get('/api/workers')
-def api_list_workers(type: str | None = None) -> list[dict[str, object]]:
-    return list_workers(type)
+def api_list_workers(type: str | None = None, request: Request = None) -> list[dict[str, object]]:
+    return list_workers(type, agent_os=_get_agent_os(request))
 
 
 @app.get('/api/workers/{worker_id}')
