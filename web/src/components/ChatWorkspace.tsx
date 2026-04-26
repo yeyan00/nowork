@@ -890,14 +890,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           const senderName = String(event.agent_name || event.team_name || '') || accumulatedSenderName;
           if (event.content && event.content.length >= accumulatedContent.length) accumulatedContent = event.content;
           if (event.reasoning && event.reasoning.length >= accumulatedReasoning.length) accumulatedReasoning = event.reasoning;
-          if (event.toolCalls) {
-            // Merge results from backend's cumulative list into local per-message list
-            accumulatedTools = accumulatedTools.map(tc => {
-              const updated = (event.toolCalls as ToolCall[]).find((t: ToolCall) => t.toolCallId === tc.toolCallId);
-              if (updated) return { ...tc, result: updated.result, error: updated.error ?? tc.error };
-              return tc;
-            });
-          }
+          if (event.toolCalls) accumulatedTools = event.toolCalls;
 
           // Store last context size & output tokens on the message
           const finalContext = liveInput;
