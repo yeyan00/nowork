@@ -181,14 +181,17 @@ export function WorkersManager({ onWorkerUpdate }: WorkersManagerProps) {
       {showCreate && (
         <div className="modal-overlay" onClick={() => setShowCreate(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>{t('workers.createTitle')}</h3>
+            <div className="modal-header">
+              <h3>{t('workers.createTitle')}</h3>
+              <button type="button" className="modal-close" onClick={() => setShowCreate(false)}>✕</button>
+            </div>
 
             <label className="modal-field">
-              <span>{t('workers.nameLabel')} *</span>
+              <span className="modal-label">{t('workers.nameLabel')} <span className="modal-required">*</span></span>
               <input
-                className="settings-input"
+                className="settings-input modal-input"
                 value={newName}
-                onChange={(e) => setNewName(e.target.value)}
+                onChange={(e) => { setNewName(e.target.value); setCreateError(''); }}
                 placeholder={t('workers.namePlaceholder')}
                 autoFocus
                 onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate(); }}
@@ -196,9 +199,9 @@ export function WorkersManager({ onWorkerUpdate }: WorkersManagerProps) {
             </label>
 
             <label className="modal-field">
-              <span>{t('workers.cloneLabel')}</span>
+              <span className="modal-label">{t('workers.cloneLabel')}</span>
               <select
-                className="settings-input"
+                className="settings-input modal-input"
                 value={cloneFromId}
                 onChange={(e) => setCloneFromId(e.target.value)}
               >
