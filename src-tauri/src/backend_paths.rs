@@ -81,12 +81,18 @@ pub fn resolve_paths(app: &AppHandle) -> BundledBackendPaths {
         let project_root = src_tauri_dir.parent().expect("src-tauri should have a parent");
         let source_server = project_root.join("server");
 
-        // Prefer NOWORK_PYTHON env var (conda env) for dev mode — avoids stale packages
-        // in resources/python/Lib/site-packages. Falls back to bundled python.
+        // Prefer NOWORK_PYTHON env var, then auto-detect from CONDA_PREFIX.
+        // Falls back to bundled resources/python if neither is set.
         let dev_python = std::env::var("NOWORK_PYTHON")
             .ok()
             .map(|p| PathBuf::from(p).join("python.exe"))
-            .filter(|p| p.exists());
+            .filter(|p| p.exists())
+            .or_else(|| {
+                std::env::var("CONDA_PREFIX")
+                    .ok()
+                    .map(|p| PathBuf::from(p).join("python.exe"))
+                    .filter(|p| p.exists())
+            });
 
         let (py, sp) = if let Some(python) = dev_python {
             let site_pkgs = python.parent().unwrap().join("Lib").join("site-packages");
