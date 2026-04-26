@@ -1104,12 +1104,12 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
               {message.role === 'worker' && message.reasoning && (
                 <ReasoningPanel content={message.reasoning} defaultOpen={!!message.streaming} />
               )}
-              {message.role === 'worker' && message.toolCalls && message.toolCalls.length > 0 && (
-                <ToolCallList tools={message.toolCalls} />
-              )}
               {message.role === 'worker'
                 ? <div className="message-body"><MarkdownContent content={message.content} /></div>
                 : <div className="message-body">{message.content}</div>}
+              {message.role === 'worker' && message.toolCalls && message.toolCalls.length > 0 && (
+                <ToolCallList tools={message.toolCalls} />
+              )}
               {message.role === 'worker' && (() => {
                 // Last worker message in a consecutive group → show tokens
                 const isLastInGroup = index === messages.length - 1 || messages[index + 1]?.role !== 'worker';
