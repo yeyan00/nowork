@@ -79,7 +79,12 @@
     "send": "发送",
     "more": "...",
     "loadingMore": "加载中...",
-    "tokenMetrics": "上下文: {context} | 输出: {output}"
+    "tokenMetrics": "上下文: {context} | 输出: {output}",
+    "memberActivities": "成员活动 ({completed}/{count})",
+    "toggleMemberActivities": "切换成员活动显示",
+    "showMemberActivities": "显示成员活动",
+    "hideMemberActivities": "隐藏成员活动",
+    "noMemberActivities": "暂无成员活动"
   },
   "workerList": {
     "title": "工作器",
@@ -244,6 +249,7 @@
     "loadMore": "加载中..."
   },
   "tool": {
+    "title": "工具",
     "args": "参数",
     "result": "结果",
     "error": "错误",

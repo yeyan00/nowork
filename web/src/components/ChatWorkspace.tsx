@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { cancelRun, createSession, listMessages, listSessions, sendMessageStream, updateSession } from '../lib/backend';
 import type { AgentEvent } from '../lib/backend';
-import type { ChatAttachment, ChatMessage, ToolCall, WorkerSummary, WorkspaceBinding } from '../types';
+import type { ChatAttachment, ChatMessage, MemberActivity, ToolCall, WorkerSummary, WorkspaceBinding } from '../types';
 import type { CachedSessionState, CachedWorkerState } from './chatState';
-import { createEmptyWorkerState, ensureSessionState, getVisibleAndOverflowSessionIds } from './chatState';
+import { createEmptyWorkerState, ensureSessionState, getVisibleAndOverflowSessionIds, type MemberActivitiesByRun } from './chatState';
 import { MarkdownContent } from './MarkdownContent';
 import { ToolCallList } from './ToolCallPanel';
 import { ReasoningPanel } from './ReasoningPanel';
@@ -54,6 +54,7 @@ function createSessionState(sessionId: string): CachedSessionState {
     error: null,
     loaded: false,
     lastActiveAt: 0,
+    memberActivitiesByRun: [],
   };
 }
 
@@ -142,6 +143,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
   const { t } = useI18n();
   const [showSessionList, setShowSessionList] = useState(false);
   const [showWorkerSettings, setShowWorkerSettings] = useState(false);
+  const [showMemberSidebar, setShowMemberSidebar] = useState(false);
   const [showWsDropdown, setShowWsDropdown] = useState(false);
   const [pendingSessionWorkspaces, setPendingSessionWorkspaces] = useState<Record<string, string>>({});
   const [draftAttachments, setDraftAttachments] = useState<Record<string, ChatAttachment[]>>({});
@@ -287,6 +289,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           loaded: true,
           isLoading: false,
           hasMore: result.has_more,
+          memberActivitiesByRun: result.memberActivitiesByRun || [],
         }));
       })
       .catch(() => {
@@ -692,6 +695,82 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           return;
         }
 
+        if (eventType === 'MemberAgentActivity') {
+          // Incremental delta events — merge into local state
+          const delta = event.delta as { type: string; agentId: string; [key: string]: unknown } | undefined;
+          if (delta) {
+            const runId = event.run_id || '';
+            updateSessionState(targetWorkerId, sessionId!, (sessionState) => {
+              const existing = sessionState.memberActivitiesByRun || [];
+              const runIdx = existing.findIndex(r => r.runId === runId);
+              let activities: MemberActivity[];
+
+              if (runIdx >= 0) {
+                activities = existing[runIdx].activities.map(a => ({ ...a }));
+              } else {
+                activities = [];
+              }
+
+              const agentIdx = activities.findIndex(a => a.agentId === delta.agentId);
+              let agent: MemberActivity;
+              if (agentIdx >= 0) {
+                agent = { ...activities[agentIdx], toolCalls: [...activities[agentIdx].toolCalls] };
+              } else {
+                agent = { agentName: '', agentId: delta.agentId, status: 'running', toolCalls: [], content: '' };
+              }
+
+              switch (delta.type) {
+                case 'member_started':
+                  agent.agentName = (delta.agentName as string) || '';
+                  agent.status = 'running';
+                  break;
+                case 'member_completed': {
+                  const newContent = delta.content as string | undefined;
+                  if (newContent !== undefined) agent.content = newContent;
+                  agent.status = delta.error ? 'error' : 'completed';
+                  break;
+                }
+                case 'content':
+                  agent.content += (delta.content as string) || '';
+                  break;
+                case 'tool_started':
+                  agent.toolCalls.push(delta.toolCall as ToolCall);
+                  break;
+                case 'tool_completed':
+                  agent.toolCalls = agent.toolCalls.map(tc =>
+                    tc.toolCallId === delta.toolCallId
+                      ? { ...tc, result: delta.result, status: 'completed' as const }
+                      : tc
+                  );
+                  break;
+                case 'tool_error':
+                  agent.toolCalls = agent.toolCalls.map(tc =>
+                    tc.toolCallId === delta.toolCallId
+                      ? { ...tc, error: delta.error as string || 'Error', status: 'error' as const }
+                      : tc
+                  );
+                  break;
+              }
+
+              if (agentIdx >= 0) {
+                activities[agentIdx] = agent;
+              } else {
+                activities.push(agent);
+              }
+
+              let updated: MemberActivitiesByRun[];
+              if (runIdx >= 0) {
+                updated = [...existing];
+                updated[runIdx] = { ...updated[runIdx], activities };
+              } else {
+                updated = [...existing, { runId, activities }];
+              }
+              return { ...sessionState, memberActivitiesByRun: updated };
+            });
+          }
+          return;
+        }
+
         if (eventType === 'RunContent') {
           const senderName = String(event.agent_name || event.team_name || '');
           if (senderName && !accumulatedSenderName) {
@@ -869,6 +948,17 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
         </div>
 
         <div className="header-actions">
+          {worker.type === 'Team' && (
+            <button
+              type="button"
+              className={`icon-button tooltip member-toggle-btn${showMemberSidebar ? ' active' : ''}`}
+              aria-label={t('chat.toggleMemberActivities')}
+              title={showMemberSidebar ? t('chat.hideMemberActivities') : t('chat.showMemberActivities')}
+              onClick={() => setShowMemberSidebar((v) => !v)}
+            >
+              <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="7" cy="7" r="3"/><path d="M1 17v-1a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v1"/><circle cx="15" cy="7" r="2.5"/><path d="M15 11.5a3 3 0 0 1 3 3v.5"/></svg>
+            </button>
+          )}
           <button type="button" className="icon-button tooltip" aria-label={t('chat.newSession')} title={t('chat.newSession')} onClick={() => void handleCreateSession()}>
             <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/></svg>
           </button>
@@ -1132,6 +1222,90 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           }}
         />
       )}
+
+      {showMemberSidebar && worker.type === 'Team' && (
+        <MemberActivitySidebar
+          memberActivitiesByRun={currentSessionState?.memberActivitiesByRun || []}
+          onClose={() => setShowMemberSidebar(false)}
+        />
+      )}
     </section>
+  );
+}
+
+function MemberActivitySidebar({ memberActivitiesByRun, onClose }: { memberActivitiesByRun: MemberActivitiesByRun[]; onClose: () => void }) {
+  const { t } = useI18n();
+  const [openMembers, setOpenMembers] = useState<Set<string>>(new Set());
+  const [openTools, setOpenTools] = useState<Set<string>>(new Set());
+
+  const allActivities = memberActivitiesByRun.flatMap(r => r.activities);
+  const completed = allActivities.filter(a => a.status === 'completed').length;
+  const total = allActivities.length;
+
+  const toggle = (set: Set<string>, key: string) => {
+    const next = new Set(set);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  };
+
+  return (
+    <div className="member-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <aside className="member-sidebar">
+        <div className="member-sidebar-header">
+          <div className="member-sidebar-title">
+            <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="7" cy="7" r="3"/><path d="M1 17v-1a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v1"/><circle cx="15" cy="7" r="2.5"/><path d="M15 11.5a3 3 0 0 1 3 3v.5"/></svg>
+            <h3>{t('chat.memberActivities', { count: total, completed })}</h3>
+          </div>
+          <button type="button" className="icon-button member-sidebar-close" onClick={onClose} aria-label="Close">
+            <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="5" y1="5" x2="15" y2="15" /><line x1="15" y1="5" x2="5" y2="15" /></svg>
+          </button>
+        </div>
+        <div className="member-sidebar-body">
+          {memberActivitiesByRun.length === 0 && (
+            <div className="member-sidebar-empty">{t('chat.noMemberActivities')}</div>
+          )}
+          {memberActivitiesByRun.map((run, ri) => (
+            <div key={run.runId || ri} className="member-run-group">
+              {run.activities.map((activity, ai) => {
+                const memberKey = `${run.runId}-${ai}`;
+                const isMemberOpen = openMembers.has(memberKey);
+                const toolsKey = `${memberKey}-tools`;
+                const isToolsOpen = openTools.has(toolsKey);
+                return (
+                  <div key={memberKey} className="member-activity-item">
+                    <button type="button" className="member-activity-item-header" onClick={() => setOpenMembers(prev => toggle(prev, memberKey))}>
+                      <span>{activity.status === 'completed' ? '✅' : activity.status === 'error' ? '❌' : '⏳'}</span>
+                      <span className="member-activity-agent">{activity.agentName}</span>
+                      {activity.toolCalls.length > 0 && <span className="member-activity-tool-count">{activity.toolCalls.length} tools</span>}
+                      <span className="member-activity-toggle">{isMemberOpen ? '▾' : '▸'}</span>
+                    </button>
+                    {isMemberOpen && (
+                      <>
+                        {activity.toolCalls.length > 0 && (
+                          <div className="member-section">
+                            <button type="button" className="member-section-header" onClick={() => setOpenTools(prev => toggle(prev, toolsKey))}>
+                              <span className="member-section-toggle">{isToolsOpen ? '▾' : '▸'}</span>
+                              <span>{t('tool.title')} ({activity.toolCalls.length})</span>
+                            </button>
+                            {isToolsOpen && (
+                              <div className="member-activity-tools">
+                                <ToolCallList tools={activity.toolCalls} />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {activity.content && (
+                          <div className="member-activity-content-full"><MarkdownContent content={activity.content} /></div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </aside>
+    </div>
   );
 }

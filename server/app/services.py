@@ -10,6 +10,8 @@ from typing import Any, AsyncIterator, Iterator
 
 from fastapi import HTTPException
 
+from pydantic import BaseModel
+
 from app.executor import run_worker, _find_agent_os_worker
 from app import repository
 from app import session_manager
@@ -78,11 +80,35 @@ def _extract_session_workspaces(session_obj: Any) -> list[str] | None:
     return None
 
 
+def _collect_skill_dirs(runtime: Any) -> list[str]:
+    """Extract skill directories from a runtime's SkillToolkit (if any).
+
+    Returns only the directories of skills that are actually registered
+    for this worker — invisible to the user, not persisted, not in system prompt.
+    """
+    dirs: list[str] = []
+    for tool in (getattr(runtime, 'tools', None) or []):
+        skills_map = getattr(tool, '_skills', None)
+        if not isinstance(skills_map, dict):
+            continue
+        for skill_meta in skills_map.values():
+            skill_dir = getattr(skill_meta, 'skill_dir', None)
+            if skill_dir:
+                d = str(skill_dir)
+                if d not in dirs:
+                    dirs.append(d)
+    return dirs
+
+
 @contextmanager
 def _bind_runtime_session_workspace(runtime: Any, session_id: str):
     tokens: list[tuple[Any, Any]] = []
     session_obj = _get_runtime_session(runtime, session_id)
     workspaces = _extract_session_workspaces(session_obj)
+
+    # Collect skill directories from SkillToolkit — added as extra readable dirs
+    # for CodingTools.  Not persisted, not in system prompt, not shown to user.
+    skill_dirs = _collect_skill_dirs(runtime)
 
     tools = list(getattr(runtime, 'tools', None) or [])
     for tool in tools:
@@ -91,8 +117,13 @@ def _bind_runtime_session_workspace(runtime: Any, session_id: str):
         try:
             token = tool.set_current_session(session_id)
             tokens.append((tool, token))
+            all_dirs: list[str] = []
             if workspaces:
-                tool.register_session_workspace(session_id, workspaces)
+                all_dirs.extend(workspaces)
+            if skill_dirs:
+                all_dirs.extend(skill_dirs)
+            if all_dirs:
+                tool.register_session_workspace(session_id, all_dirs)
         except Exception as e:
             logger.debug('Failed to bind session workspace for %s: %s', session_id, e)
 
@@ -145,56 +176,151 @@ def _parse_function_args(tc: Any) -> dict:
     return args if isinstance(args, dict) else {}
 
 
+def _normalize_single_message(msg: Any, idx: int, worker_name: str | None = None) -> dict[str, Any]:
+    """Normalize a single agno Message to API response dict."""
+    role = str(getattr(msg, 'role', 'user'))
+    if role == 'assistant':
+        role = 'worker'
+
+    raw_tool_calls = getattr(msg, 'tool_calls', None) or []
+    normalized_tools = [_normalize_tool_call(tc) for tc in raw_tool_calls]
+
+    reasoning = getattr(msg, 'reasoning_content', '') or getattr(msg, 'reasoning', '') or ''
+
+    metrics = getattr(msg, 'metrics', None)
+    token_input = getattr(metrics, 'input_tokens', 0) or 0
+    token_output = getattr(metrics, 'output_tokens', 0) or 0
+
+    msg_name = getattr(msg, 'name', None) or None
+
+    content = str(getattr(msg, 'content', ''))
+
+    # Strip compaction injection prefix from user messages
+    if role == 'user' and content.startswith('[System Injection - Prior Conversation Summary]'):
+        parts = content.split('---', 1)
+        if len(parts) > 1:
+            content = parts[1].strip()
+        else:
+            content = content[60:].strip()
+
+    attachment_lines: list[str] = []
+    for kind in ('images', 'videos', 'files'):
+        items = getattr(msg, kind, None) or []
+        for item in items:
+            name = getattr(item, 'filename', None) or getattr(item, 'name', None) or getattr(item, 'filepath', None) or getattr(item, 'url', None) or kind[:-1]
+            attachment_lines.append(f"- {kind[:-1]}: {name}")
+    if attachment_lines:
+        prefix = f"{content}\n\n" if content else ''
+        content = prefix + '[Attachments]\n' + '\n'.join(attachment_lines)
+
+    return {
+        'id': f'runtime-{idx}',
+        'role': role,
+        'content': content,
+        'contextSize': token_input,
+        'outputTokens': token_output,
+        'toolCalls': normalized_tools,
+        'reasoning': str(reasoning),
+        'senderName': msg_name if role == 'worker' and msg_name else (worker_name if role == 'worker' else None),
+    }
+
+
 def _normalize_runtime_messages(runtime_messages: list[Any], worker_name: str | None = None) -> list[dict[str, Any]]:
-    result = []
-    for idx, msg in enumerate(runtime_messages):
-        role = str(getattr(msg, 'role', 'user'))
-        if role == 'assistant':
-            role = 'worker'
+    return [_normalize_single_message(msg, idx, worker_name) for idx, msg in enumerate(runtime_messages)]
 
-        raw_tool_calls = getattr(msg, 'tool_calls', None) or []
-        normalized_tools = [_normalize_tool_call(tc) for tc in raw_tool_calls]
 
-        reasoning = getattr(msg, 'reasoning_content', '') or getattr(msg, 'reasoning', '') or ''
+def _build_team_messages(runtime: Any, agno_session_id: str, worker_name: str | None = None) -> list[dict[str, Any]]:
+    """Build message list for a Team session, including member agent activities as collapsible entries."""
+    from agno.db.base import SessionType
+    db = getattr(runtime, 'db', None)
+    if not db or not hasattr(db, 'get_session'):
+        history = runtime.get_chat_history(session_id=agno_session_id)
+        return _normalize_runtime_messages(history, worker_name)
 
-        metrics = getattr(msg, 'metrics', None)
-        token_input = getattr(metrics, 'input_tokens', 0) or 0
-        token_output = getattr(metrics, 'output_tokens', 0) or 0
+    try:
+        session_obj = db.get_session(session_id=agno_session_id, session_type=SessionType.TEAM)
+    except Exception:
+        history = runtime.get_chat_history(session_id=agno_session_id)
+        return _normalize_runtime_messages(history, worker_name)
 
-        msg_name = getattr(msg, 'name', None) or None
+    if not session_obj or not hasattr(session_obj, 'runs'):
+        history = runtime.get_chat_history(session_id=agno_session_id)
+        return _normalize_runtime_messages(history, worker_name)
 
-        content = str(getattr(msg, 'content', ''))
+    all_runs = session_obj.runs or []
+    skip_roles = {'system', 'tool'}
 
-        # Strip compaction injection prefix from user messages
-        if role == 'user' and content.startswith('[System Injection - Prior Conversation Summary]'):
-            parts = content.split('---', 1)
-            if len(parts) > 1:
-                content = parts[1].strip()
+    # Separate team-level runs and build member map: parent_run_id -> [member summaries]
+    team_runs = []
+    member_map: dict[str, list[dict[str, Any]]] = {}
+
+    for run in all_runs:
+        pid = getattr(run, 'parent_run_id', None)
+        if pid:
+            member_name = getattr(run, 'agent_name', '') or getattr(run, 'agent_id', '')
+            run_status = str(getattr(run, 'status', '')).lower()
+            member_status = 'completed' if 'completed' in run_status else ('error' if 'error' in run_status else 'completed')
+
+            # 1) Tool calls with results: prefer run.tools (ToolExecution[]) which has result/error
+            tool_calls: list[dict[str, Any]] = []
+            raw_tools = getattr(run, 'tools', None) or []
+            if raw_tools:
+                for t in raw_tools:
+                    tool_calls.append(_normalize_tool_call(t))
             else:
-                content = content[60:].strip()  # fallback: skip the header line
+                # Fallback: extract from assistant messages
+                for msg in (run.messages or []):
+                    if msg.role == 'assistant':
+                        for tc in (getattr(msg, 'tool_calls', None) or []):
+                            tool_calls.append(_normalize_tool_call(tc))
 
-        attachment_lines: list[str] = []
-        for kind in ('images', 'videos', 'files'):
-            items = getattr(msg, kind, None) or []
-            for item in items:
-                name = getattr(item, 'filename', None) or getattr(item, 'name', None) or getattr(item, 'filepath', None) or getattr(item, 'url', None) or kind[:-1]
-                attachment_lines.append(f"- {kind[:-1]}: {name}")
-        if attachment_lines:
-            prefix = f"{content}\n\n" if content else ''
-            content = prefix + '[Attachments]\n' + '\n'.join(attachment_lines)
+            # 2) Content: prefer run.content (final accumulated), then assistant messages
+            run_content = getattr(run, 'content', None)
+            if run_content:
+                content_str = str(run_content)
+            else:
+                parts: list[str] = []
+                for msg in (run.messages or []):
+                    if msg.role == 'assistant' and msg.content:
+                        parts.append(str(msg.content))
+                content_str = '\n\n'.join(parts) if parts else ''
 
-        result.append({
-            'id': f'runtime-{idx}',
-            'role': role,
-            'content': content,
-            'contextSize': token_input,
-            'outputTokens': token_output,
-            'toolCalls': normalized_tools,
-            'reasoning': str(reasoning),
-            'senderName': msg_name if role == 'worker' and msg_name else (worker_name if role == 'worker' else None),
-        })
+            member_map.setdefault(pid, []).append({
+                'agentName': member_name,
+                'agentId': getattr(run, 'agent_id', ''),
+                'status': member_status,
+                'toolCalls': tool_calls,
+                'content': content_str,
+            })
+        else:
+            team_runs.append(run)
 
-    return result
+    # Build flat message list (no inline member entries) + top-level memberActivitiesByRun
+    messages: list[dict[str, Any]] = []
+    member_activities_by_run: list[dict[str, Any]] = []
+    idx = 0
+
+    for run in team_runs:
+        run_id = str(getattr(run, 'run_id', ''))
+        members = member_map.get(run_id, [])
+
+        if members:
+            member_activities_by_run.append({
+                'runId': run_id,
+                'activities': members,
+            })
+
+        for msg in (run.messages or []):
+            if msg.role in skip_roles:
+                continue
+
+            messages.append(_normalize_single_message(msg, idx, worker_name))
+            idx += 1
+
+    return {
+        'messages': messages,
+        'memberActivitiesByRun': member_activities_by_run,
+    }
 
 
 def list_workers(worker_type: str | None = None) -> list[dict[str, Any]]:
@@ -450,10 +576,30 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
 
     if agent_os is not None:
         runtime = _resolve_runtime_agent(worker_id, agent_os)
-        if runtime is not None and hasattr(runtime, 'get_chat_history'):
-            history = runtime.get_chat_history(session_id=agno_session_id)
-            if history is not None:
-                normalized = _normalize_runtime_messages(history, worker_name=worker.get('name'))
+        if runtime is not None:
+            if worker.get('type') == 'Team':
+                # Team: build messages with member activities at top level
+                team_result = _build_team_messages(runtime, agno_session_id, worker_name=worker.get('name'))
+                team_messages = team_result['messages']
+                team_members = team_result.get('memberActivitiesByRun', [])
+                if team_messages:
+                    total = len(team_messages)
+                    start = max(0, total - offset - limit)
+                    end = total - offset
+                    return {
+                        'messages': team_messages[start:end],
+                        'total': total,
+                        'has_more': start > 0,
+                        'memberActivitiesByRun': team_members,
+                    }
+                return {'messages': [], 'total': 0, 'has_more': False, 'memberActivitiesByRun': team_members}
+            elif hasattr(runtime, 'get_chat_history'):
+                history = runtime.get_chat_history(session_id=agno_session_id)
+                normalized = _normalize_runtime_messages(history, worker_name=worker.get('name')) if history is not None else []
+            else:
+                normalized = []
+
+            if normalized:
                 total = len(normalized)
                 start = max(0, total - offset - limit)
                 end = total - offset
@@ -737,28 +883,47 @@ def _normalize_tool_execution(tc: Any) -> dict[str, Any]:
     }
 
 
+# Fields agno puts into run events that the frontend does not consume.
+# Skipping them avoids serializing large / complex objects (e.g. List[Message])
+# that would break json.dumps() and bloat the SSE payload.
+_SKIP_FIELDS = frozenset({
+    'additional_input',       # List[Message] — internal, not needed by frontend
+    'reasoning_messages',     # List[Message] — frontend uses reasoning_content instead
+    'references',             # MessageReferences — internal
+    'member_responses',       # full member RunOutput — frontend uses MemberAgentActivity
+    'session_state',          # large dict, not consumed by frontend
+    'response_audio',         # not supported yet
+    'images',                 # not supported yet
+    'videos',                 # not supported yet
+    'audio',                  # not supported yet
+})
+
+
+def _to_json_safe(value: Any) -> Any:
+    """Recursively convert a value to a JSON-safe representation."""
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, dict):
+        return value
+    if dataclasses.is_dataclass(value):
+        return _serialize_event(value)
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode='json')
+    if isinstance(value, list):
+        return [_to_json_safe(item) for item in value]
+    return str(value)
+
+
 def _serialize_event(event: Any) -> dict[str, Any]:
     result: dict[str, Any] = {'event': _get_event_type(event)}
     for field in dataclasses.fields(event):
         name = field.name
+        if name in _SKIP_FIELDS:
+            continue
         value = getattr(event, name)
         if value is None:
             continue
-        if isinstance(value, str | int | float | bool):
-            result[name] = value
-        elif dataclasses.is_dataclass(value):
-            result[name] = _serialize_event(value)
-        elif isinstance(value, list):
-            result[name] = [
-                _normalize_tool_execution(item) if type(item).__name__ == 'ToolExecution'
-                else _serialize_event(item) if dataclasses.is_dataclass(item)
-                else item
-                for item in value
-            ]
-        elif isinstance(value, dict):
-            result[name] = value
-        else:
-            result[name] = str(value)
+        result[name] = _to_json_safe(value)
     return result
 
 
@@ -923,11 +1088,88 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
         except Exception as e:
             logger.warning('Pre-run compaction check failed for session %s: %s', session_id, e)
 
+    # Track member agent activities for Team workers
+    member_activities: dict[str, dict[str, Any]] = {}
+
     try:
         with _bind_runtime_session_workspace(runtime, agno_session_id):
             async for event in runtime.arun(actual_content, session_id=agno_session_id, stream=True, stream_events=True, **media_kwargs):
-                event_data = _serialize_event(event)
                 raw_event_type = _get_event_type(event)
+
+                # ── Team worker: intercept member agent events ──
+                # Member events are identified by having parent_run_id set.
+                # We emit *incremental* MemberAgentActivity SSE events so that each
+                # message only carries the new delta (tool call, content chunk, …)
+                # instead of re-serialising the full accumulated state every time.
+                if is_team:
+                    member_parent_id = getattr(event, 'parent_run_id', None)
+                    if member_parent_id:
+                        member_name = getattr(event, 'agent_name', '') or getattr(event, 'agent_id', '')
+                        member_id = getattr(event, 'agent_id', '')
+
+                        # Keep the server-side accumulation for history API & compaction
+                        if member_id not in member_activities:
+                            member_activities[member_id] = {
+                                'agentName': member_name,
+                                'agentId': member_id,
+                                'status': 'running',
+                                'toolCalls': [],
+                                'content': '',
+                            }
+                        ma = member_activities[member_id]
+
+                        delta: dict[str, Any] | None = None
+
+                        if raw_event_type == 'RunStarted':
+                            ma['agentName'] = member_name
+                            ma['status'] = 'running'
+                            delta = {'type': 'member_started', 'agentId': member_id, 'agentName': member_name}
+                        elif raw_event_type == 'RunCompleted':
+                            ma['status'] = 'completed'
+                            c = getattr(event, 'content', None)
+                            if c:
+                                ma['content'] = str(c)
+                            delta = {'type': 'member_completed', 'agentId': member_id, 'content': ma['content']}
+                        elif raw_event_type == 'RunError':
+                            ma['status'] = 'error'
+                            delta = {'type': 'member_completed', 'agentId': member_id, 'error': True}
+                        elif raw_event_type == 'RunContent':
+                            c = getattr(event, 'content', None)
+                            if c and isinstance(c, str):
+                                ma['content'] += c
+                                delta = {'type': 'content', 'agentId': member_id, 'content': c}
+                        elif raw_event_type in ('ToolCallStarted', 'ToolCallCompleted', 'ToolCallError'):
+                            tool = getattr(event, 'tool', None)
+                            if tool:
+                                tc = _normalize_tool_execution(tool)
+                                if raw_event_type == 'ToolCallStarted':
+                                    ma['toolCalls'].append(tc)
+                                    delta = {'type': 'tool_started', 'agentId': member_id,
+                                             'toolCall': tc}
+                                elif raw_event_type == 'ToolCallCompleted':
+                                    for t in ma['toolCalls']:
+                                        if t['toolCallId'] == tc['toolCallId']:
+                                            t['result'] = tc.get('result')
+                                            t['status'] = 'completed'
+                                            break
+                                    delta = {'type': 'tool_completed', 'agentId': member_id,
+                                             'toolCallId': tc['toolCallId'], 'result': tc.get('result')}
+                                elif raw_event_type == 'ToolCallError':
+                                    for t in ma['toolCalls']:
+                                        if t['toolCallId'] == tc['toolCallId']:
+                                            t['error'] = tc.get('error')
+                                            t['status'] = 'error'
+                                            break
+                                    delta = {'type': 'tool_error', 'agentId': member_id,
+                                             'toolCallId': tc['toolCallId'], 'error': tc.get('error')}
+
+                        if delta is not None:
+                            yield f"data: {json.dumps({'event': 'MemberAgentActivity', 'run_id': member_parent_id, 'delta': delta})}\n\n"
+
+                        continue  # Skip normal event processing
+
+                # ── Normal (Team-level or Agent) event processing ──
+                event_data = _serialize_event(event)
                 event_type = _normalize_event_type(raw_event_type)
 
                 event_data['event'] = event_type

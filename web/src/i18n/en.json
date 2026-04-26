@@ -79,7 +79,12 @@
     "send": "Send",
     "more": "More",
     "loadingMore": "Loading...",
-    "tokenMetrics": "Context: {context} | Output: {output}"
+    "tokenMetrics": "Context: {context} | Output: {output}",
+    "memberActivities": "Member Activities ({completed}/{count})",
+    "toggleMemberActivities": "Toggle member activities",
+    "showMemberActivities": "Show member activities",
+    "hideMemberActivities": "Hide member activities",
+    "noMemberActivities": "No member activities yet"
   },
   "workerList": {
     "title": "Workers",
@@ -244,6 +249,7 @@
     "loadMore": "Loading..."
   },
   "tool": {
+    "title": "Tools",
     "args": "Args",
     "result": "Result",
     "error": "Error",

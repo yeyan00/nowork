@@ -31,7 +31,15 @@
   <img src="asserts/demo.png" alt="Demo Task" />
 </p>
 
-<p align="center"><em>规划、编码、审查三个 Agent 在同一个桌面应用里协作完成任务。</em></p>
+<p align="center"><em>Coding Agent 从零开始规划并构建一个番茄钟应用。</em></p>
+
+#### 👥 Team Worker：多 Agent 协作
+
+<p align="center">
+  <img src="asserts/team.png" alt="Team Worker" />
+</p>
+
+<p align="center"><em>Team Worker 协调多个 Agent 协作——实时查看成员活动、工具调用和执行进度。</em></p>
 
 ---
 

@@ -14,6 +14,7 @@ Features:
 
 import functools
 import os
+import signal
 import platform
 import shlex
 import shutil
@@ -272,6 +273,38 @@ class LocalFileOperations:
         Path(path).mkdir(parents=True, exist_ok=True)
 
 
+def _kill_process_tree(pid: int) -> None:
+    """Kill an entire process tree, not just the leader process.
+
+    On Windows the leader (shell) spawns child processes (python, node, …).
+    ``TerminateProcess`` only kills the leader, leaving children alive and
+    holding pipe handles open, which causes ``communicate()`` to block forever.
+    """
+    if os.name == 'nt':
+        # taskkill /F /T /PID kills the entire tree (all descendants)
+        try:
+            subprocess.run(
+                ['taskkill', '/F', '/T', '/PID', str(pid)],
+                capture_output=True,
+                timeout=5,
+            )
+        except Exception:
+            # Fallback: at least try to kill the leader
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except OSError:
+                pass
+    else:
+        # POSIX: kill the entire process group
+        try:
+            os.killpg(os.getpgid(pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
+
+
 class LocalShellOperations:
     
     def __init__(self, tool_config: Optional[ToolConfig] = None):
@@ -289,27 +322,45 @@ class LocalShellOperations:
                 shell, shell_args = self.tool_config.get_shell_config()
             else:
                 shell, shell_args = _detect_shell()
-            
-            result = subprocess.run(
+
+            proc = subprocess.Popen(
                 [shell] + shell_args + [command],
                 cwd=cwd,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=timeout,
                 env=get_shell_env(),
+                # Create a new process group so we can kill the entire tree
+                **({'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else
+                   {'start_new_session': True}),
             )
-            
-            output = result.stdout
-            if result.stderr:
-                output += result.stderr
-            
+
+            try:
+                stdout, stderr = proc.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                # Kill the entire process tree (not just the shell leader)
+                _kill_process_tree(proc.pid)
+                # Collect any output produced before/during kill
+                try:
+                    stdout, stderr = proc.communicate(timeout=3)
+                except subprocess.TimeoutExpired:
+                    stdout, stderr = '', ''
+                raise TimeoutError(
+                    f"Command timed out after {timeout} seconds.\n"
+                    f"Output so far:\n{stdout or ''}{stderr or ''}"
+                )
+
+            output = stdout or ''
+            if stderr:
+                output += stderr
+
             if on_data:
                 on_data(output)
-            
-            return output, result.returncode
-        
-        except subprocess.TimeoutExpired:
-            raise TimeoutError(f"Command timed out after {timeout} seconds")
+
+            return output, proc.returncode
+
+        except TimeoutError:
+            raise
         except Exception as e:
             raise RuntimeError(f"Failed to execute command: {e}")
 

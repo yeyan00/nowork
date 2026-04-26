@@ -212,7 +212,7 @@ export function WorkerSettingsPanel({
       const baseDirs = workspaces.map((w) => w.path);
       const config: Record<string, unknown> = { base_dirs: baseDirs.length > 0 ? baseDirs : undefined };
       const allOn = cat.tools.every((t) => sel.subTools[t.id]);
-      if (allOn) { config['all'] = true; } else { for (const t of cat.tools) { if (sel.subTools[t.id]) config[`enable_${t.id}`] = true; } }
+      if (allOn) { config['all'] = true; } else { for (const t of cat.tools) { config[`enable_${t.id}`] = !!sel.subTools[t.id]; } }
       result.push({ module: cat.module, class: cat.name, config });
     }
     return result;

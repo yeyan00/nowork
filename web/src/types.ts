@@ -29,6 +29,19 @@ export interface ToolCall {
   error: string | null;
 }
 
+export interface MemberActivity {
+  agentName: string;
+  agentId: string;
+  status: 'running' | 'completed' | 'error';
+  toolCalls: ToolCall[];
+  content: string;
+}
+
+export interface MemberActivitiesByRun {
+  runId: string;
+  activities: MemberActivity[];
+}
+
 export interface ChatAttachment {
   id: string;
   kind: 'file' | 'image' | 'video';

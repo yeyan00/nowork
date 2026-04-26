@@ -31,7 +31,15 @@ Build your own AI workforce — all in one chat window.
   <img src="asserts/demo.png" alt="Demo Task" />
 </p>
 
-<p align="center"><em>Planning, coding, and review agents collaborating inside one desktop app.</em></p>
+<p align="center"><em>A coding agent plans and builds a simple Pomodoro timer from scratch.</em></p>
+
+#### 👥 Team Worker: Multi-Agent Collaboration
+
+<p align="center">
+  <img src="asserts/team.png" alt="Team Worker" />
+</p>
+
+<p align="center"><em>Team workers coordinate multiple agents — watch member activities, tool calls, and progress in real time.</em></p>
 
 ---
 

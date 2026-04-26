@@ -1,4 +1,4 @@
-import type { ChatAttachment, ChatMessage, ScheduleRun, ScheduleSummary, SendMessageResult, SessionSummary, ToolCall, WorkerSummary } from '../types';
+import type { ChatAttachment, ChatMessage, MemberActivitiesByRun, ScheduleRun, ScheduleSummary, SendMessageResult, SessionSummary, ToolCall, WorkerSummary } from '../types';
 
 // Lazy-loaded Tauri invoke — only available when running inside Tauri desktop shell
 let _invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null | undefined;
@@ -175,6 +175,7 @@ export interface MessagesPage {
   messages: ChatMessage[];
   total: number;
   has_more: boolean;
+  memberActivitiesByRun?: MemberActivitiesByRun[];
 }
 
 export async function listMessages(sessionId: string, limit = 20, offset = 0): Promise<MessagesPage> {

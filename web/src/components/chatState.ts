@@ -1,4 +1,5 @@
-import type { ChatMessage, SessionSummary, TokenUsage } from '../types';
+import type { ChatMessage, MemberActivitiesByRun, MemberActivity, SessionSummary, TokenUsage } from '../types';
+export type { MemberActivitiesByRun } from '../types';
 
 export interface LiveTokenUsage {
   context: number;   // current context size (input_tokens)
@@ -19,6 +20,7 @@ export interface CachedSessionState {
   error: string | null;
   loaded: boolean;
   lastActiveAt: number;
+  memberActivitiesByRun: MemberActivitiesByRun[];
 }
 
 export interface CachedWorkerState {
@@ -55,6 +57,7 @@ export function ensureSessionState(workerState: CachedWorkerState, sessionId: st
       error: null,
       loaded: false,
       lastActiveAt: 0,
+      memberActivitiesByRun: [],
     };
   }
 
