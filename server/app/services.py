@@ -598,28 +598,25 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
         if runtime is not None:
             if worker.get('type') == 'Team':
                 # Team: build messages with member activities at top level
-                # Merge messages from all segments (compacted + active)
+                # Load active segments normally; for compacted segments, only
+                # extract user messages (so the user's original input is preserved).
                 all_segments = session_manager.get_all_segments(session_id)
                 team_messages: list[dict[str, Any]] = []
                 team_members: list[dict[str, Any]] = []
 
                 for seg in all_segments:
-                    seg_status = seg.get('status', '')
                     seg_agno_id = seg.get('agno_session_id', '')
-
-                    if seg_status == 'compacted':
-                        # Show compaction summary as a system-level message
-                        summary_text = seg.get('compaction_summary', '')
-                        if summary_text:
-                            team_messages.append({
-                                'id': f'summary-{seg["id"]}',
-                                'role': 'system',
-                                'content': summary_text,
-                                'senderName': None,
-                                'toolCalls': [],
-                            })
+                    if not seg_agno_id:
+                        continue
+                    is_compacted = seg.get('status') == 'compacted'
+                    if is_compacted:
+                        # Extract only user messages from compacted segment
+                        seg_result = _build_team_messages(runtime, seg_agno_id, worker_name=worker.get('name'))
+                        for msg in seg_result['messages']:
+                            if msg.get('role') == 'user':
+                                team_messages.append(msg)
+                        team_members.extend(seg_result.get('memberActivitiesByRun', []))
                     else:
-                        # Active segment: load full messages
                         seg_result = _build_team_messages(runtime, seg_agno_id, worker_name=worker.get('name'))
                         team_messages.extend(seg_result['messages'])
                         team_members.extend(seg_result.get('memberActivitiesByRun', []))
@@ -636,28 +633,24 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                     }
                 return {'messages': [], 'total': 0, 'has_more': False, 'memberActivitiesByRun': team_members}
             else:
-                # Agent: merge messages from all segments
+                # Agent: load active segments normally; compacted segments only extract user messages
                 all_segments = session_manager.get_all_segments(session_id)
                 normalized: list[dict[str, Any]] = []
 
                 for seg in all_segments:
-                    seg_status = seg.get('status', '')
                     seg_agno_id = seg.get('agno_session_id', '')
-
-                    if seg_status == 'compacted':
-                        summary_text = seg.get('compaction_summary', '')
-                        if summary_text:
-                            normalized.append({
-                                'id': f'summary-{seg["id"]}',
-                                'role': 'system',
-                                'content': summary_text,
-                                'senderName': None,
-                                'toolCalls': [],
-                            })
-                    elif hasattr(runtime, 'get_chat_history'):
-                        history = runtime.get_chat_history(session_id=seg_agno_id)
-                        if history is not None:
-                            normalized.extend(_normalize_runtime_messages(history, worker_name=worker.get('name')))
+                    if not seg_agno_id or not hasattr(runtime, 'get_chat_history'):
+                        continue
+                    history = runtime.get_chat_history(session_id=seg_agno_id)
+                    if history is None:
+                        continue
+                    seg_msgs = _normalize_runtime_messages(history, worker_name=worker.get('name'))
+                    if seg.get('status') == 'compacted':
+                        for msg in seg_msgs:
+                            if msg.get('role') == 'user':
+                                normalized.append(msg)
+                    else:
+                        normalized.extend(seg_msgs)
 
                 if normalized:
                     total = len(normalized)

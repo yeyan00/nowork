@@ -1120,9 +1120,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
               )}
               {message.role === 'worker'
                 ? <div className="message-body"><MarkdownContent content={message.content} /></div>
-                : message.role === 'system'
-                  ? <div className="message-body"><MarkdownContent content={message.content} /></div>
-                  : <div className="message-body">{message.content}</div>}
+                : <div className="message-body">{message.content}</div>}
               {message.role === 'worker' && message.toolCalls && message.toolCalls.length > 0 && (
                 <ToolCallList tools={message.toolCalls} />
               )}
