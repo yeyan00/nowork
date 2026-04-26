@@ -10,7 +10,6 @@
     "devUrl": "http://localhost:5173"
   },
   "app": {
-    "icon": ["icons/icon.png", "icons/icon.ico"],
     "windows": [
       {
         "title": "nowork",
@@ -23,7 +22,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "icon": ["icons/icon.ico"],
+    "icon": ["icons/icon.ico", "icons/icon.png"],
     "resources": [
       "resources/python",
       "resources/server",
