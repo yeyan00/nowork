@@ -492,7 +492,7 @@ async def generate_compaction_summary(runs: list[Any], model: Any = None, is_tea
         summary_model_ref = cfg.get('summary_model')
         model = _build_model(summary_model_ref)
 
-    if model is None:
+    if model is None or not conversation_text:
         # Final fallback: simple truncation summary
         return _generate_simple_summary(runs, conversation_text)
 
@@ -520,17 +520,18 @@ Conversation history:
 Output JSON only, no other text."""
 
     try:
-        from agno.models.openai.like import OpenAILike
-        response = await model.ainvoke(prompt)
+        from agno.models.message import Message
+        user_msg = Message(role='user', content=prompt)
+        assistant_msg = Message(role='assistant', content='')
+        response = await model.ainvoke(
+            messages=[user_msg],
+            assistant_message=assistant_msg,
+        )
 
-        # Extract response text
+        # Extract response text from ModelResponse
         content = ''
-        if hasattr(response, 'content'):
-            content = response.content
-        elif isinstance(response, str):
-            content = response
-        else:
-            content = str(response)
+        if response and hasattr(response, 'content') and response.content:
+            content = str(response.content)
 
         # Try to parse JSON from response
         content = content.strip()
@@ -797,6 +798,21 @@ def wrap_with_compaction(user_message: str, summaries: list[dict[str, Any]]) -> 
         f"---\n"
         f"{user_message}"
     )
+
+
+def unwrap_compaction_injection(content: str) -> str:
+    """Remove [System Injection - Prior Conversation Summary] prefix from a user message.
+
+    When compaction injects a summary prefix, agno stores the full wrapped message.
+    When displaying to the user, we strip the injection to show only the original input.
+    """
+    if not content or not content.startswith('[System Injection - Prior Conversation Summary]'):
+        return content
+    # Find the separator line "---" and take everything after it
+    idx = content.find('\n---\n')
+    if idx >= 0:
+        return content[idx + 5:].strip()
+    return content
 
 
 def build_compaction_text(summaries: list[dict[str, Any]]) -> str:

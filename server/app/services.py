@@ -656,10 +656,12 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                                         for msg in (getattr(run, 'messages', []) or []):
                                             role = getattr(msg, 'role', '')
                                             if role == 'user':
+                                                raw_content = str(getattr(msg, 'content', ''))
+                                                # Strip compaction injection prefix
                                                 normalized.append({
                                                     'id': getattr(msg, 'id', f'{seg_agno_id}-user'),
                                                     'role': 'user',
-                                                    'content': str(getattr(msg, 'content', '')),
+                                                    'content': session_manager.unwrap_compaction_injection(raw_content),
                                                     'senderName': None,
                                                     'toolCalls': [],
                                                 })
