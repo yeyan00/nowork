@@ -264,7 +264,7 @@ def _extract_final_run_summary(messages: list[dict[str, Any]]) -> list[dict[str,
     return result
 
 
-def _load_compacted_agent_messages(runtime: Any, seg_agno_id: str) -> list[dict[str, Any]]:
+def _load_compacted_agent_messages(runtime: Any, seg_agno_id: str, worker_name: str | None = None) -> list[dict[str, Any]]:
     """Load all messages from a compacted Agent segment via agno DB.
     Returns normalized message dicts. Used when active segment is empty.
     """
@@ -287,9 +287,9 @@ def _load_compacted_agent_messages(runtime: Any, seg_agno_id: str) -> list[dict[
                     raw_content = session_manager.unwrap_compaction_injection(raw_content)
                 normalized.append({
                     'id': getattr(msg, 'id', f'{seg_agno_id}-{role}'),
-                    'role': role,
+                    'role': 'worker' if role == 'assistant' else role,
                     'content': raw_content,
-                    'senderName': None,
+                    'senderName': worker_name if role in ('assistant', 'worker') else None,
                     'toolCalls': [],
                 })
         return normalized
@@ -736,7 +736,7 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                     is_compacted = seg.get('status') == 'compacted'
                     if is_compacted:
                         # Compacted: read directly from agno DB
-                        seg_msgs = _load_compacted_agent_messages(runtime, seg_agno_id)
+                        seg_msgs = _load_compacted_agent_messages(runtime, seg_agno_id, worker_name=worker.get('name'))
                         if seg_msgs:
                             last_compacted_messages = seg_msgs
                     else:
