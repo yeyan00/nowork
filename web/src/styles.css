@@ -3752,7 +3752,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(15, 22, 38, 0.2);
   backdrop-filter: blur(3px);
   animation: modal-fade-in 0.15s ease-out;
 }
