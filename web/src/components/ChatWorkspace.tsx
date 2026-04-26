@@ -890,7 +890,12 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           const senderName = String(event.agent_name || event.team_name || '') || accumulatedSenderName;
           if (event.content && event.content.length >= accumulatedContent.length) accumulatedContent = event.content;
           if (event.reasoning && event.reasoning.length >= accumulatedReasoning.length) accumulatedReasoning = event.reasoning;
-          if (event.toolCalls) accumulatedTools = event.toolCalls;
+          // Only use backend's toolCalls if we haven't tracked any locally.
+          // Backend sends a cumulative list for the entire stream — using it would
+          // leak tools from previous message segments into the final message.
+          if (event.toolCalls && accumulatedTools.length === 0) {
+            accumulatedTools = event.toolCalls;
+          }
 
           // Store last context size & output tokens on the message
           const finalContext = liveInput;
