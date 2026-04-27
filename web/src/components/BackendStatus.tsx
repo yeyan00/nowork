@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useI18n } from '../i18n';
 import { fetchHealth, readRuntimeState } from '../lib/backend';
+import { LogViewer } from './LogViewer';
 
 type StatusState =
   | { kind: 'loading' }
@@ -10,6 +11,7 @@ type StatusState =
 export function BackendStatus() {
   const { t } = useI18n();
   const [state, setState] = useState<StatusState>({ kind: 'loading' });
+  const [showLogs, setShowLogs] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,7 +64,20 @@ export function BackendStatus() {
   }
 
   if (state.kind === 'failed') {
-    return <div className="backend-status failed">{t('backend.failed')}</div>;
+    return (
+      <>
+        <div className="backend-status failed">
+          <div>{t('backend.failed')}</div>
+          <button
+            className="backend-error-toggle"
+            onClick={() => setShowLogs(true)}
+          >
+            {t('backend.showLog')}
+          </button>
+        </div>
+        {showLogs && <LogViewer onClose={() => setShowLogs(false)} backendAvailable={false} />}
+      </>
+    );
   }
 
   return <div className="backend-status connected">{t('backend.connected')}</div>;

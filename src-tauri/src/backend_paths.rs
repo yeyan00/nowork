@@ -22,7 +22,7 @@ fn resource_relative_paths() -> ResourceRelativePaths {
         python_executable: "resources/python/python.exe",
         server_directory: "resources/server",
         runtime_directory: "resources/runtime",
-        site_packages_directory: "resources/server/site-packages",
+        site_packages_directory: "resources/python/Lib/site-packages",
     }
 }
 
@@ -39,7 +39,7 @@ mod tests {
         assert_eq!(paths.runtime_directory, "resources/runtime");
         assert_eq!(
             paths.site_packages_directory,
-            "resources/server/site-packages"
+            "resources/python/Lib/site-packages"
         );
     }
 }

@@ -19,6 +19,7 @@
     "checking": "Checking…",
     "upToDate": "You're up to date",
     "updateAvailable": "Update available: {version}",
+    "openReleasePage": "Open Release Page",
     "updateError": "Update check failed",
     "license": "License",
     "licenseHint": "This project is open-source under the MIT License",
@@ -42,14 +43,16 @@
     "loadingMore": "Loading more...",
     "empty": "No log entries found.",
     "refresh": "Refresh",
-    "lineInfo": "Lines {start}–{end} of {total}"
+    "lineInfo": "Lines {start}–{end} of {total}",
+    "backendDown": "Backend is not running. Showing startup error logs."
   },
   "backend": {
     "loading": "Loading...",
     "connected": "Service Ready",
     "failed": "Service Unavailable",
     "runtimeNotFound": "Runtime metadata not found",
-    "healthCheckFailed": "Backend health check failed"
+    "healthCheckFailed": "Backend health check failed",
+    "showLog": "View Log"
   },
   "chat": {
     "selectWorker": "Select a worker to start.",

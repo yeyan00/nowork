@@ -79,5 +79,5 @@ server/config/models/*.yaml
 
 # === Local scripts with machine-specific paths ===
 scripts/build-local.ps1
-scripts/build-local.ps1
 scripts/build-local.cmd
+scripts/build-update-test.ps1

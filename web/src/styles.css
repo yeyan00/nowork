@@ -222,6 +222,28 @@ button {
   background: #d93025;
 }
 
+.backend-error-toggle {
+  font-size: 11px;
+  color: #5b7ab5;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 0;
+  text-decoration: underline;
+}
+
+.backend-error-toggle:hover {
+  color: #3a5a8c;
+}
+
+.log-viewer-notice {
+  padding: 8px 12px;
+  background: #fef3cd;
+  color: #856404;
+  font-size: 12px;
+  border-bottom: 1px solid #f0e0a0;
+}
+
 .chat-layout {
   display: flex;
   flex: 1;
@@ -3488,49 +3510,45 @@ button {
 
 /* ── Settings Page ─────────────────────────────────────────────────── */
 
+.settings-page.page-frame {
+  overflow-y: auto;
+}
+
 .settings-page .settings-sections {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  max-width: 640px;
+  gap: 16px;
+  max-width: 720px;
   padding: 0 24px 32px;
 }
 
-/* ── Collapsible Panel ────────────────────────────────── */
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 14px 18px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font: inherit;
-  color: var(--text1);
-  border-radius: 10px;
-  transition: background 0.15s;
+/* ── Section Block (non-collapsible) ──────────────────── */
+
+.settings-block {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 18px 20px;
 }
-.panel-header:hover {
-  background: var(--hover);
-}
-.panel-header-title {
+
+.settings-block-title {
   font-size: 14px;
   font-weight: 600;
+  margin: 0 0 12px;
+  color: var(--text1);
 }
-.panel-chevron {
-  font-size: 12px;
-  color: var(--text3);
-  transition: transform 0.2s;
-}
-.panel-chevron.open {
-  transform: rotate(90deg);
-}
-.panel-body {
-  padding: 0 18px 16px;
+
+.settings-block-body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* Inline row: description + button on same line */
+.settings-inline-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .settings-section-title {
@@ -3588,8 +3606,9 @@ button {
 .settings-version-row {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   margin-bottom: 8px;
+  flex-wrap: wrap;
 }
 
 .settings-version-badge {

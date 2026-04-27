@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
-import { fetchLogs } from '../lib/backend';
+import { fetchLogs, getBackendError } from '../lib/backend';
 import type { LogData } from '../lib/backend';
 
 interface LogViewerProps {
   onClose: () => void;
+  /** When false, skip /api/logs and read startup error logs via Tauri instead. */
+  backendAvailable?: boolean;
 }
 
-export function LogViewer({ onClose }: LogViewerProps) {
+export function LogViewer({ onClose, backendAvailable = true }: LogViewerProps) {
   const { t } = useI18n();
   const [data, setData] = useState<LogData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -50,10 +52,38 @@ export function LogViewer({ onClose }: LogViewerProps) {
     }
   }, [data, loadingMore, selectedFile]);
 
-  // Initial load
+  // Load startup error logs via Tauri (when backend is down)
+  const loadStartupLogs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const raw = await getBackendError();
+      if (raw) {
+        const lines = raw.split('\n');
+        setData({
+          lines,
+          total: lines.length,
+          offset: lines.length,
+          has_more: false,
+          files: [],
+        });
+      } else {
+        setData({ lines: [], total: 0, offset: 0, has_more: false, files: [] });
+      }
+    } catch {
+      setData({ lines: [], total: 0, offset: 0, has_more: false, files: [] });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Initial load — choose data source based on backend availability
   useEffect(() => {
-    void loadLatest();
-  }, [loadLatest]);
+    if (backendAvailable) {
+      void loadLatest();
+    } else {
+      void loadStartupLogs();
+    }
+  }, [backendAvailable, loadLatest, loadStartupLogs]);
 
   // After loading more, restore scroll position
   useEffect(() => {
@@ -93,7 +123,7 @@ export function LogViewer({ onClose }: LogViewerProps) {
         <div className="log-viewer-header">
           <h2>{t('logs.title')}</h2>
           <div className="log-viewer-actions">
-            {data && data.files.length > 1 && (
+            {backendAvailable && data && data.files.length > 1 && (
               <select
                 className="log-file-select"
                 value={selectedFile}
@@ -104,15 +134,17 @@ export function LogViewer({ onClose }: LogViewerProps) {
                 ))}
               </select>
             )}
-            <button
-              type="button"
-              className="soft-button"
-              disabled={loading}
-              onClick={() => void loadLatest(selectedFile || undefined)}
-              title={t('logs.refresh')}
-            >
-              {loading ? '...' : '↻'}
-            </button>
+            {backendAvailable && (
+              <button
+                type="button"
+                className="soft-button"
+                disabled={loading}
+                onClick={() => void loadLatest(selectedFile || undefined)}
+                title={t('logs.refresh')}
+              >
+                {loading ? '...' : '↻'}
+              </button>
+            )}
             <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
               <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <line x1="5" y1="5" x2="15" y2="15" />
@@ -121,6 +153,11 @@ export function LogViewer({ onClose }: LogViewerProps) {
             </button>
           </div>
         </div>
+
+        {/* Backend-down notice */}
+        {!backendAvailable && (
+          <div className="log-viewer-notice">{t('logs.backendDown')}</div>
+        )}
 
         {/* Content */}
         <div className="log-viewer-body">

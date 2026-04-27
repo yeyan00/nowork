@@ -1,4 +1,5 @@
 use std::env;
+use std::fs::File;
 use std::process::{Child, Command, Stdio};
 
 use crate::backend_paths::BundledBackendPaths;
@@ -171,11 +172,33 @@ pub fn start_backend(paths: &BundledBackendPaths) -> std::io::Result<Child> {
     }
 
     // In dev mode, show backend output in terminal for debugging.
-    // In release mode, suppress output.
+    // In release mode, redirect to log files so startup errors can be diagnosed.
     if cfg!(debug_assertions) {
         command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
     } else {
-        command.stdout(Stdio::null()).stderr(Stdio::null());
+        // Ensure runtime/logs directory exists
+        let logs_dir = paths.runtime_directory.join("logs");
+        if let Err(e) = std::fs::create_dir_all(&logs_dir) {
+            eprintln!("[nowork] Warning: failed to create logs dir {}: {e}", logs_dir.display());
+        }
+
+        let stdout_path = logs_dir.join("backend.log");
+        let stderr_path = logs_dir.join("backend-err.log");
+
+        match File::create(&stdout_path) {
+            Ok(f) => { command.stdout(f); }
+            Err(e) => {
+                eprintln!("[nowork] Warning: failed to create {}: {e}", stdout_path.display());
+                command.stdout(Stdio::null());
+            }
+        }
+        match File::create(&stderr_path) {
+            Ok(f) => { command.stderr(f); }
+            Err(e) => {
+                eprintln!("[nowork] Warning: failed to create {}: {e}", stderr_path.display());
+                command.stderr(Stdio::null());
+            }
+        }
     }
 
     #[cfg(windows)]

@@ -27,8 +27,8 @@ if (Test-Path $targetPython) {
 }
 New-Item -ItemType Directory -Force -Path $targetPython | Out-Null
 
-# Copy everything EXCEPT Lib/site-packages (we handle that separately)
-Get-ChildItem $sourcePython -Exclude 'Lib' | ForEach-Object {
+# Copy everything EXCEPT Lib/site-packages and conda-meta (we handle site-packages separately)
+Get-ChildItem $sourcePython -Exclude 'Lib','conda-meta' | ForEach-Object {
   Copy-Item $_.FullName $targetPython -Recurse -Force
 }
 

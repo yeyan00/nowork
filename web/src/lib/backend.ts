@@ -86,6 +86,20 @@ export async function readRuntimeState(): Promise<RuntimeState | null> {
   return runtimeStatePromise;
 }
 
+/// Read backend error logs via Tauri command (release mode only).
+/// Returns raw log text for display to the user.
+export async function getBackendError(): Promise<string | null> {
+  try {
+    const invoke = await getTauriInvoke();
+    if (invoke) {
+      return await invoke('get_backend_error', {}) as string;
+    }
+  } catch {
+    // Not running in Tauri or command failed
+  }
+  return null;
+}
+
 export async function fetchHealth(baseUrl: string): Promise<HealthPayload> {
   const response = await fetch(`${baseUrl}/health`);
 

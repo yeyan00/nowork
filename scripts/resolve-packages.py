@@ -51,8 +51,27 @@ def find_dist(name: str):
     return None
 
 
-def get_core_requires(name: str) -> list[str]:
-    """Get only non-conditional (core) requires of a package."""
+def _parse_dep_name(req_str: str) -> str:
+    """Extract package name from a dependency spec like 'httpx[http2]>=0.24'."""
+    dep_part = req_str.split(';')[0]
+    return re.split(r'[\[><=!~(]', dep_part)[0].strip()
+
+
+def _parse_dep_extras(req_str: str) -> set[str]:
+    """Extract extras from a dependency spec like 'httpx[http2]>=0.24'."""
+    m = re.search(r'\[([^\]]+)\]', req_str)
+    if m:
+        return {e.strip() for e in m.group(1).split(',')}
+    return set()
+
+
+def get_core_requires(name: str) -> list[tuple[str, set[str]]]:
+    """Get non-conditional (core) requires of a package.
+
+    Returns list of (package_name, {extras}) tuples.
+    e.g. 'httpx[http2]>=0.24' → ('httpx', {'http2'})
+         'pydantic>=2.0'      → ('pydantic', set())
+    """
     dist = find_dist(name)
     if dist is None:
         return []
@@ -61,11 +80,10 @@ def get_core_requires(name: str) -> list[str]:
         # Skip extra-conditional requires
         if 'extra ==' in req_str:
             continue
-        # Extract package name (before version specs / extras / semicolons)
-        dep_part = req_str.split(';')[0]
-        dep_name = re.split(r'[\[><=!]', dep_part)[0].strip()
+        dep_name = _parse_dep_name(req_str)
+        extras = _parse_dep_extras(req_str)
         if dep_name:
-            result.append(dep_name)
+            result.append((dep_name, extras))
     return result
 
 
@@ -88,8 +106,21 @@ def resolve_full(requirements: list[tuple[str, set[str]]]) -> set[str]:
         if n in all_packages:
             return
         all_packages.add(n)
-        for dep in get_core_requires(name):
-            collect_core(dep)
+
+        for dep_name, dep_extras in get_core_requires(name):
+            # If the dependency itself carries extras (e.g. httpx[http2]),
+            # expand those extra-conditional deps before recursing.
+            if dep_extras:
+                dep_dist = find_dist(dep_name)
+                if dep_dist:
+                    for req_str in (dep_dist.requires or []):
+                        m = re.search(r';\s*extra\s*==\s*["\'](\w+)["\']', req_str)
+                        if m and m.group(1) in dep_extras:
+                            extra_dep = _parse_dep_name(req_str)
+                            if extra_dep:
+                                collect_core(extra_dep)
+
+            collect_core(dep_name)
 
     for name, extras in requirements:
         # Stage 1: expand extras → direct deps
@@ -98,8 +129,7 @@ def resolve_full(requirements: list[tuple[str, set[str]]]) -> set[str]:
             for req_str in (dist.requires or []):
                 m = re.search(r';\s*extra\s*==\s*["\'](\w+)["\']', req_str)
                 if m and m.group(1) in extras:
-                    dep_part = req_str.split(';')[0]
-                    dep_name = re.split(r'[\[><=!]', dep_part)[0].strip()
+                    dep_name = _parse_dep_name(req_str)
                     if dep_name:
                         collect_core(dep_name)
 
