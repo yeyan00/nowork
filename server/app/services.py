@@ -1218,14 +1218,24 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
             return False
 
         runs = getattr(session_obj, 'runs', None) or []
-        # Find the last run's metrics
+        if not runs:
+            return False
+
+        # Find the last run's LAST event's input_tokens.
+        # NOTE: run.metrics.input_tokens is the CUMULATIVE sum of all API calls
+        # within the run (each tool call is a separate API call). For compaction
+        # threshold we need the last single API call's input_tokens — that tells
+        # us how much context the model is actually consuming.
         last_input = 0
         for run in reversed(runs):
-            metrics = getattr(run, 'metrics', None)
-            if metrics:
-                last_input = getattr(metrics, 'input_tokens', 0) or 0
-                if last_input > 0:
+            events = getattr(run, 'events', None) or []
+            for ev in reversed(events):
+                ev_input = getattr(ev, 'input_tokens', 0) or 0
+                if ev_input > 0:
+                    last_input = ev_input
                     break
+            if last_input > 0:
+                break
 
         if last_input <= 0:
             return False
@@ -1273,10 +1283,6 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
             if context_window is None or context_window <= 0:
                 context_window = 128000  # default context window
             limit = int(context_window * threshold - reserve)
-            if input_tokens >= limit:
-                need_compact = True
-                logger.info('Compaction flag set: input_tokens=%d >= limit=%d (context_window=%s, threshold=%.0f%%)',
-                            input_tokens, limit, context_window, threshold * 100)
             if input_tokens >= limit:
                 need_compact = True
                 logger.info('Compaction flag set: input_tokens=%d >= limit=%d (context_window=%s, threshold=%.0f%%)',
