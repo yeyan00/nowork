@@ -8,6 +8,16 @@ tools:
   fd_path: null
 default_model: ''
 models: []
+session:
+  db_file: db/nowork_sessions.db
+  compaction:
+    enabled: true
+    context_usage_threshold: 0.8
+    context_reserve_tokens: 4000
+    summary_style: structured
+    preserve_recent_messages: 5
+    max_summaries_injected: 3
+    summary_model: null
 workers:
   - code-agent
   - doc-agent

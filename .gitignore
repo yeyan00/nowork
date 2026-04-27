@@ -81,3 +81,4 @@ server/config/models/*.yaml
 scripts/build-local.ps1
 scripts/build-local.cmd
 scripts/build-update-test.ps1
+NUL

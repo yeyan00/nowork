@@ -557,37 +557,47 @@ class CodingTools(Toolkit):
     
     _TOOL_INSTRUCTIONS = {
         "read_file": dedent("""\
-            **read_file** - Read files with line numbers. Use offset and limit to paginate large files.
-            - Always read a file before editing it to understand its current contents.
-            - Use the line numbers in the output to understand the file structure."""),
+            **read_file** - Read text files with line numbers.
+            - Use this before editing to understand the current contents and nearby code style.
+            - Use `offset` and `limit` to paginate large files. `offset` is 0-based, so `offset=0` starts at line 1.
+            - Output may be truncated by line or byte limits. If you need the rest of a file, call read_file again with a larger offset.
+            - The footer shows which line range was returned and the total line count when available."""),
         "edit_file": dedent("""\
             **edit_file** - Make precise edits using exact text matching (find and replace).
-            - The old_text must match exactly one location in the file, including whitespace and indentation.
-            - Include enough surrounding context in old_text to ensure a unique match.
-            - Prefer small, focused edits over rewriting entire files."""),
+            - The `old_text` must match exactly one location in the file, including whitespace and indentation.
+            - Include enough surrounding context in `old_text` to ensure a unique match.
+            - Prefer small, focused edits over rewriting entire files.
+            - If an edit fails because the text is missing or ambiguous, read more surrounding context and try again with a more specific match."""),
         "write_file": dedent("""\
-            **write_file** - Create new files or overwrite existing ones entirely.
-            - Use this for creating new files. For modifying existing files, prefer edit_file.
+            **write_file** - Create new files or overwrite existing files entirely.
+            - Use this for creating new files or replacing an entire file.
+            - For targeted changes to an existing file, prefer edit_file.
             - Parent directories are created automatically."""),
         "run_shell": dedent("""\
             **run_shell** - Execute shell commands with timeout protection.
-            - Use this for: running tests, git operations, installing packages, searching files (grep/find),
-              checking system state, compiling code, and any other command-line task.
-            - Commands run from the base directory.
-            - Output is truncated if too long; the full output is saved to a temp file."""),
+            - Use this for running tests, git operations, installing packages, checking system state, building code, and other command-line tasks.
+            - For codebase exploration, prefer grep/find/ls before using shell commands.
+            - Commands run from the active workspace or base directory.
+            - Output may be truncated by line or byte limits. When truncated, the full output is saved to a temp file and its path is returned.
+            - If command output is too large, narrow the command scope or inspect the saved temp file."""),
         "grep": dedent("""\
             **grep** - Search file contents for a pattern with line numbers.
-            - Use for finding code patterns, function definitions, imports, etc.
-            - Supports regex patterns and case-insensitive search.
-            - Use the include parameter to filter by file type (e.g. "*.py")."""),
+            - Use this to find definitions, imports, call sites, configuration keys, and repeated text patterns.
+            - Supports regex patterns, case-insensitive search, optional context lines, and file filtering with `include`.
+            - Prefer this over run_shell for most content searches.
+            - Matched file paths in the results may be returned relative to the searched directory.
+            - Results may be limited or truncated when there are too many matches."""),
         "find": dedent("""\
-            **find** - Search for files by glob pattern.
-            - Use for discovering files in the project structure.
-            - Supports recursive patterns like "**/*.py"."""),
+            **find** - Search for matching paths by glob pattern.
+            - Use this to discover files and directories in the project structure before reading or editing them.
+            - Supports recursive patterns like "**/*.py".
+            - Prefer this over run_shell for most file discovery tasks.
+            - Results may be limited when there are too many matches."""),
         "ls": dedent("""\
             **ls** - List directory contents.
-            - Use for quick directory exploration.
-            - Directories are shown with a trailing /."""),
+            - Use this for quick directory exploration before reading files in detail.
+            - Directories are shown with a trailing `/`.
+            - Results may be limited when a directory contains many entries."""),
     }
     _current_session_id: ContextVar[Optional[str]] = ContextVar("coding_tools_current_session_id", default=None)
 
@@ -657,10 +667,15 @@ class CodingTools(Toolkit):
         best_practices = []
         if "read_file" in tool_names and "edit_file" in tool_names:
             best_practices.append("- Read before editing: always read_file before edit_file to see current contents.")
+            best_practices.append("- For large files, read in chunks with offset and limit instead of assuming the first read returned the full file.")
         if "edit_file" in tool_names:
             best_practices.append("- Make small, incremental edits rather than rewriting entire files.")
+            best_practices.append("- Follow existing conventions in nearby code before introducing new patterns or dependencies.")
+        if "grep" in tool_names or "find" in tool_names or "ls" in tool_names:
+            best_practices.append("- Explore first: prefer ls/find/grep for codebase discovery before using run_shell for ad-hoc searching.")
         if "run_shell" in tool_names:
-            best_practices.append("- Run tests after making changes to verify correctness.")
+            best_practices.append("- Run relevant verification commands after making changes when the project provides them.")
+            best_practices.append("- If shell output is truncated, inspect the saved temp file or rerun a narrower command.")
         
         result = preamble + "\n\n## Tool Usage Guidelines\n\n" + "\n\n".join(sections)
         if best_practices:
@@ -849,10 +864,11 @@ class CodingTools(Toolkit):
         log_info(f"Platform: {get_platform()}, Shell: {self.tool_config.get_shell_config()[0]}")
 
     def register_session_workspace(self, session_id: str, workspaces: Union[list[Union[str, Path]], str, Path]) -> None:
-        """Register one or more workspaces for a session.
+        """Register one or more session-scoped directories.
         
-        If a list is given, each path is resolved and stored.
-        The effective base_dirs for the session become this list (intersected with self.base_dirs).
+        Session-specific directories extend the toolkit's configured base_dirs rather
+        than replacing them. This preserves access to the worker's primary workspace
+        while allowing extra readable directories such as skill folders.
         """
         paths: list[Path] = []
         raw_list = workspaces if isinstance(workspaces, list) else [workspaces]
@@ -861,7 +877,11 @@ class CodingTools(Toolkit):
             if resolved.exists() and resolved.is_dir():
                 paths.append(resolved)
         if paths:
-            self._session_workspaces[session_id] = paths  # type: ignore[assignment]
+            merged: list[Path] = []
+            for candidate in [*self.base_dirs, *paths]:
+                if candidate not in merged:
+                    merged.append(candidate)
+            self._session_workspaces[session_id] = merged  # type: ignore[assignment]
 
     def _get_current_base_dirs(self) -> List[Path]:
         session_id = self.get_current_session()
@@ -1041,7 +1061,22 @@ class CodingTools(Toolkit):
         return None
     
     def read_file(self, file_path: str, offset: int = 0, limit: Optional[int] = None) -> str:
-        """Read a file with line numbers and pagination."""
+        """Read a text file with line numbers and pagination.
+
+        Returns the selected slice of the file with 1-based line numbers prefixed
+        to each line. Use this before editing files and use pagination for large
+        files.
+
+        :param file_path: Path to the file to read, relative to an allowed workspace
+            directory or an absolute allowed path.
+        :param offset: 0-based line offset to start reading from. ``offset=0`` starts
+            from line 1.
+        :param limit: Maximum number of file lines to return before formatting. If not
+            provided, the default configured line window is used.
+        :return: Formatted file contents, or an error message. Output may be truncated
+            by the configured line and byte limits. When more content remains, the
+            result includes a footer showing the returned line range and total lines.
+        """
         try:
             is_safe, resolved_path = self._resolve_path(file_path)
             if not is_safe or resolved_path is None:
@@ -1103,7 +1138,19 @@ class CodingTools(Toolkit):
             return f"Error reading file: {e}"
     
     def edit_file(self, file_path: str, old_text: str, new_text: str) -> str:
-        """Edit a file by replacing exact text match."""
+        """Edit a file by replacing a single exact text match.
+
+        This tool is intended for precise, surgical edits to existing files.
+        The old text must match exactly once, including whitespace and indentation.
+
+        :param file_path: Path to the file to edit, relative to an allowed workspace
+            directory or an absolute allowed path.
+        :param old_text: Exact text to find in the file. Include enough surrounding
+            context to make the match unique.
+        :param new_text: Replacement text for the matched block.
+        :return: A unified diff showing the applied change, or an error message. Diff
+            output may be truncated by the configured line and byte limits.
+        """
         try:
             is_safe, resolved_path = self._resolve_path(file_path)
             if not is_safe or resolved_path is None:
@@ -1175,7 +1222,17 @@ class CodingTools(Toolkit):
             return f"Error editing file: {e}"
     
     def write_file(self, file_path: str, contents: str) -> str:
-        """Create or overwrite a file."""
+        """Create a new file or overwrite an existing file completely.
+
+        Use this for new files or when replacing the entire contents of a file.
+        For targeted edits to existing files, prefer ``edit_file``.
+
+        :param file_path: Path to the file to create or overwrite, relative to an
+            allowed workspace directory or an absolute allowed path.
+        :param contents: Full contents to write to the file.
+        :return: A short success message with the number of lines written, or an
+            error message.
+        """
         try:
             is_safe, resolved_path = self._resolve_path(file_path)
             if not is_safe or resolved_path is None:
@@ -1198,7 +1255,19 @@ class CodingTools(Toolkit):
             return f"Error writing file: {e}"
     
     def run_shell(self, command: str, timeout: Optional[int] = None) -> str:
-        """Execute a shell command and return output."""
+        """Execute a shell command in the active workspace and return its output.
+
+        This tool is intended for tests, git operations, builds, package commands,
+        environment inspection, and other command-line tasks.
+
+        :param command: Shell command to execute.
+        :param timeout: Optional timeout in seconds. If not provided, the toolkit's
+            default shell timeout is used.
+        :return: Command output prefixed with the exit code, or an error message.
+            Output may be truncated by the configured line and byte limits. When
+            truncation occurs, the full output is saved to a temporary file and the
+            returned text includes that file path.
+        """
         try:
             _warn_coding_tools()
             log_info(f"Running shell command: {command}")
@@ -1255,7 +1324,23 @@ class CodingTools(Toolkit):
         context: int = 0,
         limit: int = 100,
     ) -> str:
-        """Search file contents for a pattern."""
+        """Search file contents for a text pattern.
+
+        Uses ripgrep when available and falls back to grep-compatible behavior.
+        Prefer this over shell commands for most content searches.
+
+        :param pattern: Regex or plain-text pattern to search for.
+        :param path: Optional directory or file path to search within. Defaults to
+            the active workspace or primary base directory.
+        :param ignore_case: If True, perform a case-insensitive search.
+        :param include: Optional file glob filter such as ``*.py``.
+        :param context: Number of context lines to include before and after matches.
+        :param limit: Maximum number of matched output lines to return before adding a
+            results-limited notice.
+        :return: Matching lines with file paths and line numbers, or an error message.
+            Returned file paths may be relative to the searched directory. Output
+            may also be truncated by the configured line and byte limits.
+        """
         try:
             if not pattern:
                 return "Error: Pattern cannot be empty"
@@ -1346,7 +1431,19 @@ class CodingTools(Toolkit):
             return f"Error running grep: {e}"
     
     def find(self, pattern: str, path: Optional[str] = None, limit: int = 500) -> str:
-        """Search for files by glob pattern."""
+        """Search for matching paths by glob pattern.
+
+        Uses fd when available and falls back to pathlib-based glob matching.
+        Prefer this over shell commands for most file discovery tasks.
+
+        :param pattern: Glob pattern to match, such as ``*.py`` or ``**/*.json``.
+        :param path: Optional directory to search within. Defaults to the active
+            workspace or primary base directory.
+        :param limit: Maximum number of matching entries to return.
+        :return: Matching relative paths, or an error message. Results can include
+            files and directories depending on the pattern and backend behavior.
+            When too many matches are found, the result includes a results-limited notice.
+        """
         try:
             if not pattern:
                 return "Error: Pattern cannot be empty"
@@ -1421,7 +1518,17 @@ class CodingTools(Toolkit):
             return f"Error finding files: {e}"
     
     def ls(self, path: Optional[str] = None, limit: int = 500) -> str:
-        """List directory contents."""
+        """List the contents of a directory.
+
+        Use this for quick workspace exploration before reading files in detail.
+
+        :param path: Optional directory to list. Defaults to the active workspace or
+            primary base directory.
+        :param limit: Maximum number of entries to return.
+        :return: Directory entries sorted alphabetically, with ``/`` appended to
+            directory names, or an error message. When too many entries exist, the
+            result includes a listing-limited notice.
+        """
         try:
             # Resolve path
             if path:
