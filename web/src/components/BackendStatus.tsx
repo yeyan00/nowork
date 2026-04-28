@@ -12,11 +12,12 @@ export function BackendStatus() {
   const { t } = useI18n();
   const [state, setState] = useState<StatusState>({ kind: 'loading' });
   const [showLogs, setShowLogs] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     let retries = 0;
-    const maxRetries = 30; // 30 x 1s = 30s max wait
+    const maxRetries = 60; // 60 x 1s = 60s max wait (cold start can be slow)
 
     async function tryConnect() {
       const runtime = await readRuntimeState();
@@ -57,7 +58,7 @@ export function BackendStatus() {
     return () => {
       cancelled = true;
     };
-  }, [t]);
+  }, [t, retryKey]);
 
   if (state.kind === 'loading') {
     return <div className="backend-status">{t('backend.loading')}</div>;
@@ -68,12 +69,20 @@ export function BackendStatus() {
       <>
         <div className="backend-status failed">
           <div>{t('backend.failed')}</div>
-          <button
-            className="backend-error-toggle"
-            onClick={() => setShowLogs(true)}
-          >
-            {t('backend.showLog')}
-          </button>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+            <button
+              className="backend-error-toggle"
+              onClick={() => setRetryKey((k) => k + 1)}
+            >
+              {t('backend.retry') || 'Retry'}
+            </button>
+            <button
+              className="backend-error-toggle"
+              onClick={() => setShowLogs(true)}
+            >
+              {t('backend.showLog')}
+            </button>
+          </div>
         </div>
         {showLogs && <LogViewer onClose={() => setShowLogs(false)} backendAvailable={false} />}
       </>

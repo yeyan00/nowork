@@ -55,7 +55,7 @@ export default function App() {
     let retries = 0;
 
     async function loadWorkers() {
-      while (retries < 30 && !cancelled) {
+      while (retries < 60 && !cancelled) {
         try {
           const nextWorkers = await listWorkers();
           if (!cancelled) {

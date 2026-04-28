@@ -134,6 +134,26 @@ fn main() {
                 .lock()
                 .expect("failed to store backend child") = Some(child);
 
+            // Wait for the backend to write app-runtime.json.
+            // The Python process needs a few seconds to initialize, choose a port,
+            // and write the runtime config file. We block here so the frontend
+            // doesn't show "service not ready" on first launch.
+            let runtime_file = paths.runtime_directory.join("app-runtime.json");
+            eprintln!("[nowork] Waiting for runtime config: {}", runtime_file.display());
+            let mut waited_ms: u64 = 0;
+            loop {
+                if runtime_file.exists() {
+                    eprintln!("[nowork] Runtime config appeared after {}ms", waited_ms);
+                    break;
+                }
+                if waited_ms >= 30_000 {
+                    eprintln!("[nowork] WARNING: Runtime config not found after 30s, proceeding anyway");
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(200));
+                waited_ms += 200;
+            }
+
             Ok(())
         })
         .build(tauri::generate_context!())

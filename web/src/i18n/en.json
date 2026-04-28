@@ -53,6 +53,7 @@
     "failed": "Service Unavailable",
     "runtimeNotFound": "Runtime metadata not found",
     "healthCheckFailed": "Backend health check failed",
+    "retry": "Retry",
     "showLog": "View Log"
   },
   "chat": {

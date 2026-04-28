@@ -53,6 +53,7 @@
     "failed": "服务未就绪",
     "runtimeNotFound": "未找到运行时元数据",
     "healthCheckFailed": "后端健康检查失败",
+    "retry": "重试",
     "showLog": "查看日志"
   },
   "chat": {
