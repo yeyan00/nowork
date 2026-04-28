@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 import logging
-from datetime import date
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -26,6 +25,7 @@ logger = logging.getLogger('nowork')
 
 # ── Sync Cancellation ───────────────────────────────────────────
 
+_active_run_ids: dict[str, set[str]] = {}
 _sync_cancel_flags: dict[str, bool] = {}
 
 
@@ -58,9 +58,6 @@ def _unregister_active_run(kb_id: str, run_id: str) -> None:
     """Remove a completed Agno run ID."""
     if kb_id in _active_run_ids:
         _active_run_ids[kb_id].discard(run_id)
-
-
-_active_run_ids: dict[str, set[str]] = {}
 
 
 def _is_cancelled(kb_id: str) -> bool:
@@ -310,11 +307,10 @@ async def sync_knowledge_base(kb_id: str, model: Any,
                 )
                 all_written.extend(written)
             except SyncCancelled:
-                raise  # propagate to caller
+                raise
             except Exception as e:
                 logger.error('Failed to ingest %s: %s', file_path, e)
     except SyncCancelled:
-        # Clean up on cancel
         clear_sync_cancel(kb_id)
         raise
 

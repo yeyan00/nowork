@@ -1,7 +1,7 @@
 """Localized prompt templates for Wiki Ingest pipeline.
 
 Supports multiple languages. The language is read from the knowledge base
-config (``language`` field, default ``"zh"``).
+config (``language`` field, default ``"en"``).
 
 Each prompt function accepts dynamic parameters and returns the complete
 prompt string in the requested language.

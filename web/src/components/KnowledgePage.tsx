@@ -209,13 +209,15 @@ export function KnowledgePage() {
       const result = await syncWikiKnowledgeBase(selectedId, ac.signal);
       loadWikiData();
       if (result.cancelled) {
-        alert('Sync cancelled.');
+        alert('Sync cancelled. Partial results have been saved.');
       } else {
         alert(`Synced: ${result.pages_written} pages written`);
       }
     } catch (e: any) {
       if (e.name === 'AbortError') {
-        // Frontend aborted — backend cancel was already called above
+        // Frontend aborted — backend cancel was already called above.
+        // Reload wiki data to show partial results.
+        loadWikiData();
       } else {
         alert('Sync failed: ' + e.message);
       }

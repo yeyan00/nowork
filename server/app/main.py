@@ -591,7 +591,9 @@ async def api_sync_knowledge(knowledge_id: str, request: Request):
     try:
         written = await sync_knowledge_base(knowledge_id, model)
     except SyncCancelled:
-        return {'ok': True, 'id': knowledge_id, 'cancelled': True, 'pages_written': 0, 'pages': []}
+        # Pages already ingested are kept on disk — just report cancellation.
+        # Frontend will reload wiki data to reflect the partial results.
+        return {'ok': True, 'id': knowledge_id, 'cancelled': True}
     return {'ok': True, 'id': knowledge_id, 'pages_written': len(written), 'pages': written}
 
 
