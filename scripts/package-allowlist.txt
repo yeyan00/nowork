@@ -1,7 +1,6 @@
 81d243bd2c585b0f4821__mypyc
 PIL
 PyISAPI_loader
-__pycache__
 _cffi_backend
 _win32sysloader
 _winxptheme

@@ -196,6 +196,9 @@ def build_allowlist(resolved: set[str], site_packages: Path) -> list[str]:
         for u in sorted(unmatched):
             print(f"    {u}", file=sys.stderr)
 
+    # Exclude __pycache__ — not needed at runtime, saves ~50% disk for some packages
+    allowlist.discard('__pycache__')
+
     return sorted(allowlist)
 
 

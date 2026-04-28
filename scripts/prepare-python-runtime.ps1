@@ -41,6 +41,9 @@ Get-ChildItem $sourceLib -Exclude 'site-packages' | ForEach-Object {
   Copy-Item $_.FullName $targetLib -Recurse -Force
 }
 
+# Remove __pycache__ from stdlib copy
+Get-ChildItem $targetLib -Directory -Recurse -Filter '__pycache__' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+
 # ── Step 2: Copy filtered site-packages ───────────────────────────────
 Write-Host "`n[2/3] Copying filtered site-packages ..."
 
@@ -76,6 +79,49 @@ foreach ($pattern in $allowlist) {
 }
 
 Write-Host "  Copied: $copiedItems / $totalItems items ($missingItems not found in source)"
+
+# ── Step 2.5: Remove unnecessary files ────────────────────────────────
+
+# 1) __pycache__ / .pyc — runtime bytecode cache, auto-regenerated
+$pycacheCount = (Get-ChildItem $targetSP -Directory -Recurse -Filter '__pycache__' -ErrorAction SilentlyContinue).Count
+if ($pycacheCount -gt 0) {
+  Get-ChildItem $targetSP -Directory -Recurse -Filter '__pycache__' | Remove-Item -Recurse -Force
+}
+$pycCount = (Get-ChildItem $targetSP -File -Recurse -Filter '*.pyc' -ErrorAction SilentlyContinue).Count
+if ($pycCount -gt 0) {
+  Get-ChildItem $targetSP -File -Recurse -Filter '*.pyc' | Remove-Item -Force
+}
+Write-Host "  Cleaned up $pycacheCount __pycache__ dirs, $pycCount .pyc files"
+
+# 2) tests/test/testing directories — dev-only, ~39 MB
+$testCount = 0
+foreach ($testDir in @('tests', 'test', 'testing')) {
+  $found = Get-ChildItem $targetSP -Directory -Recurse -Filter $testDir -ErrorAction SilentlyContinue
+  $testCount += $found.Count
+  $found | Remove-Item -Recurse -Force
+}
+Write-Host "  Cleaned up $testCount test directories"
+
+# 3) .pyi stubs — IDE/type-check only, ~2 MB
+$pyiCount = (Get-ChildItem $targetSP -File -Recurse -Filter '*.pyi' -ErrorAction SilentlyContinue).Count
+if ($pyiCount -gt 0) {
+  Get-ChildItem $targetSP -File -Recurse -Filter '*.pyi' | Remove-Item -Force
+}
+Write-Host "  Cleaned up $pyiCount .pyi stub files"
+
+# 4) .pxd/.pyx Cython sources — already compiled, ~0.5 MB
+$cythonCount = (Get-ChildItem $targetSP -File -Recurse -Include '*.pxd','*.pyx' -ErrorAction SilentlyContinue).Count
+if ($cythonCount -gt 0) {
+  Get-ChildItem $targetSP -File -Recurse -Include '*.pxd','*.pyx' | Remove-Item -Force
+}
+Write-Host "  Cleaned up $cythonCount Cython source files"
+
+# 5) .dist-info — pip metadata, not needed at runtime, ~3 MB
+$distInfoCount = (Get-ChildItem $targetSP -Directory -Filter '*.dist-info' -ErrorAction SilentlyContinue).Count
+if ($distInfoCount -gt 0) {
+  Get-ChildItem $targetSP -Directory -Filter '*.dist-info' | Remove-Item -Recurse -Force
+}
+Write-Host "  Cleaned up $distInfoCount .dist-info directories"
 
 # ── Step 3: Summary ───────────────────────────────────────────────────
 Write-Host "`n[3/3] Done!"
