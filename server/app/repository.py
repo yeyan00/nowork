@@ -60,12 +60,12 @@ def _serialize_worker(worker_cfg: dict[str, Any]) -> dict[str, Any]:
     worker_type = _detect_type(worker_cfg)
     model_ref = worker_cfg.get('model')
     return {
-        'id': block.get('id', ''),
+        'id': block.get('id') or '',
         'type': worker_type,
-        'name': block.get('name', ''),
-        'description': block.get('description', ''),
-        'status': block.get('status', ''),
-        'recent': block.get('status', ''),
+        'name': block.get('name') or '',
+        'description': block.get('description') or '',
+        'status': block.get('status') or '',
+        'recent': block.get('status') or '',
         'config': {
             'model': model_ref,
             'modelCapabilities': get_model_capabilities(model_ref),
@@ -170,8 +170,8 @@ def update_worker(worker_id: str, payload: dict[str, Any]) -> dict[str, Any] | N
         return None
 
     block = _extract_worker_block(raw)
-    block['name'] = payload.get('name', block.get('name', ''))
-    block['description'] = payload.get('description', block.get('description', ''))
+    block['name'] = payload.get('name') or block.get('name') or ''
+    block['description'] = payload.get('description') or block.get('description') or ''
     if 'status' in payload:
         block['status'] = payload['status']
 
