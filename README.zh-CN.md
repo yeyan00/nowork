@@ -90,7 +90,7 @@ NoWork 选择了另一条路：
 | **长对话连续性** | 自动上下文压缩（Compaction），帮助长会话持续保留有效状态。 |
 | **安全工作区访问** | 文件与 Shell 操作仅限于配置好的目录和权限范围内。 |
 | **文档处理技能** | 内置 Word、Excel、PowerPoint、PDF 等技能。 |
-| **知识库** | Wiki 驱动的知识管理，支持自动摄入、全文搜索、知识图谱和 Worker 集成。支持 Wiki 模式和传统向量模式。 |
+| **知识库** | Wiki 驱动的知识管理，灵感来自 [Karpathy 的 LLM Wiki 方法论](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)，实现参考 [llm_wiki](https://github.com/nashsu/llm_wiki)。支持自动摄入、全文搜索、知识图谱和 Worker 集成。支持 Wiki 模式和传统向量模式。 |
 | **定时执行** | 支持按计划定时运行 Worker。 |
 | **MCP 集成** | 通过 Model Context Protocol 接入外部工具。 |
 | **桌面原生打包** | 基于 Tauri，内置后端与嵌入式 Python 运行时。 |

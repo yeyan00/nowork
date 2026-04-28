@@ -90,7 +90,7 @@ The goal is simple: let AI handle repetitive work, so you can stay focused on de
 | **Long-session continuity** | Automatic context compaction helps preserve useful state in long conversations. |
 | **Workspace-safe file access** | Sandboxed file and shell operations limited to configured directories and permissions. |
 | **Document processing skills** | Built-in support for Word, Excel, PowerPoint, and PDF workflows. |
-| **Knowledge bases** | Wiki-driven knowledge management with auto-ingest, full-text search, knowledge graphs, and Worker integration. Supports both Wiki mode and traditional vector mode. |
+| **Knowledge bases** | Wiki-driven knowledge management inspired by [Karpathy's LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f), with implementation reference from [llm_wiki](https://github.com/nashsu/llm_wiki). Supports auto-ingest, full-text search, knowledge graphs, and Worker integration. Works in both Wiki mode and traditional vector mode. |
 | **Scheduled runs** | Set recurring tasks for workers to run automatically. |
 | **MCP integration** | Connect external tools through Model Context Protocol. |
 | **Desktop-native packaging** | Tauri desktop shell with bundled backend and embedded Python runtime. |

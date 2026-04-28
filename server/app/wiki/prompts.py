@@ -20,9 +20,12 @@ _LOCALE_MAP: dict[str, str] = {
 
 
 def _resolve(locale: str | None) -> str:
-    """Normalize locale string to a supported code."""
+    """Normalize locale string to a supported code.
+
+    Default is English ('en') when locale is not specified.
+    """
     if not locale:
-        return 'zh'
+        return 'en'
     return _LOCALE_MAP.get(locale.lower().strip(), 'en')
 
 
