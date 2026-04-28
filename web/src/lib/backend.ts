@@ -709,6 +709,7 @@ export interface KnowledgeBase {
   wiki_mode?: boolean;
   purpose?: string;
   auto_sync?: boolean;
+  language?: string;
   _ref: string;
 }
 
@@ -789,7 +790,7 @@ export async function createKnowledgeBase(payload: Partial<KnowledgeBase>): Prom
   return (await response.json()) as KnowledgeBase;
 }
 
-export async function updateKnowledgeBase(id: string, payload: { name?: string; description?: string; wiki_mode?: boolean; purpose?: string; auto_sync?: boolean; config?: { paths?: string[]; embedder?: Record<string, unknown>; vector_db?: Record<string, unknown> } }): Promise<KnowledgeBase> {
+export async function updateKnowledgeBase(id: string, payload: { name?: string; description?: string; wiki_mode?: boolean; purpose?: string; auto_sync?: boolean; language?: string; config?: { paths?: string[]; embedder?: Record<string, unknown>; vector_db?: Record<string, unknown> } }): Promise<KnowledgeBase> {
   const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: JSON.stringify(payload),

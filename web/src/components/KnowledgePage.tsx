@@ -45,6 +45,7 @@ export function KnowledgePage() {
   const [purpose, setPurpose] = useState('');
   const [wikiMode, setWikiMode] = useState(false);
   const [autoSync, setAutoSync] = useState(false);
+  const [language, setLanguage] = useState('');
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
@@ -94,6 +95,7 @@ export function KnowledgePage() {
     setWikiMode(selected.wiki_mode ?? false);
     setPurpose(selected.purpose ?? '');
     setAutoSync(selected.auto_sync ?? false);
+    setLanguage(selected.language ?? '');
     setDirty(false);
     setDetailTab(isWiki ? 'pages' : 'settings');
     setSelectedPagePath(null);
@@ -140,6 +142,7 @@ export function KnowledgePage() {
       wiki_mode: wikiMode,
       purpose,
       auto_sync: autoSync,
+      language,
       config: {
         paths: paths.split('\n').map((p) => p.trim()).filter(Boolean),
       },
@@ -147,7 +150,7 @@ export function KnowledgePage() {
       setItems((prev) => prev.map((kb) => (kb.id === selectedId ? { ...kb, ...updated } : kb)));
       setDirty(false);
     }).catch(() => {}).finally(() => setSaving(false));
-  }, [selectedId, name, description, wikiMode, purpose, autoSync, paths]);
+  }, [selectedId, name, description, wikiMode, purpose, autoSync, language, paths]);
 
   const handleCreate = useCallback(() => {
     if (!newName.trim()) return;
@@ -366,6 +369,17 @@ export function KnowledgePage() {
                       />
                       <span>{t('knowledge.autoSyncHint')}</span>
                     </label>
+
+                    <h3 className="settings-section-title" style={{ marginTop: '1rem' }}>{t('knowledge.ingestLanguage')}</h3>
+                    <p style={{ fontSize: '12px', color: '#8492aa', margin: '0 0 6px' }}>{t('knowledge.ingestLanguageHint')}</p>
+                    <select
+                      className="settings-select"
+                      value={language}
+                      onChange={(e) => { setLanguage(e.target.value); markDirty(); }}
+                    >
+                      <option value="en">English</option>
+                      <option value="zh">中文</option>
+                    </select>
                   </>
                 )}
 

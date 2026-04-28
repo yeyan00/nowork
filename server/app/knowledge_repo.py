@@ -29,6 +29,7 @@ def _serialize_knowledge(k_cfg: dict[str, Any]) -> dict[str, Any]:
         'wiki_mode': wiki_mode,
         'purpose': k_cfg.get('purpose', ''),
         'auto_sync': k_cfg.get('auto_sync', False),
+        'language': k_cfg.get('language', ''),
         '_ref': k_cfg.get('_ref', ''),
         '_raw': k_cfg,
     }
@@ -71,6 +72,7 @@ def create_knowledge(payload: dict[str, Any]) -> dict[str, Any]:
         'wiki_mode': payload.get('wiki_mode', False),
         'purpose': payload.get('purpose', ''),
         'auto_sync': payload.get('auto_sync', False),
+        'language': payload.get('language', ''),
     }
 
     save_knowledge_config(ref, new_cfg)
@@ -127,6 +129,10 @@ def update_knowledge(knowledge_id: str, payload: dict[str, Any]) -> dict[str, An
         target['auto_sync'] = payload['auto_sync']
     elif 'config' in payload and 'auto_sync' in payload['config']:
         target['auto_sync'] = payload['config']['auto_sync']
+    if 'language' in payload:
+        target['language'] = payload['language']
+    elif 'config' in payload and 'language' in payload['config']:
+        target['language'] = payload['config']['language']
 
     # 初始化 Wiki 目录（首次开启 wiki_mode）
     if target.get('wiki_mode', False):

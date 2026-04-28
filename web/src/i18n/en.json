@@ -249,6 +249,8 @@
     "purposeHint": "Helps AI generate more accurate wiki pages during sync.\n\nExample: Provide structured knowledge retrieval for the engineering team, covering API design, architecture decisions, and technical specs. Focus on REST endpoint definitions, database schema change history, and interaction protocols between key components.",
     "autoSync": "Auto Sync",
     "autoSyncHint": "Automatically ingest when source files change",
+    "ingestLanguage": "Ingest Language",
+    "ingestLanguageHint": "Language used for Wiki content generation during Sync. Affects LLM prompts and output language.",
     "tabSettings": "Settings",
     "tabPages": "Wiki Pages",
     "tabSearch": "Search",

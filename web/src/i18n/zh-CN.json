@@ -249,6 +249,8 @@
     "purposeHint": "帮助 AI 在 sync 时生成更精准的 wiki 页面。\n\n示例：为研发团队提供项目文档的结构化知识检索，涵盖 API 设计、架构决策和技术规范。重点关注 REST 接口定义、数据库 schema 变更历史、以及关键组件间的交互协议。",
     "autoSync": "自动同步",
     "autoSyncHint": "源文件变更时自动导入",
+    "ingestLanguage": "导入语言",
+    "ingestLanguageHint": "Sync 时生成 Wiki 内容使用的语言。影响 LLM 提示词和输出内容的语言。",
     "tabSettings": "设置",
     "tabPages": "Wiki 页面",
     "tabSearch": "搜索",
