@@ -155,6 +155,46 @@ Skills are reusable prompt packages that enhance Worker capabilities.
 - Click a skill to view its details (SKILL.md content)
 - Install new skills via **Install Skill** (local directory path or URL)
 
+### 📖 Knowledge Bases
+
+Knowledge Bases let you build structured, searchable Wiki from your documents. Workers can query knowledge bases during conversations to provide context-aware answers.
+
+**Creating a Knowledge Base:**
+1. Click **Knowledge** in the left navigation rail
+2. Click **+ Create** in the top-right corner
+3. Enter a name for the knowledge base
+4. Optionally enable **Wiki Mode** (recommended) — this creates a Wiki-style knowledge base with auto-ingest, full-text search, and knowledge graph visualization
+5. Click **Create**
+
+**Configuring a Knowledge Base:**
+
+| Setting | Description |
+|---------|-------------|
+| **Name** | Display name for the knowledge base |
+| **Description** | Brief description of the knowledge base purpose |
+| **Wiki Mode** | Enable Wiki-style knowledge management (recommended) |
+| **Purpose** | Describe the knowledge base's goal — this guides the AI during auto-ingest to generate relevant Wiki pages |
+| **Auto Sync** | Automatically sync files on app startup |
+| **Paths** | Directories or files to ingest (one per line) |
+
+**Wiki Mode Features:**
+
+- **Pages Tab**: Browse all generated Wiki pages by type (entities, concepts, sources, queries). Click a page to read its content, edit, or delete it.
+- **Sync**: Click **Sync** to ingest new or changed files from your configured paths. The AI will analyze documents and generate structured Wiki pages (entities, concepts, source summaries).
+- **Search Tab**: Full-text search across all Wiki pages. Results show title matches, content snippets, and relevance.
+- **Knowledge Graph**: Visualize relationships between Wiki pages. Nodes represent pages, edges represent cross-references (`[[wikilinks]]`).
+- **Page Editor**: Edit any Wiki page's raw Markdown content directly within the app.
+
+**Traditional Vector Mode:**
+
+If Wiki Mode is disabled, the knowledge base uses traditional vector embedding and similarity search instead. Configure the paths to your documents, then click **Reload** to index them.
+
+**Binding a Knowledge Base to a Worker:**
+1. Go to **Workers** → select a Worker
+2. Scroll to the **Knowledge Bases** section
+3. Select one or more knowledge bases to bind
+4. The Worker will automatically gain a `search_knowledge` tool to query the bound knowledge bases during conversations
+
 ### 🧩 Extensions
 
 Manage optional extension packages:

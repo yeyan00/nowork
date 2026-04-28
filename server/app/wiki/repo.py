@@ -1,4 +1,4 @@
-"""Wiki 文件系统操作 — 读写 Wiki 页面、解析 YAML frontmatter、管理目录结构。"""
+"""Wiki file-system operations — read/write Wiki pages, parse YAML frontmatter, manage directory structure."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ logger = logging.getLogger('nowork')
 
 
 def _kb_data_dir(kb_id: str) -> Path:
-    """获取知识库数据目录: {server_root}/knowledge/{kb_id}/"""
+    """Return the knowledge base data directory: {server_root}/knowledge/{kb_id}/"""
     root = resolve_server_root()
     d = root / 'knowledge' / kb_id
     d.mkdir(parents=True, exist_ok=True)
@@ -26,9 +26,9 @@ def _kb_data_dir(kb_id: str) -> Path:
 
 
 def _parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:
-    """解析 YAML frontmatter，返回 (metadata, body)。
-    
-    支持格式:
+    """Parse YAML frontmatter and return (metadata, body).
+
+    Supported format:
     ---
     key: value
     ---
@@ -38,7 +38,7 @@ def _parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:
     if not content.startswith('---'):
         return {}, content
 
-    # 找到第二个 ---
+    # Find the second ---
     end = content.find('---', 3)
     if end < 0:
         return {}, content
@@ -55,13 +55,13 @@ def _parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:
 
 
 def _serialize_frontmatter(meta: dict[str, Any], body: str) -> str:
-    """将 metadata + body 序列化为带 frontmatter 的 Markdown。"""
+    """Serialize metadata + body into a frontmatter Markdown document."""
     fm = yaml.dump(meta, default_flow_style=False, allow_unicode=True, sort_keys=False).strip()
     return f"---\n{fm}\n---\n{body}"
 
 
 def _safe_wiki_path(path: str) -> bool:
-    """安全检查: 路径必须在 wiki/ 下，无 .. 或绝对路径。"""
+    """Security check: path must be under wiki/, with no .. or absolute segments."""
     if not path.startswith('wiki/'):
         return False
     parts = path.replace('\\', '/').split('/')
@@ -69,7 +69,7 @@ def _safe_wiki_path(path: str) -> bool:
 
 
 class WikiRepository:
-    """Wiki 文件系统仓库。"""
+    """Wiki file system repository."""
 
     def __init__(self, kb_id: str):
         self.kb_id = kb_id
@@ -77,21 +77,21 @@ class WikiRepository:
         self.wiki_dir = self.data_dir / 'wiki'
         self.cache_dir = self.data_dir / '.cache'
 
-    # ── 目录初始化 ──────────────────────────────────────────
+    # ── Directory Initialization ───────────────────────────────
 
     def ensure_structure(self) -> None:
-        """确保 Wiki 目录结构存在。"""
+        """Ensure the Wiki directory structure exists."""
         for sub in ('entities', 'concepts', 'sources', 'queries'):
             (self.wiki_dir / sub).mkdir(parents=True, exist_ok=True)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # 初始化骨架文件（如果不存在）
+        # Initialize skeleton files (if they don't exist)
         if not (self.data_dir / 'purpose.md').exists():
             (self.data_dir / 'purpose.md').write_text('', encoding='utf-8')
         if not (self.data_dir / 'schema.md').exists():
             (self.data_dir / 'schema.md').write_text(
-                '## 页面类型\n\n- entity: 实体页面\n- concept: 概念页面\n'
-                '- source: 来源摘要\n- query: 问答归档\n',
+                '## Page Types\n\n- entity: entity pages\n- concept: concept pages\n'
+                '- source: source summaries\n- query: Q&A archives\n',
                 encoding='utf-8',
             )
         if not (self.wiki_dir / 'index.md').exists():
@@ -104,7 +104,7 @@ class WikiRepository:
         if not (self.wiki_dir / 'log.md').exists():
             (self.wiki_dir / 'log.md').write_text('# Wiki Log\n\n', encoding='utf-8')
 
-    # ── 骨架文件读写 ────────────────────────────────────────
+    # ── Skeleton File I/O ──────────────────────────────────────
 
     def read_purpose(self) -> str:
         p = self.data_dir / 'purpose.md'
@@ -141,14 +141,14 @@ class WikiRepository:
         today = date.today().isoformat()
         p.write_text(f"{existing}\n## [{today}] ingest | {entry}\n\n", encoding='utf-8')
 
-    # ── 页面操作 ────────────────────────────────────────────
+    # ── Page Operations ────────────────────────────────────────
 
     def list_pages(self, category: str = '', search: str = '') -> list[dict[str, Any]]:
-        """列出 Wiki 页面。
-        
+        """List Wiki pages.
+
         Args:
-            category: 按类型过滤 (entities/concepts/sources/queries)
-            search: 按标题/内容关键词过滤
+            category: Filter by type (entities/concepts/sources/queries).
+            search: Filter by title/content keyword.
         """
         pages: list[dict[str, Any]] = []
 
@@ -156,7 +156,7 @@ class WikiRepository:
         if category:
             scan_dirs.append(self.wiki_dir / category)
         else:
-            # 也扫描 wiki/ 根目录的文件 (index.md, overview.md, log.md)
+            # Also scan wiki/ root-level files (index.md, overview.md, log.md)
             for sub in ('entities', 'concepts', 'sources', 'queries'):
                 scan_dirs.append(self.wiki_dir / sub)
 
@@ -173,7 +173,7 @@ class WikiRepository:
                 title = meta.get('title', md_file.stem)
                 page_type = meta.get('type', '')
 
-                # 搜索过滤
+                # Search filter
                 if search_lower:
                     if search_lower not in title.lower() and search_lower not in body.lower():
                         continue
@@ -194,8 +194,8 @@ class WikiRepository:
         return pages
 
     def read_page(self, page_path: str) -> dict[str, Any] | None:
-        """读取指定 Wiki 页面。返回 {path, meta, body, content} 或 None。"""
-        # 安全检查
+        """Read a specific Wiki page. Returns {path, meta, body, content} or None."""
+        # Security check
         if not _safe_wiki_path(page_path):
             return None
 
@@ -214,7 +214,7 @@ class WikiRepository:
         }
 
     def write_page(self, page_path: str, content: str) -> bool:
-        """写入 Wiki 页面。返回是否成功。"""
+        """Write a Wiki page. Returns True on success."""
         if not _safe_wiki_path(page_path):
             logger.warning('Rejected path outside wiki/: %s', page_path)
             return False
@@ -225,7 +225,7 @@ class WikiRepository:
         return True
 
     def delete_page(self, page_path: str) -> bool:
-        """删除 Wiki 页面。"""
+        """Delete a Wiki page."""
         if not _safe_wiki_path(page_path):
             return False
 
@@ -235,10 +235,10 @@ class WikiRepository:
             return True
         return False
 
-    # ── 统计 ────────────────────────────────────────────────
+    # ── Statistics ─────────────────────────────────────────────
 
     def get_stats(self) -> dict[str, Any]:
-        """获取 Wiki 统计信息。"""
+        """Return Wiki statistics."""
         stats: dict[str, Any] = {
             'total': 0,
             'by_type': {},
@@ -265,7 +265,7 @@ class WikiRepository:
 
         return stats
 
-    # ── 版本控制 ────────────────────────────────────────────
+    # ── Versioning ─────────────────────────────────────────────
 
     def _version_file(self) -> Path:
         return self.data_dir / '.version'
@@ -284,19 +284,20 @@ class WikiRepository:
         self._version_file().write_text(str(v), encoding='utf-8')
         return v
 
-    # ── 清理 ────────────────────────────────────────────────
+    # ── Cleanup ────────────────────────────────────────────────
 
     def destroy(self) -> None:
-        """删除整个知识库数据目录。"""
+        """Delete the entire knowledge base data directory."""
         if self.data_dir.exists():
             shutil.rmtree(self.data_dir, ignore_errors=True)
 
-    # ── Wikilink 收集 ───────────────────────────────────────
+    # ── Wikilink Collection ────────────────────────────────────
 
     WIKILINK_RE = re.compile(r'\[\[([^\]]+)\]\]')
 
     def collect_all_links(self) -> dict[str, list[str]]:
-        """收集所有页面的 [[wikilink]] 出链。
+        """Collect all [[wikilink]] outgoing links from every page.
+
         Returns: {page_path: [target, target, ...]}
         """
         links: dict[str, list[str]] = {}
@@ -312,7 +313,7 @@ class WikiRepository:
         return links
 
     def collect_all_page_ids(self) -> set[str]:
-        """收集所有页面的 ID (文件名去掉 .md)。"""
+        """Collect all page IDs (filename without .md extension)."""
         ids: set[str] = set()
         if not self.wiki_dir.exists():
             return ids

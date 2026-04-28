@@ -1,4 +1,4 @@
-"""分词搜索 — CJK bigram + 英文 token 搜索，标题加权。"""
+"""Tokenized search — CJK bigram + English token matching with title boosting."""
 
 from __future__ import annotations
 
@@ -11,16 +11,17 @@ from app.wiki.repo import WikiRepository, _parse_frontmatter
 
 
 def tokenize_query(query: str) -> list[str]:
-    """将查询拆分为 tokens: 英文单词 + CJK bigram。
-    
-    "transformer 训练方法" → ["transformer", "训练", "练方", "方法"]
+    """Split a query into tokens: English words + CJK bigrams.
+
+    "transformer training methods" -> ["transformer", "training", "methods"]
+    "transformer 训练方法" -> ["transformer", "训", "练", "方", "法", "训练", "练方", "方法"]
     """
     tokens: list[str] = []
-    # 英文单词
+    # English words
     en_words = re.findall(r'[a-zA-Z0-9]+', query.lower())
     tokens.extend(w for w in en_words if len(w) >= 2)
 
-    # CJK bigram
+    # CJK bigrams
     cjk_chars = []
     for ch in query:
         if _is_cjk(ch):
@@ -29,10 +30,10 @@ def tokenize_query(query: str) -> list[str]:
     for i in range(len(cjk_chars)):
         if i < len(cjk_chars) - 1:
             tokens.append(cjk_chars[i] + cjk_chars[i + 1])
-        # 也添加单字
+        # Also add single characters
         tokens.append(cjk_chars[i])
 
-    # 去重但保持顺序
+    # Deduplicate while preserving order
     seen = set()
     unique = []
     for t in tokens:
@@ -57,9 +58,9 @@ def _is_cjk(ch: str) -> bool:
 
 
 def tokenized_search(kb_id: str, query: str, max_results: int = 20) -> list[dict[str, Any]]:
-    """分词搜索 Wiki 页面。
-    
-    标题命中 × 3 加分，内容命中 × 1，related/tag 命中 × 0.5。
+    """Tokenized search across Wiki pages.
+
+    Scoring: title match x3, content match x1 (capped at 3), related/tag match x0.5.
     """
     repo = WikiRepository(kb_id)
     wiki_dir = repo.wiki_dir
@@ -94,7 +95,7 @@ def tokenized_search(kb_id: str, query: str, max_results: int = 20) -> list[dict
                 score += 3.0
                 title_match = True
             if token_lower in body_lower:
-                # 内容命中的次数加分（最多 3 次）
+                # Cap content match bonus at 3 occurrences
                 count = min(body_lower.count(token_lower), 3)
                 score += count * 1.0
             if token_lower in extra_lower:
@@ -110,6 +111,6 @@ def tokenized_search(kb_id: str, query: str, max_results: int = 20) -> list[dict
                 'snippet': body[:300].strip() if body else '',
             })
 
-    # 按分数降序
+    # Sort by score descending
     results.sort(key=lambda r: r['score'], reverse=True)
     return results[:max_results]

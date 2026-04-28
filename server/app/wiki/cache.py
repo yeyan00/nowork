@@ -1,4 +1,4 @@
-"""SHA256 缓存管理 — Ingest 去重，检测文件变化。"""
+"""SHA256 cache management — Ingest dedup and file-change detection."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ logger = logging.getLogger('nowork')
 
 
 def _sha256_file(path: str | Path) -> str:
-    """计算文件的 SHA256 哈希。"""
+    """Compute SHA256 hash of a file."""
     h = hashlib.sha256()
     with open(path, 'rb') as f:
         for chunk in iter(lambda: f.read(8192), b''):
@@ -21,7 +21,7 @@ def _sha256_file(path: str | Path) -> str:
 
 
 class WikiCache:
-    """Ingest 缓存管理。存储在 {kb_data_dir}/.cache/ingest-cache.json。"""
+    """Ingest cache manager. Stored at {kb_data_dir}/.cache/ingest-cache.json."""
 
     def __init__(self, cache_dir: Path):
         self.cache_dir = cache_dir
@@ -44,8 +44,8 @@ class WikiCache:
         )
 
     def check_cache(self, source_path: str) -> dict[str, Any] | None:
-        """检查缓存。如果文件未变化，返回上次的 cached info；否则返回 None。
-        
+        """Check cache. Returns cached info if the file is unchanged, else None.
+
         Returns:
             None if file changed or not cached
             {"hash": ..., "files": [...], "timestamp": ...} if cached and unchanged
@@ -59,7 +59,7 @@ class WikiCache:
         return None
 
     def save_cache(self, source_path: str, wiki_files: list[str]) -> None:
-        """保存 Ingest 结果到缓存。"""
+        """Save Ingest result to cache."""
         self._cache[source_path] = {
             'hash': _sha256_file(source_path),
             'files': wiki_files,
@@ -68,17 +68,17 @@ class WikiCache:
         self._save()
 
     def remove_cache(self, source_path: str) -> None:
-        """删除指定文件的缓存。"""
+        """Remove cache entry for the given file."""
         self._cache.pop(source_path, None)
         self._save()
 
     def scan_changes(self, paths: list[str]) -> list[str]:
-        """扫描目录/文件列表，返回有变化的文件路径。
-        
+        """Scan directories/file lists and return paths of changed files.
+
         Args:
-            paths: 目录或文件路径列表
+            paths: List of directory or file paths.
         Returns:
-            发生变化的文件绝对路径列表
+            List of absolute paths for files that have changed.
         """
         changed: list[str] = []
 
@@ -96,10 +96,10 @@ class WikiCache:
         return changed
 
     def _file_changed(self, file_path: str) -> bool:
-        """检查单个文件是否有变化。"""
+        """Check whether a single file has changed."""
         cached = self._cache.get(file_path)
         if cached is None:
-            return True  # 新文件
+            return True  # new file
         try:
             current_hash = _sha256_file(file_path)
             return current_hash != cached.get('hash', '')
@@ -112,7 +112,7 @@ class WikiCache:
 
 
 def _is_supported_file(path: Path) -> bool:
-    """检查文件扩展名是否支持提取。"""
+    """Check whether the file extension is supported for extraction."""
     supported = {
         '.md', '.txt', '.py', '.js', '.ts', '.json', '.yaml', '.yml',
         '.toml', '.csv', '.xml', '.html', '.css', '.sql', '.sh', '.bat',

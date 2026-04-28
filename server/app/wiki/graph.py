@@ -1,4 +1,4 @@
-"""知识图谱构建 — 从 Wiki 文件的 [[wikilink]] 构建节点和边。"""
+"""Knowledge graph builder — extract nodes and edges from Wiki [[wikilink]] syntax."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ DEFAULT_COLOR = '#8492aa'
 
 
 def build_graph(kb_id: str) -> dict[str, Any]:
-    """构建知识图谱的节点和边。
+    """Build the knowledge graph's nodes and edges.
 
     Returns:
         {

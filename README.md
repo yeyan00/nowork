@@ -41,6 +41,14 @@ Build your own AI workforce — all in one chat window.
 
 <p align="center"><em>Team workers coordinate multiple agents — watch member activities, tool calls, and progress in real time.</em></p>
 
+#### 📚 Knowledge Base: Wiki-Driven Knowledge Management
+
+<p align="center">
+  <img src="asserts/kl_demo.png" alt="Knowledge Base" />
+</p>
+
+<p align="center"><em>Build a structured Wiki from your documents — auto-ingest files, browse pages, search, and visualize knowledge graphs.</em></p>
+
 ---
 
 ## What is NoWork?
@@ -82,6 +90,7 @@ The goal is simple: let AI handle repetitive work, so you can stay focused on de
 | **Long-session continuity** | Automatic context compaction helps preserve useful state in long conversations. |
 | **Workspace-safe file access** | Sandboxed file and shell operations limited to configured directories and permissions. |
 | **Document processing skills** | Built-in support for Word, Excel, PowerPoint, and PDF workflows. |
+| **Knowledge bases** | Wiki-driven knowledge management with auto-ingest, full-text search, knowledge graphs, and Worker integration. Supports both Wiki mode and traditional vector mode. |
 | **Scheduled runs** | Set recurring tasks for workers to run automatically. |
 | **MCP integration** | Connect external tools through Model Context Protocol. |
 | **Desktop-native packaging** | Tauri desktop shell with bundled backend and embedded Python runtime. |
@@ -153,6 +162,7 @@ NoWork ships with a practical default workforce for common engineering and docum
 | `server/config/config.yaml` | Global config: default model, tools, server settings |
 | `server/config/models/*.yaml` | Model provider definitions, API keys, endpoints, capabilities |
 | `server/config/workers/*.yaml` | Worker definitions: instructions, tools, workspaces, history, learning |
+| `server/config/knowledge/*.yaml` | Knowledge base definitions: paths, wiki mode, purpose, auto sync |
 | `server/config/mcp.yaml` | MCP server connections |
 
 ### Example worker config

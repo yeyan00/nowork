@@ -1,4 +1,4 @@
-"""Lint 健康检查 — 断链、孤立页面、缺失来源检测。"""
+"""Lint health checks — broken links, orphan pages, and missing source detection."""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ logger = logging.getLogger('nowork')
 @dataclass
 class LintResult:
     broken_links: list[dict] = field(default_factory=list)    # {source, target}
-    orphan_pages: list[str] = field(default_factory=list)      # 孤立页面路径
-    empty_pages: list[str] = field(default_factory=list)       # 空内容页面路径
+    orphan_pages: list[str] = field(default_factory=list)      # orphan page paths
+    empty_pages: list[str] = field(default_factory=list)       # empty content page paths
     missing_sources: list[dict] = field(default_factory=list)  # {page, source_path}
     total_pages: int = 0
     total_links: int = 0
@@ -41,13 +41,13 @@ class LintResult:
 
 
 def lint_knowledge_base(kb_id: str) -> LintResult:
-    """结构性 Lint（不需要 LLM）。
-    
-    检查:
-    - 断链: [[xxx]] 目标页面不存在
-    - 孤立页面: 没有任何入链的页面
-    - 空页面: 只有 frontmatter 没有内容
-    - 缺失来源: frontmatter.sources 中的文件已不存在
+    """Structural lint (no LLM required).
+
+    Checks:
+    - Broken links: [[xxx]] target page does not exist
+    - Orphan pages: pages with no incoming links
+    - Empty pages: only frontmatter, no body content
+    - Missing sources: frontmatter.sources references a non-existent file
     """
     repo = WikiRepository(kb_id)
     result = LintResult()
@@ -56,20 +56,20 @@ def lint_knowledge_base(kb_id: str) -> LintResult:
     if not wiki_dir.exists():
         return result
 
-    # 收集所有页面 ID (用于断链检查)
+    # Collect all page IDs (for broken-link checks)
     all_page_ids = repo.collect_all_page_ids()
 
-    # 收集所有出链 (用于孤立页面检查)
+    # Collect all outgoing links (for orphan-page checks)
     all_links = repo.collect_all_links()
     result.total_links = sum(len(targets) for targets in all_links.values())
 
-    # 收集所有被引用的页面 ID
+    # Collect all referenced page IDs
     referenced_ids: set[str] = set()
     for targets in all_links.values():
         for target in targets:
             referenced_ids.add(target)
 
-    # 遍历所有页面进行检查
+    # Iterate all pages
     pages = repo.list_pages()
     result.total_pages = len(pages)
 
@@ -77,14 +77,14 @@ def lint_knowledge_base(kb_id: str) -> LintResult:
         page_path = page['path']
         page_id = Path(page_path).stem
 
-        # 检查空内容
+        # Check empty content
         page_data = repo.read_page(page_path)
         if page_data:
             body = page_data['body'].strip()
             if not body:
                 result.empty_pages.append(page_path)
 
-            # 检查缺失来源
+            # Check missing sources
             sources = page_data.get('meta', {}).get('sources', [])
             for src in sources:
                 if src and not Path(src).exists():
@@ -93,7 +93,7 @@ def lint_knowledge_base(kb_id: str) -> LintResult:
                         'source_path': src,
                     })
 
-        # 检查断链
+        # Check broken links
         targets = all_links.get(page_path, [])
         for target in targets:
             if target not in all_page_ids:
@@ -102,7 +102,7 @@ def lint_knowledge_base(kb_id: str) -> LintResult:
                     'target': target,
                 })
 
-        # 检查孤立页面 (排除 index/overview/log 等特殊页面)
+        # Check orphan pages (exclude special pages like index/overview/log)
         special_pages = {'index', 'overview', 'log'}
         if page_id not in special_pages and page_id not in referenced_ids:
             result.orphan_pages.append(page_path)

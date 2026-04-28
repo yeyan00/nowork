@@ -1,4 +1,4 @@
-"""Wiki 知识库模块 — Markdown + YAML frontmatter 知识库核心实现。"""
+"""Wiki knowledge-base module — Markdown + YAML frontmatter KB core implementation."""
 
 from app.wiki.repo import WikiRepository
 from app.wiki.cache import WikiCache

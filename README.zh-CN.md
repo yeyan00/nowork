@@ -41,6 +41,14 @@
 
 <p align="center"><em>Team Worker 协调多个 Agent 协作——实时查看成员活动、工具调用和执行进度。</em></p>
 
+#### 📚 知识库：Wiki 驱动的知识管理
+
+<p align="center">
+  <img src="asserts/kl_demo.png" alt="Knowledge Base" />
+</p>
+
+<p align="center"><em>从文档自动构建结构化 Wiki——自动摄入文件、浏览页面、搜索和可视化知识图谱。</em></p>
+
 ---
 
 ## NoWork 是什么？
@@ -82,6 +90,7 @@ NoWork 选择了另一条路：
 | **长对话连续性** | 自动上下文压缩（Compaction），帮助长会话持续保留有效状态。 |
 | **安全工作区访问** | 文件与 Shell 操作仅限于配置好的目录和权限范围内。 |
 | **文档处理技能** | 内置 Word、Excel、PowerPoint、PDF 等技能。 |
+| **知识库** | Wiki 驱动的知识管理，支持自动摄入、全文搜索、知识图谱和 Worker 集成。支持 Wiki 模式和传统向量模式。 |
 | **定时执行** | 支持按计划定时运行 Worker。 |
 | **MCP 集成** | 通过 Model Context Protocol 接入外部工具。 |
 | **桌面原生打包** | 基于 Tauri，内置后端与嵌入式 Python 运行时。 |
@@ -153,6 +162,7 @@ NoWork 默认内置了一组面向工程与文档工作的实用 Worker。
 | `server/config/config.yaml` | 全局配置：默认模型、工具、服务设置 |
 | `server/config/models/*.yaml` | 模型供应商定义、API Key、接口地址、能力 |
 | `server/config/workers/*.yaml` | Worker 定义：指令、工具、工作区、历史、学习配置 |
+| `server/config/knowledge/*.yaml` | 知识库定义：关联目录、Wiki 模式、目标方向、自动同步 |
 | `server/config/mcp.yaml` | MCP 服务连接配置 |
 
 ### Worker 配置示例
