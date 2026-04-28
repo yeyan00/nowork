@@ -28,6 +28,9 @@ import type {
 
 type DetailTab = 'settings' | 'pages' | 'search';
 
+// Module-level sync state — survives component remount (page navigation)
+let _activeSyncAbort: AbortController | null = null;
+
 export function KnowledgePage() {
   const { t } = useI18n();
   const [items, setItems] = useState<KnowledgeBase[]>([]);
@@ -53,8 +56,7 @@ export function KnowledgePage() {
   const [detailTab, setDetailTab] = useState<DetailTab>('settings');
   const [wikiPages, setWikiPages] = useState<WikiPageSummary[]>([]);
   const [wikiStats, setWikiStats] = useState<WikiStats | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncAbortRef, setSyncAbortRef] = useState<AbortController | null>(null);
+  const [syncing, setSyncing] = useState(_activeSyncAbort !== null);
   const [selectedPagePath, setSelectedPagePath] = useState<string | null>(null);
   const [pageContent, setPageContent] = useState<WikiPage | null>(null);
   const [editingPage, setEditingPage] = useState(false);
@@ -181,9 +183,9 @@ export function KnowledgePage() {
   const handleSync = useCallback(async () => {
     if (!selectedId) return;
     // If already syncing, cancel
-    if (syncAbortRef) {
-      syncAbortRef.abort();
-      setSyncAbortRef(null);
+    if (_activeSyncAbort) {
+      _activeSyncAbort.abort();
+      _activeSyncAbort = null;
       setSyncing(false);
       return;
     }
@@ -191,7 +193,7 @@ export function KnowledgePage() {
     // Save language to backend first, then sync
     setSyncing(true);
     const ac = new AbortController();
-    setSyncAbortRef(ac);
+    _activeSyncAbort = ac;
 
     try {
       // Save language setting before sync so backend reads the correct locale
@@ -209,10 +211,13 @@ export function KnowledgePage() {
         alert('Sync failed: ' + e.message);
       }
     } finally {
+      // Only clear if this is still the active controller
+      if (_activeSyncAbort === ac) {
+        _activeSyncAbort = null;
+      }
       setSyncing(false);
-      setSyncAbortRef(null);
     }
-  }, [selectedId, language, syncAbortRef, loadWikiData]);
+  }, [selectedId, language, loadWikiData]);
 
   const handleSavePage = useCallback(() => {
     if (!selectedId || !selectedPagePath) return;
