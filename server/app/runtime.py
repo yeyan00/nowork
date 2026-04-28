@@ -84,6 +84,57 @@ def _build_learning(learning_cfg: dict | None, db: Any | None, model: Any | None
     )
 
 
+def _build_wiki_tools_for_worker(knowledge_refs: list[str]) -> tuple[list[Any], str, list[str]]:
+    """为 Wiki 模式的知识库构建 KnowledgeBaseTool + purpose 注入文本 + 源目录列表。
+    
+    Returns:
+        (wiki_tools, purpose_text, source_paths) — 工具列表、注入文本、原始文件目录
+    """
+    all_kb_configs = get_all_knowledge_configs()
+    kb_map: dict[str, dict] = {}
+    for kb_cfg in all_kb_configs:
+        kb_id = kb_cfg.get('id', '')
+        ref_name = kb_cfg.get('_ref', '')
+        if kb_id:
+            kb_map[kb_id] = kb_cfg
+        if ref_name:
+            kb_map[ref_name] = kb_cfg
+
+    wiki_tools: list[Any] = []
+    purposes: list[str] = []
+    source_paths: list[str] = []
+
+    for ref in knowledge_refs:
+        kb_cfg = kb_map.get(ref)
+        if kb_cfg is None:
+            continue
+        if not kb_cfg.get('wiki_mode', False):
+            continue
+
+        from app.wiki.tool import KnowledgeBaseTool
+        kb_id = kb_cfg.get('id', ref)
+        wiki_tools.append(KnowledgeBaseTool(kb_id))
+
+        # 读取 purpose
+        try:
+            from app.wiki.repo import WikiRepository
+            repo = WikiRepository(kb_id)
+            purpose = repo.read_purpose()
+            if purpose:
+                purposes.append(f'## 知识库: {kb_cfg.get("name", kb_id)}\n{purpose}')
+        except Exception:
+            pass
+
+        # 收集源文件目录（供加入 workspace）
+        for p in kb_cfg.get('paths', []):
+            import os
+            if p and os.path.isdir(p):
+                source_paths.append(p)
+
+    purpose_text = '\n\n'.join(purposes)
+    return wiki_tools, purpose_text, source_paths
+
+
 def _build_knowledge_for_worker(knowledge_refs: list[str] | str | None) -> Any | None:
     if not knowledge_refs:
         return None
@@ -105,6 +156,10 @@ def _build_knowledge_for_worker(knowledge_refs: list[str] | str | None) -> Any |
     for ref in knowledge_refs:
         kb_cfg = kb_map.get(ref)
         if kb_cfg is None:
+            continue
+
+        # Wiki 模式跳过传统 knowledge 构建
+        if kb_cfg.get('wiki_mode', False):
             continue
 
         kb_obj = _build_single_knowledge(kb_cfg)
@@ -351,6 +406,32 @@ async def build_agent_os(workers: list[dict[str, Any]], base_app: Any | None = N
             if knowledge:
                 agent_kwargs['knowledge'] = knowledge
 
+            # Wiki 模式知识库 → 注入 KnowledgeBaseTool
+            knowledge_refs = raw.get('knowledge', [])
+            if knowledge_refs:
+                if isinstance(knowledge_refs, str):
+                    knowledge_refs = [knowledge_refs]
+                wiki_tools, wiki_purpose, wiki_source_paths = _build_wiki_tools_for_worker(knowledge_refs)
+                if wiki_tools:
+                    agent_kwargs['tools'] = agent_kwargs.get('tools') or []
+                    agent_kwargs['tools'].extend(wiki_tools)
+                if wiki_purpose:
+                    existing_instructions = agent_kwargs.get('instructions', '')
+                    paths_hint = ''
+                    if wiki_source_paths:
+                        paths_hint = (
+                            f'\n\n知识库原始文件目录: {", ".join(wiki_source_paths)}\n'
+                            f'如果 search_knowledge 返回的内容不够详细，'
+                            f'你可以用 read_file 直接读取上述目录中的原始文件获取更多信息。'
+                        )
+                    agent_kwargs['instructions'] = (
+                        f'{existing_instructions}\n\n'
+                        f'你可以使用知识库搜索工具查询相关资料。'
+                        f'当用户的问题可能涉及已有知识库内容时，优先搜索知识库。\n\n'
+                        f'{wiki_purpose}'
+                        f'{paths_hint}'
+                    )
+
             agents.append(Agent(**agent_kwargs))
 
         elif worker_type == 'Team':
@@ -412,6 +493,32 @@ async def build_agent_os(workers: list[dict[str, Any]], base_app: Any | None = N
             knowledge = _build_knowledge_for_worker(raw.get('knowledge'))
             if knowledge:
                 team_kwargs['knowledge'] = knowledge
+
+            # Wiki 模式知识库 → 注入 KnowledgeBaseTool
+            knowledge_refs = raw.get('knowledge', [])
+            if knowledge_refs:
+                if isinstance(knowledge_refs, str):
+                    knowledge_refs = [knowledge_refs]
+                wiki_tools, wiki_purpose, wiki_source_paths = _build_wiki_tools_for_worker(knowledge_refs)
+                if wiki_tools:
+                    team_kwargs['tools'] = team_kwargs.get('tools') or []
+                    team_kwargs['tools'].extend(wiki_tools)
+                if wiki_purpose:
+                    existing_instructions = team_kwargs.get('instructions', '')
+                    paths_hint = ''
+                    if wiki_source_paths:
+                        paths_hint = (
+                            f'\n\n知识库原始文件目录: {", ".join(wiki_source_paths)}\n'
+                            f'如果 search_knowledge 返回的内容不够详细，'
+                            f'你可以让成员用 read_file 直接读取上述目录中的原始文件获取更多信息。'
+                        )
+                    team_kwargs['instructions'] = (
+                        f'{existing_instructions}\n\n'
+                        f'你可以使用知识库搜索工具查询相关资料。'
+                        f'当用户的问题可能涉及已有知识库内容时，优先搜索知识库。\n\n'
+                        f'{wiki_purpose}'
+                        f'{paths_hint}'
+                    )
 
             teams.append(Team(**team_kwargs))
 

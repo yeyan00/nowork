@@ -1898,13 +1898,13 @@ TOOLS_CATALOG = [
         'module': 'app.tools.codingTools',
         'description': 'File operations, shell execution, code search',
         'tools': [
-            {'id': 'read_file', 'name': 'Read File', 'default': True},
+            {'id': 'read_file', 'name': 'Read File', 'default': True, 'required': True},
+            {'id': 'grep', 'name': 'Grep', 'default': True, 'required': True},
+            {'id': 'find', 'name': 'Find', 'default': True, 'required': True},
+            {'id': 'ls', 'name': 'List Dir', 'default': True, 'required': True},
             {'id': 'edit_file', 'name': 'Edit File', 'default': True},
             {'id': 'write_file', 'name': 'Write File', 'default': True},
             {'id': 'run_shell', 'name': 'Shell', 'default': True},
-            {'id': 'grep', 'name': 'Grep', 'default': False},
-            {'id': 'find', 'name': 'Find', 'default': False},
-            {'id': 'ls', 'name': 'List Dir', 'default': False},
         ],
     },
 ]

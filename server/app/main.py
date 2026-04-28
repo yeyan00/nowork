@@ -527,6 +527,175 @@ async def api_reload_knowledge(knowledge_id: str, request: Request) -> dict[str,
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =============================================================================
+# Wiki Knowledge APIs
+# =============================================================================
+
+from app.wiki.repo import WikiRepository as _WikiRepo
+from app.wiki.search import tokenized_search as _tokenized_search
+from app.wiki.lint import lint_knowledge_base as _lint_kb
+
+
+def _get_wiki_repo(knowledge_id: str) -> _WikiRepo:
+    """获取 Wiki 仓库，验证知识库存在。"""
+    kb = _get_kb(knowledge_id)
+    if kb is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail='Knowledge base not found')
+    if not kb.get('wiki_mode', False):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail='Knowledge base is not in wiki mode')
+    repo = _WikiRepo(knowledge_id)
+    repo.ensure_structure()
+    return repo
+
+
+@app.post('/api/knowledge/{knowledge_id}/sync')
+async def api_sync_knowledge(knowledge_id: str, request: Request):
+    """同步知识库的所有关联目录。"""
+    kb = _get_kb(knowledge_id)
+    if kb is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail='Knowledge base not found')
+
+    from app.config import get_default_model_id
+    from app.runtime import _build_model
+
+    try:
+        model_ref = kb.get('_raw', kb).get('model')
+        if not model_ref:
+            try:
+                model_ref = get_default_model_id()
+            except ValueError:
+                from fastapi import HTTPException
+                raise HTTPException(status_code=400, detail='No default model configured')
+        model = _build_model(model_ref)
+        if model is None:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail='Failed to build model')
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=f'Model error: {e}')
+
+    from app.wiki.ingest import sync_knowledge_base
+    written = await sync_knowledge_base(knowledge_id, model)
+    return {'ok': True, 'id': knowledge_id, 'pages_written': len(written), 'pages': written}
+
+
+@app.post('/api/knowledge/{knowledge_id}/ingest')
+async def api_ingest_knowledge(knowledge_id: str, request: Request):
+    """手动 Ingest 指定文件列表。"""
+    body = await request.json()
+    files = body.get('files', [])
+    force = body.get('force', False)
+
+    if not files:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail='files list is required')
+
+    from app.config import get_default_model_id
+    from app.runtime import _build_model
+    from app.wiki.ingest import ingest_file
+
+    try:
+        model_ref = None
+        try:
+            model_ref = get_default_model_id()
+        except ValueError:
+            pass
+        model = _build_model(model_ref) if model_ref else None
+        if model is None:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail='No model available for ingest')
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=f'Model error: {e}')
+
+    all_written: list[str] = []
+    for f in files:
+        written = await ingest_file(knowledge_id, f, model, force=force)
+        all_written.extend(written)
+
+    return {'ok': True, 'id': knowledge_id, 'pages_written': len(all_written), 'pages': all_written}
+
+
+@app.get('/api/knowledge/{knowledge_id}/wiki/pages')
+def api_list_wiki_pages(knowledge_id: str, type: str = '', search: str = ''):
+    repo = _get_wiki_repo(knowledge_id)
+    pages = repo.list_pages(category=type, search=search)
+    return pages
+
+
+@app.get('/api/knowledge/{knowledge_id}/wiki/page/{page_path:path}')
+def api_read_wiki_page(knowledge_id: str, page_path: str):
+    repo = _get_wiki_repo(knowledge_id)
+    page = repo.read_page(f'wiki/{page_path}' if not page_path.startswith('wiki/') else page_path)
+    if page is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail='Page not found')
+    return page
+
+
+@app.put('/api/knowledge/{knowledge_id}/wiki/page/{page_path:path}')
+async def api_write_wiki_page(knowledge_id: str, page_path: str, request: Request):
+    repo = _get_wiki_repo(knowledge_id)
+    body = await request.json()
+    content = body.get('content', '')
+
+    full_path = f'wiki/{page_path}' if not page_path.startswith('wiki/') else page_path
+    ok = repo.write_page(full_path, content)
+    if not ok:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail='Failed to write page (invalid path?)')
+    repo.bump_version()
+    return {'ok': True, 'path': full_path}
+
+
+@app.delete('/api/knowledge/{knowledge_id}/wiki/page/{page_path:path}')
+def api_delete_wiki_page(knowledge_id: str, page_path: str):
+    repo = _get_wiki_repo(knowledge_id)
+    full_path = f'wiki/{page_path}' if not page_path.startswith('wiki/') else page_path
+    ok = repo.delete_page(full_path)
+    if not ok:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail='Page not found')
+    repo.bump_version()
+    return {'ok': True, 'path': full_path}
+
+
+@app.post('/api/knowledge/{knowledge_id}/wiki/search')
+def api_search_wiki(knowledge_id: str, request: Request):
+    body = {}
+    try:
+        body = request.json() if request.headers.get('content-type', '').startswith('application/json') else {}
+    except Exception:
+        pass
+
+    query = body.get('query', '') if isinstance(body, dict) else ''
+    max_results = body.get('max_results', 20) if isinstance(body, dict) else 20
+
+    if not query:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail='query is required')
+
+    _get_wiki_repo(knowledge_id)  # 验证 kb 存在
+    results = _tokenized_search(knowledge_id, query, max_results)
+    return results
+
+
+@app.get('/api/knowledge/{knowledge_id}/wiki/stats')
+def api_wiki_stats(knowledge_id: str):
+    repo = _get_wiki_repo(knowledge_id)
+    return repo.get_stats()
+
+
+@app.post('/api/knowledge/{knowledge_id}/wiki/lint')
+def api_lint_wiki(knowledge_id: str):
+    _get_wiki_repo(knowledge_id)  # 验证
+    result = _lint_kb(knowledge_id)
+    return result.to_dict()
+
+
 from app.extensions import list_extensions as _list_ext, get_extension as _get_ext, install_extension as _install_ext, uninstall_extension as _uninstall_ext
 
 

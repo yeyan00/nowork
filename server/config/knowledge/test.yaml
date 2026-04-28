@@ -1,6 +1,10 @@
 id: kb-0bf573ea
-name: test
-description: ''
-paths: []
+name: molmo
+description: molmo多模态
+paths:
+- C:\00_work\greenvalley\code\llm\molmo2
 embedder: {}
 vector_db: {}
+wiki_mode: true
+purpose: molmo多模态
+auto_sync: true

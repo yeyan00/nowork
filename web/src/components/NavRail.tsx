@@ -6,6 +6,7 @@ const pages: Array<{ page: AppPage; icon: string; i18nKey: string }> = [
   { page: 'Workers', icon: 'W', i18nKey: 'nav.Workers' },
   { page: 'Schedules', icon: 'Q', i18nKey: 'nav.Schedules' },
   { page: 'Skills', icon: 'S', i18nKey: 'nav.Skills' },
+  { page: 'Knowledge', icon: 'K', i18nKey: 'nav.Knowledge' },
   { page: 'MCP', icon: 'M', i18nKey: 'nav.MCP' },
   { page: 'Models', icon: 'L', i18nKey: 'nav.Models' },
   { page: 'Settings', icon: 'T', i18nKey: 'nav.Settings' }

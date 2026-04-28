@@ -75,6 +75,7 @@ export function WorkerSettingsPanel({
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [workspaces, setWorkspaces] = useState<WorkspaceEntry[]>([]);
   const [newWsPath, setNewWsPath] = useState('');
+  const [defaultReadable, setDefaultReadable] = useState(true);
   const [modelRef, setModelRef] = useState('');
   const [toolSelections, setToolSelections] = useState<Record<string, ToolSelection>>({});
   const [members, setMembers] = useState<{ agent_id: string; role: string }[]>([]);
@@ -122,6 +123,12 @@ export function WorkerSettingsPanel({
 
     const wsRaw = (cfg['workspaces'] as Array<Record<string, string>>) ?? [];
     setWorkspaces(wsRaw.map((w) => ({ path: w.path, permission: w.permission })));
+
+    // Read default_readable from tools config
+    const _toolsRaw = (cfg['tools'] as Array<Record<string, unknown>>) ?? [];
+    const codingCfg = _toolsRaw.find((t) => t.class === 'CodingTools');
+    const toolsConfig = (codingCfg?.config ?? {}) as Record<string, unknown>;
+    setDefaultReadable(toolsConfig['default_readable'] !== false);
 
     const membersRaw = (cfg['members'] as Array<Record<string, unknown>>) ?? [];
     setMembers(membersRaw.map((m) => ({ agent_id: (m['agent_id'] as string) ?? '', role: (m['role'] as string) ?? '' })));
@@ -208,15 +215,16 @@ export function WorkerSettingsPanel({
     const result: unknown[] = [];
     for (const cat of toolsCatalog) {
       const sel = toolSelections[cat.id];
-      if (!sel || !sel.enabled) continue;
+      const isRequired = cat.id === 'coding-tools';
+      if (!isRequired && (!sel || !sel.enabled)) continue;
       const baseDirs = workspaces.map((w) => w.path);
-      const config: Record<string, unknown> = { base_dirs: baseDirs.length > 0 ? baseDirs : undefined };
-      const allOn = cat.tools.every((t) => sel.subTools[t.id]);
-      if (allOn) { config['all'] = true; } else { for (const t of cat.tools) { config[`enable_${t.id}`] = !!sel.subTools[t.id]; } }
+      const config: Record<string, unknown> = { base_dirs: baseDirs.length > 0 ? baseDirs : undefined, default_readable: defaultReadable };
+      const allOn = cat.tools.every((t) => sel?.subTools[t.id] || t.required);
+      if (allOn) { config['all'] = true; } else { for (const t of cat.tools) { config[`enable_${t.id}`] = !!sel?.subTools[t.id]; } }
       result.push({ module: cat.module, class: cat.name, config });
     }
     return result;
-  }, [toolsCatalog, toolSelections, workspaces]);
+  }, [toolsCatalog, toolSelections, workspaces, defaultReadable]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -293,10 +301,16 @@ export function WorkerSettingsPanel({
             {toolsCatalog.map((cat) => {
               const sel = toolSelections[cat.id];
               const enabled = sel?.enabled ?? false;
+              // CodingTools is always required — skip the enable toggle
+              const isRequired = cat.id === 'coding-tools';
+              const showTools = isRequired || enabled;
               return (
                 <div key={cat.id} className="tool-card">
-                  <label className="tool-card-header"><input type="checkbox" checked={enabled} onChange={() => toggleTool(cat.id)} /><div className="tool-card-info"><strong>{cat.name}</strong><span className="tool-card-desc">{cat.description}</span></div></label>
-                  {enabled && (<div className="tool-sub-list">{cat.tools.map((st) => (<label key={st.id} className="tool-sub-item"><input type="checkbox" checked={sel?.subTools[st.id] ?? st.default} onChange={() => toggleTool(cat.id, st.id)} /><span>{st.name}</span></label>))}</div>)}
+                  <label className="tool-card-header">
+                    <input type="checkbox" checked={isRequired || enabled} onChange={() => { if (!isRequired) toggleTool(cat.id); }} disabled={isRequired} />
+                    <div className="tool-card-info"><strong>{cat.name}</strong><span className="tool-card-desc">{cat.description}</span></div>
+                  </label>
+                  {showTools && (<div className="tool-sub-list">{cat.tools.map((st) => (<label key={st.id} className={`tool-sub-item${st.required ? ' tool-required' : ''}`}><input type="checkbox" checked={sel?.subTools[st.id] ?? st.default} onChange={() => toggleTool(cat.id, st.id)} disabled={st.required} /><span>{st.name}{st.required ? ' *' : ''}</span></label>))}</div>)}
                 </div>
               );
             })}
@@ -319,6 +333,13 @@ export function WorkerSettingsPanel({
             <div className="ws-add-row">
               <input className="ws-add-input" value={newWsPath} onChange={(e) => setNewWsPath(e.target.value)} placeholder="C:/my-project" onKeyDown={(e) => { if (e.key === 'Enter') addWorkspace(); }} />
               <button type="button" className="ws-add-btn" onClick={addWorkspace}>{t('workerSettings.add')}</button>
+            </div>
+            <div className="ws-option-row">
+              <label className="ws-option-label">
+                <input type="checkbox" checked={defaultReadable} onChange={(e) => { setDefaultReadable(e.target.checked); setDirty(true); }} />
+                <span>{t('workerSettings.defaultReadable')}</span>
+              </label>
+              <span className="ws-option-hint">{t('workerSettings.defaultReadableHint')}</span>
             </div>
           </div>
         )}

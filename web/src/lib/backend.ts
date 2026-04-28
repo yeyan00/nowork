@@ -516,6 +516,7 @@ export interface ToolSubDef {
   id: string;
   name: string;
   default: boolean;
+  required?: boolean;
 }
 
 export interface ToolCatalogEntry {
@@ -705,7 +706,66 @@ export interface KnowledgeBase {
   paths: string[];
   embedder: Record<string, unknown>;
   vector_db: Record<string, unknown>;
+  wiki_mode?: boolean;
+  purpose?: string;
+  auto_sync?: boolean;
   _ref: string;
+}
+
+// ── Wiki API Types ──────────────────────────────────────────────
+
+export interface WikiPage {
+  path: string;
+  meta: Record<string, unknown>;
+  body: string;
+  raw: string;
+  title: string;
+}
+
+export interface WikiPageSummary {
+  path: string;
+  title: string;
+  type: string;
+  category: string;
+}
+
+export interface WikiSearchResult {
+  path: string;
+  title: string;
+  title_match: boolean;
+  score: number;
+  snippet: string;
+}
+
+export interface WikiStats {
+  total: number;
+  by_type: Record<string, number>;
+  by_category: Record<string, number>;
+}
+
+export interface WikiLintResult {
+  broken_links: Array<{ source: string; target: string }>;
+  orphan_pages: string[];
+  empty_pages: string[];
+  missing_sources: string[];
+  total_pages: number;
+  total_links: number;
+  healthy: boolean;
+  warnings: number;
+}
+
+export interface WikiSyncResult {
+  ok: boolean;
+  id: string;
+  pages_written: number;
+  pages: string[];
+}
+
+export interface WikiIngestResult {
+  ok: boolean;
+  id: string;
+  pages_written: number;
+  pages: string[];
 }
 
 export async function listKnowledgeBases(): Promise<KnowledgeBase[]> {
@@ -729,7 +789,7 @@ export async function createKnowledgeBase(payload: Partial<KnowledgeBase>): Prom
   return (await response.json()) as KnowledgeBase;
 }
 
-export async function updateKnowledgeBase(id: string, payload: { name?: string; description?: string; config?: { paths?: string[]; embedder?: Record<string, unknown>; vector_db?: Record<string, unknown> } }): Promise<KnowledgeBase> {
+export async function updateKnowledgeBase(id: string, payload: { name?: string; description?: string; wiki_mode?: boolean; purpose?: string; auto_sync?: boolean; config?: { paths?: string[]; embedder?: Record<string, unknown>; vector_db?: Record<string, unknown> } }): Promise<KnowledgeBase> {
   const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
@@ -748,6 +808,80 @@ export async function reloadKnowledgeBase(id: string): Promise<{ ok: boolean }> 
   const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}/reload`, { method: 'POST' });
   if (!response.ok) throw new Error('Failed to reload knowledge base');
   return (await response.json()) as { ok: boolean };
+}
+
+
+// =============================================================================
+// Wiki Knowledge APIs
+// =============================================================================
+
+export async function syncWikiKnowledgeBase(id: string): Promise<WikiSyncResult> {
+  const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}/sync`, { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to sync wiki knowledge base');
+  return (await response.json()) as WikiSyncResult;
+}
+
+export async function ingestWikiFiles(id: string, files: string[], force = false): Promise<WikiIngestResult> {
+  const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}/ingest`, {
+    method: 'POST',
+    body: JSON.stringify({ files, force }),
+  });
+  if (!response.ok) throw new Error('Failed to ingest files');
+  return (await response.json()) as WikiIngestResult;
+}
+
+export async function listWikiPages(id: string, type?: string, search?: string): Promise<WikiPageSummary[]> {
+  const params = new URLSearchParams();
+  if (type) params.set('type', type);
+  if (search) params.set('search', search);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}/wiki/pages${qs}`);
+  if (!response.ok) throw new Error('Failed to list wiki pages');
+  return (await response.json()) as WikiPageSummary[];
+}
+
+export async function readWikiPage(id: string, pagePath: string): Promise<WikiPage> {
+  const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}/wiki/page/${pagePath}`);
+  if (!response.ok) throw new Error('Failed to read wiki page');
+  return (await response.json()) as WikiPage;
+}
+
+export async function writeWikiPage(id: string, pagePath: string, content: string): Promise<{ ok: boolean; path: string }> {
+  const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}/wiki/page/${pagePath}`, {
+    method: 'PUT',
+    body: JSON.stringify({ content }),
+  });
+  if (!response.ok) throw new Error('Failed to write wiki page');
+  return (await response.json()) as { ok: boolean; path: string };
+}
+
+export async function deleteWikiPage(id: string, pagePath: string): Promise<{ ok: boolean; path: string }> {
+  const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}/wiki/page/${pagePath}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) throw new Error('Failed to delete wiki page');
+  return (await response.json()) as { ok: boolean; path: string };
+}
+
+export async function searchWikiPages(id: string, query: string, maxResults = 20): Promise<WikiSearchResult[]> {
+  const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}/wiki/search`, {
+    method: 'POST',
+    body: JSON.stringify({ query, max_results: maxResults }),
+  });
+  if (!response.ok) throw new Error('Failed to search wiki pages');
+  return (await response.json()) as WikiSearchResult[];
+}
+
+export async function getWikiStats(id: string): Promise<WikiStats> {
+  const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}/wiki/stats`);
+  if (!response.ok) throw new Error('Failed to get wiki stats');
+  return (await response.json()) as WikiStats;
+}
+
+export async function lintWikiKnowledgeBase(id: string): Promise<WikiLintResult> {
+  const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}/wiki/lint`, { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to lint wiki knowledge base');
+  return (await response.json()) as WikiLintResult;
 }
 
 

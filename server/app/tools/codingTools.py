@@ -630,9 +630,23 @@ class CodingTools(Toolkit):
             dir_list = "\n".join(dir_lines)
             preamble += (
                 f"\n\n## Workspace Directories\n"
-                f"Your workspace directories (use these as base paths for all file operations):\n"
-                f"{dir_list}\n"
-                f"Directories marked 'read-only' must not be modified."
+                f"Your workspace directories (full read-write access):\n"
+                f"{dir_list}"
+            )
+
+        # Inform about read access scope
+        if self.default_readable:
+            preamble += (
+                f"\n\n## Read Access\n"
+                f"Read tools (read_file, grep, find, ls) can access any non-system, non-sensitive directory.\n"
+                f"Write tools (edit_file, write_file) are restricted to workspace directories only.\n"
+                f"Only read files when the user explicitly asks or when searching for relevant information."
+            )
+        elif self.readable_extra:
+            extra_lines = "\n".join(f"  - {d}" for d in self.readable_extra)
+            preamble += (
+                f"\n\n## Additional Read-Only Directories\n"
+                f"{extra_lines}"
             )
 
         # Build sections, dynamically adjusting run_shell instructions based on operator restrictions
@@ -718,6 +732,8 @@ class CodingTools(Toolkit):
         base_dirs: Optional[Union[str, Path, List[Union[str, Path]]]] = None,
         workspace_permissions: Optional[Dict[str, str]] = None,
         restrict_to_base_dirs: bool = True,
+        default_readable: bool = True,
+        readable_extra: Optional[List[str]] = None,
         allow_shell_operators: bool = True,
         max_lines: int = 2000,
         max_bytes: int = 50_000,
@@ -741,10 +757,21 @@ class CodingTools(Toolkit):
         """
         Initialize CodingTools with multi-directory and configurable external tools support.
         
+        Access model (three-tier):
+            Tier 1 — base_dirs:       Full access (read + write + shell)
+            Tier 2 — default readable: Read-only (non-system, non-sensitive paths)
+            Tier 3 — blocked:          System/sensitive directories (no access)
+        
         Args:
             base_dirs: Single directory, list of directories, or None (uses cwd).
                       Can be strings or Path objects.
-            restrict_to_base_dirs: If True, file operations restricted to base_dirs.
+            workspace_permissions: Deprecated. Kept for backward compatibility.
+            restrict_to_base_dirs: If True, write operations restricted to base_dirs.
+                                   Read operations respect default_readable.
+            default_readable: If True (default), read_file/grep/find/ls can access
+                              any non-system, non-sensitive directory without explicit
+                              configuration. Write operations still require base_dirs.
+            readable_extra: Additional read-only directories (used to override blocklist).
             allow_shell_operators: If True, allow shell chaining operators (&&, ||, ;, |, >, etc.).
                                    If False, shell operators are blocked and model is instructed not to use them.
                                    Defaults to True.
@@ -803,8 +830,12 @@ class CodingTools(Toolkit):
             for raw_path, perm in workspace_permissions.items():
                 resolved = str(Path(raw_path).expanduser().resolve())
                 self.workspace_permissions[resolved] = perm
-        
+
         self.restrict_to_base_dirs = restrict_to_base_dirs
+        self.default_readable = default_readable
+        self.readable_extra: List[Path] = []
+        if readable_extra:
+            self.readable_extra = [Path(d).expanduser().resolve() for d in readable_extra]
         self.allow_shell_operators = allow_shell_operators
         # Tool configuration (must be resolved before allowed_commands)
         self.tool_config = self._normalize_tool_config(tool_config)
@@ -951,11 +982,61 @@ class CodingTools(Toolkit):
                 pass
         self._temp_files.clear()
     
-    def _is_safe_path(self, path: Path) -> bool:
-        """Check if path is within allowed base directories."""
-        if not self.restrict_to_base_dirs:
-            return True
-        
+    # ── Path security: three-tier access model ─────────────────────
+    # Tier 1: base_dirs → full access (read + write)
+    # Tier 2: default readable → read-only (non-system, non-sensitive)
+    # Tier 3: blocked → system/sensitive directories
+
+    _SYSTEM_BLOCKLIST_WIN: List[str] = [
+        r'C:\Windows', r'C:\Program Files', r'C:\Program Files (x86)',
+        r'C:\ProgramData',
+    ]
+    _SYSTEM_BLOCKLIST_UNIX: List[str] = [
+        '/usr', '/etc', '/var', '/sys', '/proc', '/dev', '/boot',
+        '/root', '/sbin', '/bin', '/lib', '/lib64',
+    ]
+    _SYSTEM_BLOCKLIST_MACOS: List[str] = [
+        '/System', '/Library', '/private/var', '/private/etc',
+    ]
+    # Sensitive path name components (checked anywhere in path)
+    _SENSITIVE_NAMES: set = {
+        '.ssh', '.gnupg', '.aws', '.kube', '.credentials',
+        '.env', 'credentials', 'id_rsa', 'id_ed25519',
+    }
+
+    @classmethod
+    def _is_system_path(cls, path: Path) -> bool:
+        """Check if a path is in the system/sensitive blocklist."""
+        import platform
+        resolved = str(path.resolve())
+        lower = resolved.lower()
+
+        # Windows system directories
+        if platform.system() == 'Windows':
+            for bl in cls._SYSTEM_BLOCKLIST_WIN:
+                if lower.startswith(bl.lower()):
+                    return True
+
+        # Unix system directories (also applies to macOS)
+        if platform.system() != 'Windows':
+            for bl in cls._SYSTEM_BLOCKLIST_UNIX:
+                if resolved.startswith(bl):
+                    return True
+            if platform.system() == 'Darwin':
+                for bl in cls._SYSTEM_BLOCKLIST_MACOS:
+                    if resolved.startswith(bl):
+                        return True
+
+        # Sensitive name components (check each part of the path)
+        parts = path.parts
+        for part in parts:
+            if part.lower() in cls._SENSITIVE_NAMES:
+                return True
+
+        return False
+
+    def _is_in_base_dirs(self, path: Path) -> bool:
+        """Check if path is within base_dirs (Tier 1 — full access)."""
         try:
             for base_dir in self._get_current_base_dirs():
                 try:
@@ -966,11 +1047,58 @@ class CodingTools(Toolkit):
             return False
         except Exception:
             return False
+
+    def _is_read_allowed(self, path: Path) -> bool:
+        """Check if path is readable (Tier 1 or Tier 2)."""
+        # Tier 1: in base_dirs → always readable
+        if self._is_in_base_dirs(path):
+            return True
+
+        # If restrict_to_base_dirs and no default_readable → only base_dirs
+        if self.restrict_to_base_dirs and not self.default_readable:
+            # Check readable_extra whitelist
+            for rd in self.readable_extra:
+                try:
+                    path.relative_to(rd)
+                    return True
+                except ValueError:
+                    continue
+            return False
+
+        if not self.default_readable:
+            return False
+
+        # Tier 2: default readable — allow non-system, non-sensitive paths
+        if self._is_system_path(path):
+            # Still check readable_extra (whitelist override for blocklist)
+            for rd in self.readable_extra:
+                try:
+                    path.relative_to(rd)
+                    return True
+                except ValueError:
+                    continue
+            return False
+
+        return True
+
+    def _is_safe_path(self, path: Path) -> bool:
+        """Check if path is within allowed directories (backward compat: read access)."""
+        if not self.restrict_to_base_dirs:
+            return True
+        return self._is_read_allowed(path)
+
+    def _is_write_allowed(self, path: Path) -> bool:
+        """Check if path is writable (must be in base_dirs — Tier 1 only)."""
+        return self._is_in_base_dirs(path)
     
-    def _resolve_path(self, file_path: str) -> Tuple[bool, Optional[Path]]:
+    def _resolve_path(self, file_path: str, *, write: bool = False) -> Tuple[bool, Optional[Path]]:
         """
         Resolve a file path safely.
-        
+
+        Args:
+            file_path: Path to resolve
+            write: If True, check write permission (base_dirs only)
+
         Returns:
             Tuple of (is_safe, resolved_path)
         """
@@ -983,10 +1111,14 @@ class CodingTools(Toolkit):
                 path = primary_base_dir / path
             
             path = path.resolve()
-            
-            if self._is_safe_path(path):
-                return True, path
+
+            if write:
+                if self._is_write_allowed(path):
+                    return True, path
+                return False, None
             else:
+                if self._is_read_allowed(path):
+                    return True, path
                 return False, None
         except Exception:
             return False, None
@@ -1080,7 +1212,7 @@ class CodingTools(Toolkit):
         try:
             is_safe, resolved_path = self._resolve_path(file_path)
             if not is_safe or resolved_path is None:
-                return f"Error: Path '{file_path}' is outside allowed directories"
+                return f"Error: Path '{file_path}' is not readable (system/sensitive directory)"
             
             if not resolved_path.exists():
                 return f"Error: File not found: {file_path}"
@@ -1152,9 +1284,9 @@ class CodingTools(Toolkit):
             output may be truncated by the configured line and byte limits.
         """
         try:
-            is_safe, resolved_path = self._resolve_path(file_path)
+            is_safe, resolved_path = self._resolve_path(file_path, write=True)
             if not is_safe or resolved_path is None:
-                return f"Error: Path '{file_path}' is outside allowed directories"
+                return f"Error: Path '{file_path}' is not writable (only workspace directories allow writing)"
             
             if not resolved_path.exists():
                 return f"Error: File not found: {file_path}"
@@ -1234,9 +1366,9 @@ class CodingTools(Toolkit):
             error message.
         """
         try:
-            is_safe, resolved_path = self._resolve_path(file_path)
+            is_safe, resolved_path = self._resolve_path(file_path, write=True)
             if not is_safe or resolved_path is None:
-                return f"Error: Path '{file_path}' is outside allowed directories"
+                return f"Error: Path '{file_path}' is not writable (only workspace directories allow writing)"
             
             # Create parent directories
             if not resolved_path.parent.exists():
@@ -1349,7 +1481,7 @@ class CodingTools(Toolkit):
             if path:
                 is_safe, resolved_path = self._resolve_path(path)
                 if not is_safe or resolved_path is None:
-                    return f"Error: Path '{path}' is outside allowed directories"
+                    return f"Error: Path '{path}' is not readable (system/sensitive directory)"
             else:
                 resolved_path = self._get_primary_base_dir()
             
@@ -1452,7 +1584,7 @@ class CodingTools(Toolkit):
             if path:
                 is_safe, resolved_path = self._resolve_path(path)
                 if not is_safe or resolved_path is None:
-                    return f"Error: Path '{path}' is outside allowed directories"
+                    return f"Error: Path '{path}' is not readable (system/sensitive directory)"
             else:
                 resolved_path = self._get_primary_base_dir()
             
@@ -1534,7 +1666,7 @@ class CodingTools(Toolkit):
             if path:
                 is_safe, resolved_path = self._resolve_path(path)
                 if not is_safe or resolved_path is None:
-                    return f"Error: Path '{path}' is outside allowed directories"
+                    return f"Error: Path '{path}' is not readable (system/sensitive directory)"
             else:
                 resolved_path = self._get_primary_base_dir()
             

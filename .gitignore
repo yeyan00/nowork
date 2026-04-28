@@ -72,6 +72,8 @@ findings.md
 progress.md
 tests
 
+knowledge
+
 # === Config with secrets (do not commit) ===
 server/config/config.yaml
 server/config/models/*.yaml
