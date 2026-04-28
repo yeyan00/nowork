@@ -884,6 +884,37 @@ export async function lintWikiKnowledgeBase(id: string): Promise<WikiLintResult>
   return (await response.json()) as WikiLintResult;
 }
 
+export interface WikiGraphNode {
+  id: string;
+  title: string;
+  type: string;
+  path: string;
+  group: string;
+}
+
+export interface WikiGraphEdge {
+  source: string;
+  target: string;
+  source_path: string;
+}
+
+export interface WikiGraphData {
+  nodes: WikiGraphNode[];
+  edges: WikiGraphEdge[];
+  stats: {
+    total_nodes: number;
+    total_edges: number;
+    by_type: Record<string, number>;
+    orphan_nodes: string[];
+  };
+}
+
+export async function getWikiGraph(id: string): Promise<WikiGraphData> {
+  const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}/wiki/graph`);
+  if (!response.ok) throw new Error('Failed to get wiki graph');
+  return (await response.json()) as WikiGraphData;
+}
+
 
 export interface ExtensionInfo {
   id: string;

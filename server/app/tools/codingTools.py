@@ -500,6 +500,7 @@ class CodingTools(Toolkit):
         "sqlite3", "psql", "mysql", "redis-cli",
         # Docker
         "docker",
+        "browser-use"
     ]
 
     # PowerShell: external tools + common cmdlets/aliases

@@ -1724,6 +1724,53 @@ button {
   margin: 0;
 }
 
+.settings-title-with-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-title-tip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(76, 120, 255, 0.12);
+  color: #4c78ff;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: help;
+  position: relative;
+}
+
+.settings-title-tip-icon::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 340px;
+  padding: 10px 14px;
+  background: rgba(30, 41, 59, 0.94);
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.6;
+  border-radius: 8px;
+  white-space: pre-line;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 100;
+}
+
+.settings-title-tip-icon:hover::after {
+  opacity: 1;
+}
+
 .settings-textarea {
   width: 100%;
   font-family: inherit;
@@ -3376,8 +3423,7 @@ button {
 /* ── Wiki Pages Panel ───────────────────────────────────────── */
 
 .wiki-settings-scroll {
-  overflow-y: auto;
-  flex: 1;
+  flex: none;
 }
 
 .wiki-pages-panel {
@@ -3505,6 +3551,8 @@ button {
   padding: 16px;
   overflow-y: auto;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .wiki-page-header {
@@ -3550,7 +3598,10 @@ button {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 20px 0;
+  padding: 0;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .wiki-stats-grid {
@@ -3733,6 +3784,86 @@ button {
   color: #8492aa;
   padding-top: 8px;
   border-top: 1px solid rgba(132, 146, 170, 0.08);
+}
+
+/* ── Wiki Graph ──────────────────────────────────────────────── */
+
+.wiki-graph-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.wiki-graph-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.wiki-graph-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.wiki-graph-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.wiki-graph-canvas {
+  flex: 1;
+  min-height: 420px;
+  border: 1px solid rgba(132, 146, 170, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fafbfe;
+  position: relative;
+}
+
+.wiki-graph-tooltip {
+  position: absolute;
+  padding: 6px 10px;
+  background: rgba(30, 41, 59, 0.92);
+  color: #fff;
+  font-size: 11px;
+  border-radius: 6px;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 10;
+  transition: opacity 0.15s;
+}
+
+.wiki-graph-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.wiki-graph-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #475569;
+}
+
+.wiki-graph-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .schedule-filter-bar {

@@ -67,10 +67,7 @@ export function WorkerList({ workers, activeWorkerId, runningWorkerIds = new Set
   return (
     <section className="worker-panel">
       <header className="worker-panel-header">
-        <div>
           <h2>{t('workerList.title')}</h2>
-          <p>{t('workerList.subtitle')}</p>
-        </div>
         <button
           type="button"
           className={`worker-search-toggle ${showSearch ? 'active' : ''}`}

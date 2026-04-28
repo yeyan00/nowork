@@ -182,17 +182,26 @@ def update_worker(worker_id: str, payload: dict[str, Any]) -> dict[str, Any] | N
         ws_key = 'team_workspaces' if _detect_type(raw) == 'Team' else 'workspaces'
         raw[ws_key] = config['workspaces']
     if 'knowledge' in config:
-        raw['knowledge'] = config['knowledge']
+        if config['knowledge']:
+            raw['knowledge'] = config['knowledge']
+        else:
+            raw.pop('knowledge', None)
     if 'instructions' in config:
         block['instructions'] = config['instructions']
     if 'skills' in config:
-        raw['skills'] = config['skills']
+        if config['skills']:
+            raw['skills'] = config['skills']
+        else:
+            raw.pop('skills', None)
     if 'tools' in config:
         raw['tools'] = config['tools']
     if 'members' in config:
         raw['members'] = config['members']
     if 'mcp' in config:
-        raw['mcp'] = config['mcp']
+        if config['mcp']:
+            raw['mcp'] = config['mcp']
+        else:
+            raw.pop('mcp', None)
     if 'history' in config:
         raw['history'] = config['history']
     if 'learning' in config:

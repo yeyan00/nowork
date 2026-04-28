@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useI18n } from '../i18n';
 import { MarkdownContent } from './MarkdownContent';
+import { WikiGraphView } from './WikiGraphView';
 import {
   createKnowledgeBase,
   deleteKnowledgeBase,
@@ -14,7 +15,7 @@ import {
   deleteWikiPage,
   searchWikiPages,
   getWikiStats,
-  lintWikiKnowledgeBase,
+  getWikiGraph,
 } from '../lib/backend';
 import type {
   KnowledgeBase,
@@ -22,10 +23,10 @@ import type {
   WikiPageSummary,
   WikiSearchResult,
   WikiStats,
-  WikiLintResult,
+  WikiGraphData,
 } from '../lib/backend';
 
-type DetailTab = 'settings' | 'pages' | 'search' | 'lint';
+type DetailTab = 'settings' | 'pages' | 'search';
 
 export function KnowledgePage() {
   const { t } = useI18n();
@@ -66,9 +67,7 @@ export function KnowledgePage() {
   const [searchResults, setSearchResults] = useState<WikiSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
 
-  // ── Lint state ──
-  const [lintResult, setLintResult] = useState<WikiLintResult | null>(null);
-  const [linting, setLinting] = useState(false);
+  const [graphData, setGraphData] = useState<WikiGraphData | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -111,6 +110,9 @@ export function KnowledgePage() {
     void getWikiStats(selectedId)
       .then(setWikiStats)
       .catch(() => setWikiStats(null));
+    void getWikiGraph(selectedId)
+      .then(setGraphData)
+      .catch(() => setGraphData(null));
   }, [selectedId, isWiki, pageType, pageFilter]);
 
   useEffect(() => { loadWikiData(); }, [loadWikiData]);
@@ -236,23 +238,13 @@ export function KnowledgePage() {
       .finally(() => setSearching(false));
   }, [selectedId, searchQuery]);
 
-  const handleLint = useCallback(() => {
-    if (!selectedId) return;
-    setLinting(true);
-    void lintWikiKnowledgeBase(selectedId)
-      .then(setLintResult)
-      .catch(() => setLintResult(null))
-      .finally(() => setLinting(false));
-  }, [selectedId]);
-
   if (loading) return <section className="page-frame"><p>{t('knowledge.loading')}</p></section>;
 
   // ── Wiki tabs ──
   const wikiTabs: Array<{ key: DetailTab; label: string }> = [
-    { key: 'settings', label: t('knowledge.tabSettings') },
     { key: 'pages', label: t('knowledge.tabPages') },
     { key: 'search', label: t('knowledge.tabSearch') },
-    { key: 'lint', label: t('knowledge.tabLint') },
+    { key: 'settings', label: t('knowledge.tabSettings') },
   ];
 
   return (
@@ -335,9 +327,10 @@ export function KnowledgePage() {
                 <h3 className="settings-section-title" style={{ marginTop: '1rem' }}>{t('knowledge.description')}</h3>
                 <textarea
                   className="settings-textarea"
-                  rows={3}
+                  rows={2}
                   value={description}
                   onChange={(e) => { setDescription(e.target.value); markDirty(); }}
+                  placeholder={t('knowledge.descriptionHint')}
                 />
 
                 <h3 className="settings-section-title" style={{ marginTop: '1rem' }}>{t('knowledge.wikiMode')}</h3>
@@ -352,13 +345,16 @@ export function KnowledgePage() {
 
                 {wikiMode && (
                   <>
-                    <h3 className="settings-section-title" style={{ marginTop: '1rem' }}>{t('knowledge.purpose')}</h3>
+                    <h3 className="settings-section-title settings-title-with-tip" style={{ marginTop: '1rem' }}>
+                      {t('knowledge.purpose')}
+                      <span className="settings-title-tip-icon" data-tip={t('knowledge.purposeHint')}>?</span>
+                    </h3>
                     <textarea
                       className="settings-textarea"
-                      rows={3}
+                      rows={4}
                       value={purpose}
                       onChange={(e) => { setPurpose(e.target.value); markDirty(); }}
-                      placeholder={t('knowledge.purposeHint')}
+                      placeholder={t('knowledge.purposePlaceholder')}
                     />
 
                     <h3 className="settings-section-title" style={{ marginTop: '1rem' }}>{t('knowledge.autoSync')}</h3>
@@ -376,10 +372,10 @@ export function KnowledgePage() {
                 <h3 className="settings-section-title" style={{ marginTop: '1rem' }}>{t('knowledge.paths')}</h3>
                 <textarea
                   className="settings-textarea"
-                  rows={4}
+                  rows={3}
                   value={paths}
                   onChange={(e) => { setPaths(e.target.value); markDirty(); }}
-                  placeholder={'C:/docs/api\nC:/docs/guides\n./README.md'}
+                  placeholder={'D:/projects/api-docs\nE:/技术报告/2025\nC:/work/README.md'}
                 />
 
                 <div className="settings-footer" style={{ borderTop: '1px solid rgba(132,146,170,0.1)', marginTop: '1rem' }}>
@@ -518,7 +514,6 @@ export function KnowledgePage() {
                     )}
                     {!pageContent && selectedPagePath === null && (
                       <div className="wiki-page-empty">
-                        <p>{t('knowledge.overview')}</p>
                         {wikiStats && (
                           <div className="wiki-stats-grid">
                             <div className="wiki-stat-card">
@@ -531,6 +526,11 @@ export function KnowledgePage() {
                                 <span className="wiki-stat-label">{type}</span>
                               </div>
                             ))}
+                          </div>
+                        )}
+                        {graphData && graphData.nodes.length > 0 && (
+                          <div className="wiki-graph-container">
+                            <WikiGraphView data={graphData} onPageClick={(path) => setSelectedPagePath(path)} />
                           </div>
                         )}
                       </div>
@@ -610,71 +610,6 @@ export function KnowledgePage() {
                 )}
                 {searchResults.length === 0 && searchQuery && !searching && (
                   <p className="knowledge-empty">{t('knowledge.noResults')}</p>
-                )}
-              </div>
-            )}
-
-            {/* ── Tab: Lint ── */}
-            {isWiki && detailTab === 'lint' && (
-              <div className="wiki-lint-panel">
-                <div className="wiki-lint-toolbar">
-                  <button
-                    type="button"
-                    className="primary-button"
-                    disabled={linting}
-                    onClick={handleLint}
-                  >
-                    {linting ? '...' : t('knowledge.tabLint')}
-                  </button>
-                </div>
-                {lintResult && (
-                  <div className="wiki-lint-results">
-                    {lintResult.healthy ? (
-                      <div className="wiki-lint-healthy">✅ {t('knowledge.lintHealthy')}</div>
-                    ) : (
-                      <>
-                        {lintResult.broken_links.length > 0 && (
-                          <div className="wiki-lint-section">
-                            <h4>❌ {t('knowledge.lintBrokenLinks')} ({lintResult.broken_links.length})</h4>
-                            {lintResult.broken_links.map((bl, i) => (
-                              <div key={i} className="wiki-lint-entry">
-                                <span className="wiki-lint-source">{bl.source}</span>
-                                <span className="wiki-lint-arrow">→</span>
-                                <span className="wiki-lint-target">{bl.target}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {lintResult.orphan_pages.length > 0 && (
-                          <div className="wiki-lint-section">
-                            <h4>⚠️ {t('knowledge.lintOrphanPages')} ({lintResult.orphan_pages.length})</h4>
-                            {lintResult.orphan_pages.map((p) => (
-                              <div key={p} className="wiki-lint-entry">{p}</div>
-                            ))}
-                          </div>
-                        )}
-                        {lintResult.empty_pages.length > 0 && (
-                          <div className="wiki-lint-section">
-                            <h4>⚠️ {t('knowledge.lintEmptyPages')} ({lintResult.empty_pages.length})</h4>
-                            {lintResult.empty_pages.map((p) => (
-                              <div key={p} className="wiki-lint-entry">{p}</div>
-                            ))}
-                          </div>
-                        )}
-                        {lintResult.missing_sources.length > 0 && (
-                          <div className="wiki-lint-section">
-                            <h4>⚠️ {t('knowledge.lintMissingSources')} ({lintResult.missing_sources.length})</h4>
-                            {lintResult.missing_sources.map((p) => (
-                              <div key={p} className="wiki-lint-entry">{p}</div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
-                    <div className="wiki-lint-summary">
-                      {lintResult.total_pages} pages · {lintResult.total_links} links · {lintResult.warnings} warnings
-                    </div>
-                  </div>
                 )}
               </div>
             )}

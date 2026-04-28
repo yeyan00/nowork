@@ -235,12 +235,12 @@ export function WorkerSettingsPanel({
         config: {
           model: modelRef || undefined,
           instructions: instructions || undefined,
-          skills: selectedSkills.length > 0 ? selectedSkills : undefined,
+          skills: selectedSkills,
           workspaces: workspaces.length > 0 ? workspaces : undefined,
           tools: buildToolsPayload().length > 0 ? buildToolsPayload() : undefined,
           members: worker.type === 'Team' && members.length > 0 ? members : undefined,
-          mcp: selectedMCPs.length > 0 ? selectedMCPs : undefined,
-          knowledge: selectedKnowledge.length > 0 ? selectedKnowledge : undefined,
+          mcp: selectedMCPs,
+          knowledge: selectedKnowledge,
           learning: { user_profile: learningUserProfile, user_memory: learningUserMemory, session_context: learningSessionContext, entity_memory: learningEntityMemory, decision_log: learningDecisionLog },
         },
       });

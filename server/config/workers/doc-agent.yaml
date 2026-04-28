@@ -1,8 +1,7 @@
 agent:
   id: doc-agent-1
-  name: Document Agent
-  description: Creates, edits and analyzes documents (Word, PDF, Excel, PowerPoint)
-    and automates browser interactions for web research
+  name: null
+  description: null
   instructions: 'You are a document and web research specialist.
 
     You can create, edit and analyze Word (.docx), PDF, Excel (.xlsx), and PowerPoint
@@ -25,6 +24,7 @@ tools:
   config:
     base_dirs:
     - ~/nowork-workspace
+    default_readable: true
     all: true
 database:
   db_file: db/doc_agent.db

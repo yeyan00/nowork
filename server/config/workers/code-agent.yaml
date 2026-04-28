@@ -16,6 +16,7 @@ tools:
   config:
     base_dirs:
     - ~/nowork-workspace
+    default_readable: true
     all: true
 database:
   db_file: db/code_agent.db
@@ -47,3 +48,5 @@ learning:
   session_context: false
   entity_memory: false
   decision_log: false
+knowledge:
+- kb-0bf573ea

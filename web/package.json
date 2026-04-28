@@ -1,23 +1,25 @@
 {
-    "name":  "nowork-web",
-    "private":  true,
-    "version":  "0.0.5",
-    "type":  "module",
-    "scripts":  {
-                    "dev":  "vite",
-                    "build":  "tsc \u0026\u0026 vite build"
-                },
-    "dependencies":  {
-                         "@tauri-apps/api":  "^2.10.1",
-                         "marked":  "^18.0.0",
-                         "react":  "^18.3.1",
-                         "react-dom":  "^18.3.1"
-                     },
-    "devDependencies":  {
-                            "@types/react":  "^18.3.3",
-                            "@types/react-dom":  "^18.3.0",
-                            "@vitejs/plugin-react":  "^4.3.1",
-                            "typescript":  "^5.5.4",
-                            "vite":  "^5.3.4"
-                        }
+    "name": "nowork-web",
+    "private": true,
+    "version": "0.0.5",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc && vite build"
+    },
+    "dependencies": {
+        "@tauri-apps/api": "^2.10.1",
+        "@types/d3": "^7.4.3",
+        "d3": "^7.9.0",
+        "marked": "^18.0.0",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1"
+    },
+    "devDependencies": {
+        "@types/react": "^18.3.3",
+        "@types/react-dom": "^18.3.0",
+        "@vitejs/plugin-react": "^4.3.1",
+        "typescript": "^5.5.4",
+        "vite": "^5.3.4"
+    }
 }

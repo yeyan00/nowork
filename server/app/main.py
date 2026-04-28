@@ -534,6 +534,7 @@ async def api_reload_knowledge(knowledge_id: str, request: Request) -> dict[str,
 from app.wiki.repo import WikiRepository as _WikiRepo
 from app.wiki.search import tokenized_search as _tokenized_search
 from app.wiki.lint import lint_knowledge_base as _lint_kb
+from app.wiki.graph import build_graph as _build_graph
 
 
 def _get_wiki_repo(knowledge_id: str) -> _WikiRepo:
@@ -664,10 +665,10 @@ def api_delete_wiki_page(knowledge_id: str, page_path: str):
 
 
 @app.post('/api/knowledge/{knowledge_id}/wiki/search')
-def api_search_wiki(knowledge_id: str, request: Request):
+async def api_search_wiki(knowledge_id: str, request: Request):
     body = {}
     try:
-        body = request.json() if request.headers.get('content-type', '').startswith('application/json') else {}
+        body = await request.json() if request.headers.get('content-type', '').startswith('application/json') else {}
     except Exception:
         pass
 
@@ -691,9 +692,15 @@ def api_wiki_stats(knowledge_id: str):
 
 @app.post('/api/knowledge/{knowledge_id}/wiki/lint')
 def api_lint_wiki(knowledge_id: str):
-    _get_wiki_repo(knowledge_id)  # 验证
+    _get_wiki_repo(knowledge_id)
     result = _lint_kb(knowledge_id)
     return result.to_dict()
+
+
+@app.get('/api/knowledge/{knowledge_id}/wiki/graph')
+def api_wiki_graph(knowledge_id: str):
+    _get_wiki_repo(knowledge_id)
+    return _build_graph(knowledge_id)
 
 
 from app.extensions import list_extensions as _list_ext, get_extension as _get_ext, install_extension as _install_ext, uninstall_extension as _uninstall_ext
@@ -783,22 +790,47 @@ async def api_trigger_compaction(ws_id: str, request: Request) -> dict[str, obje
     return await trigger_manual_compaction(ws_id, agent_os=_get_agent_os(request))
 
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logger.exception('Unhandled exception on %s %s: %s', request.method, request.url.path, exc)
-    from fastapi.responses import JSONResponse
-    return JSONResponse(status_code=500, content={'detail': 'Internal server error'})
+class LogRequestsMiddleware:
+    """Pure ASGI middleware for request logging and exception handling.
+
+    Replaces the previous @app.middleware('http') + @app.exception_handler approach,
+    which caused Starlette's BaseHTTPMiddleware to raise RuntimeError('No response returned.')
+    whenever the exception_handler caught an error — because BaseHTTPMiddleware.call_next()
+    cannot see responses produced by exception handlers.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope['type'] not in ('http', 'websocket'):
+            await self.app(scope, receive, send)
+            return
+
+        start = time.time()
+        path = scope.get('path', '')
+        method = scope.get('method', '')
+        status_holder = {'status': 0}
+
+        async def send_wrapper(message):
+            if message['type'] == 'http.response.start':
+                status_holder['status'] = message.get('status', 0)
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        except Exception as exc:
+            status_holder['status'] = 500
+            logger.exception('Unhandled exception on %s %s: %s', method, path, exc)
+            body = json.dumps({'detail': 'Internal server error'}).encode('utf-8')
+            await send({'type': 'http.response.start', 'status': 500,
+                        'headers': [[b'content-type', b'application/json'],
+                                    [b'content-length', str(len(body)).encode()]]})
+            await send({'type': 'http.response.body', 'body': body})
+
+        elapsed = (time.time() - start) * 1000
+        if path.startswith('/api/'):
+            logger.info('%s %s %d %.0fms', method, path, status_holder['status'], elapsed)
 
 
-@app.middleware('http')
-async def log_requests(request: Request, call_next):
-    start = time.time()
-    try:
-        response = await call_next(request)
-    except Exception as e:
-        logger.exception('Request failed %s %s: %s', request.method, request.url.path, e)
-        raise
-    elapsed = (time.time() - start) * 1000
-    if request.url.path.startswith('/api/'):
-        logger.info('%s %s %d %.0fms', request.method, request.url.path, response.status_code, elapsed)
-    return response
+app.add_middleware(LogRequestsMiddleware)

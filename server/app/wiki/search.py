@@ -107,7 +107,7 @@ def tokenized_search(kb_id: str, query: str, max_results: int = 20) -> list[dict
                 'type': str(meta.get('type', '')),
                 'score': score,
                 'title_match': title_match,
-                'summary': body[:300].strip() if body else '',
+                'snippet': body[:300].strip() if body else '',
             })
 
     # 按分数降序

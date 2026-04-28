@@ -578,6 +578,32 @@ async def _build_single_agent(raw: dict[str, Any], learning_enabled: bool | None
     if knowledge:
         agent_kwargs['knowledge'] = knowledge
 
+    # Wiki 模式知识库 → 注入 KnowledgeBaseTool
+    knowledge_refs = raw.get('knowledge', [])
+    if knowledge_refs:
+        if isinstance(knowledge_refs, str):
+            knowledge_refs = [knowledge_refs]
+        wiki_tools, wiki_purpose, wiki_source_paths = _build_wiki_tools_for_worker(knowledge_refs)
+        if wiki_tools:
+            agent_kwargs['tools'] = agent_kwargs.get('tools') or []
+            agent_kwargs['tools'].extend(wiki_tools)
+        if wiki_purpose:
+            existing_instructions = agent_kwargs.get('instructions', '')
+            paths_hint = ''
+            if wiki_source_paths:
+                paths_hint = (
+                    f'\n\n知识库原始文件目录: {", ".join(wiki_source_paths)}\n'
+                    f'如果 search_knowledge 返回的内容不够详细，'
+                    f'你可以用 read_file 直接读取上述目录中的原始文件获取更多信息。'
+                )
+            agent_kwargs['instructions'] = (
+                f'{existing_instructions}\n\n'
+                f'你可以使用知识库搜索工具查询相关资料。'
+                f'当用户的问题可能涉及已有知识库内容时，优先搜索知识库。\n\n'
+                f'{wiki_purpose}'
+                f'{paths_hint}'
+            )
+
     return Agent(**agent_kwargs)
 
 
@@ -637,6 +663,32 @@ async def _build_single_team(raw: dict[str, Any], existing_agents: list[Agent],
     knowledge = _build_knowledge_for_worker(raw.get('knowledge'))
     if knowledge:
         team_kwargs['knowledge'] = knowledge
+
+    # Wiki 模式知识库 → 注入 KnowledgeBaseTool
+    knowledge_refs = raw.get('knowledge', [])
+    if knowledge_refs:
+        if isinstance(knowledge_refs, str):
+            knowledge_refs = [knowledge_refs]
+        wiki_tools, wiki_purpose, wiki_source_paths = _build_wiki_tools_for_worker(knowledge_refs)
+        if wiki_tools:
+            team_kwargs['tools'] = team_kwargs.get('tools') or []
+            team_kwargs['tools'].extend(wiki_tools)
+        if wiki_purpose:
+            existing_instructions = team_kwargs.get('instructions', '')
+            paths_hint = ''
+            if wiki_source_paths:
+                paths_hint = (
+                    f'\n\n知识库原始文件目录: {", ".join(wiki_source_paths)}\n'
+                    f'如果 search_knowledge 返回的内容不够详细，'
+                    f'你可以用 read_file 直接读取上述目录中的原始文件获取更多信息。'
+                )
+            team_kwargs['instructions'] = (
+                f'{existing_instructions}\n\n'
+                f'你可以使用知识库搜索工具查询相关资料。'
+                f'当用户的问题可能涉及已有知识库内容时，优先搜索知识库。\n\n'
+                f'{wiki_purpose}'
+                f'{paths_hint}'
+            )
 
     return Team(**team_kwargs)
 
