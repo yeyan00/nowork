@@ -48,6 +48,7 @@ dotenv
 exchange
 fastapi
 fastapi-0.135.3.dist-info
+fitz
 git
 gitdb
 gitdb-4.0.12.dist-info
@@ -122,6 +123,8 @@ pygments-2.20.0.dist-info
 pyjwt-2.12.1.dist-info
 pymilvus
 pymilvus-2.6.12.dist-info
+pymupdf
+pymupdf-1.27.2.3.dist-info
 python_dateutil-2.9.0.post0.dist-info
 python_dotenv-1.2.2.dist-info
 python_multipart

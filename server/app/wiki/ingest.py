@@ -7,6 +7,11 @@ import logging
 from datetime import date
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
+
+from agno.agent import Agent
+from agno.run.cancel import cancel_run as _agno_cancel_run
+from agno.exceptions import RunCancelledException as _AgnoCancelled
 
 from app.wiki.repo import WikiRepository
 from app.wiki.extract import extract_text
@@ -25,22 +30,41 @@ _sync_cancel_flags: dict[str, bool] = {}
 
 
 def request_sync_cancel(kb_id: str) -> None:
-    """Mark a running sync for cancellation."""
+    """Cancel a running sync by setting the flag and cancelling active Agno runs."""
     _sync_cancel_flags[kb_id] = True
-    logger.info('Sync cancellation requested for kb %s', kb_id)
-
-
-def _check_cancelled(kb_id: str) -> bool:
-    """Check if sync was cancelled. Raises SyncCancelled if so."""
-    if _sync_cancel_flags.get(kb_id):
-        logger.info('Sync cancelled for kb %s', kb_id)
-        raise SyncCancelled(kb_id)
-    return False
+    # Cancel any active Agno agent runs for this kb
+    for run_id in list(_active_run_ids.get(kb_id, [])):
+        try:
+            _agno_cancel_run(run_id)
+            logger.info('Cancelled Agno run %s for kb %s', run_id, kb_id)
+        except Exception as e:
+            logger.warning('Failed to cancel Agno run %s: %s', run_id, e)
 
 
 def clear_sync_cancel(kb_id: str) -> None:
     """Clear cancellation flag (called when sync starts or ends)."""
     _sync_cancel_flags.pop(kb_id, None)
+    _active_run_ids.pop(kb_id, None)
+
+
+def _register_active_run(kb_id: str, run_id: str) -> None:
+    """Track an active Agno run ID so it can be cancelled."""
+    if kb_id not in _active_run_ids:
+        _active_run_ids[kb_id] = set()
+    _active_run_ids[kb_id].add(run_id)
+
+
+def _unregister_active_run(kb_id: str, run_id: str) -> None:
+    """Remove a completed Agno run ID."""
+    if kb_id in _active_run_ids:
+        _active_run_ids[kb_id].discard(run_id)
+
+
+_active_run_ids: dict[str, set[str]] = {}
+
+
+def _is_cancelled(kb_id: str) -> bool:
+    return _sync_cancel_flags.get(kb_id, False)
 
 
 class SyncCancelled(Exception):
@@ -48,6 +72,12 @@ class SyncCancelled(Exception):
     def __init__(self, kb_id: str):
         self.kb_id = kb_id
         super().__init__(f'Sync cancelled for {kb_id}')
+
+
+def _check_cancelled(kb_id: str) -> None:
+    """Raise SyncCancelled if the sync was cancelled."""
+    if _is_cancelled(kb_id):
+        raise SyncCancelled(kb_id)
 
 
 # ── FILE Block Parsing ──────────────────────────────────────────
@@ -120,8 +150,6 @@ async def ingest_file(kb_id: str, source_path: str, model: Any,
     Raises:
         SyncCancelled: If the sync was cancelled by the user.
     """
-    from agno.agent import Agent
-
     _check_cancelled(kb_id)
 
     repo = WikiRepository(kb_id)
@@ -156,28 +184,47 @@ async def ingest_file(kb_id: str, source_path: str, model: Any,
     _check_cancelled(kb_id)
 
     # 4. Step 1: Analysis (expensive LLM call)
-    analyst = Agent(
-        name='wiki-analyst',
-        model=model,
-        instructions=analysis_prompt(locale, purpose, index),
-    )
-    analysis = await analyst.arun(
-        ingest_run_message(locale, file_name) + text,
-    )
+    #    Pre-generate run_id so we can cancel mid-flight via Agno's cancellation system
+    analysis_run_id = str(uuid4())
+    _register_active_run(kb_id, analysis_run_id)
+
+    try:
+        analyst = Agent(
+            name='wiki-analyst',
+            model=model,
+            instructions=analysis_prompt(locale, purpose, index),
+        )
+        analysis = await analyst.arun(
+            ingest_run_message(locale, file_name) + text,
+            run_id=analysis_run_id,
+        )
+    except _AgnoCancelled:
+        raise SyncCancelled(kb_id)
+    finally:
+        _unregister_active_run(kb_id, analysis_run_id)
 
     _check_cancelled(kb_id)
 
     # 5. Step 2: Generation (expensive LLM call)
-    generator = Agent(
-        name='wiki-generator',
-        model=model,
-        instructions=generation_prompt(
-            locale, schema, purpose, index, file_name, overview,
-        ),
-    )
-    generation = await generator.arun(
-        ingest_generate_message(locale, file_name, analysis.content, text),
-    )
+    generation_run_id = str(uuid4())
+    _register_active_run(kb_id, generation_run_id)
+
+    try:
+        generator = Agent(
+            name='wiki-generator',
+            model=model,
+            instructions=generation_prompt(
+                locale, schema, purpose, index, file_name, overview,
+            ),
+        )
+        generation = await generator.arun(
+            ingest_generate_message(locale, file_name, analysis.content, text),
+            run_id=generation_run_id,
+        )
+    except _AgnoCancelled:
+        raise SyncCancelled(kb_id)
+    finally:
+        _unregister_active_run(kb_id, generation_run_id)
 
     _check_cancelled(kb_id)
 
@@ -223,8 +270,6 @@ async def sync_knowledge_base(kb_id: str, model: Any,
     Raises:
         SyncCancelled: If the sync was cancelled by the user.
     """
-    from app.config import load_knowledge_config, list_knowledge_refs
-
     # Clear any stale cancel flag from a previous run
     clear_sync_cancel(kb_id)
 
@@ -256,17 +301,22 @@ async def sync_knowledge_base(kb_id: str, model: Any,
 
     # Serial ingest — check cancellation between each file
     all_written: list[str] = []
-    for file_path in changed:
-        _check_cancelled(kb_id)
-        try:
-            written = await ingest_file(
-                kb_id, file_path, model, force=force, locale=locale,
-            )
-            all_written.extend(written)
-        except SyncCancelled:
-            raise  # propagate to caller
-        except Exception as e:
-            logger.error('Failed to ingest %s: %s', file_path, e)
+    try:
+        for file_path in changed:
+            _check_cancelled(kb_id)
+            try:
+                written = await ingest_file(
+                    kb_id, file_path, model, force=force, locale=locale,
+                )
+                all_written.extend(written)
+            except SyncCancelled:
+                raise  # propagate to caller
+            except Exception as e:
+                logger.error('Failed to ingest %s: %s', file_path, e)
+    except SyncCancelled:
+        # Clean up on cancel
+        clear_sync_cancel(kb_id)
+        raise
 
     return all_written
 

@@ -14,3 +14,6 @@ uvicorn
 # agno[mcp]       → MCP tool protocol
 # agno[milvusdb]  → Milvus vector DB for knowledge
 # agno[sqlite]    → SQLite session storage via SQLAlchemy
+
+# --- Knowledge / Wiki ---
+PyMuPDF
