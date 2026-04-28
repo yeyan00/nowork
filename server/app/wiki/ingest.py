@@ -27,6 +27,7 @@ logger = logging.getLogger('nowork')
 
 _active_run_ids: dict[str, set[str]] = {}
 _sync_cancel_flags: dict[str, bool] = {}
+_active_sync: set[str] = set()        # kb_ids currently syncing
 
 
 def request_sync_cancel(kb_id: str) -> None:
@@ -206,6 +207,8 @@ async def ingest_file(kb_id: str, source_path: str, model: Any,
     generation_run_id = str(uuid4())
     _register_active_run(kb_id, generation_run_id)
 
+    analysis_text = getattr(analysis, 'content', None) or ''
+
     try:
         generator = Agent(
             name='wiki-generator',
@@ -215,7 +218,7 @@ async def ingest_file(kb_id: str, source_path: str, model: Any,
             ),
         )
         generation = await generator.arun(
-            ingest_generate_message(locale, file_name, analysis.content, text),
+            ingest_generate_message(locale, file_name, analysis_text, text),
             run_id=generation_run_id,
         )
     except _AgnoCancelled:
@@ -226,7 +229,8 @@ async def ingest_file(kb_id: str, source_path: str, model: Any,
     _check_cancelled(kb_id)
 
     # 6. Parse and write
-    blocks = parse_file_blocks(generation.content)
+    gen_text = getattr(generation, 'content', None) or ''
+    blocks = parse_file_blocks(gen_text)
     written: list[str] = []
     for path, content in blocks:
         if repo.write_page(path, content):
@@ -235,7 +239,7 @@ async def ingest_file(kb_id: str, source_path: str, model: Any,
     # Fallback: create a basic source summary if none was generated
     source_base = Path(source_path).stem
     if not any('sources/' in p for p in written):
-        fb = fallback_source_summary(locale, file_name, source_path)
+        fb = fallback_source_summary(locale, file_name, file_name)
         repo.write_page(f'wiki/sources/{source_base}.md', fb)
         written.append(f'wiki/sources/{source_base}.md')
 
@@ -267,9 +271,23 @@ async def sync_knowledge_base(kb_id: str, model: Any,
     Raises:
         SyncCancelled: If the sync was cancelled by the user.
     """
+    # Prevent concurrent syncs for the same KB
+    if kb_id in _active_sync:
+        raise ValueError(f'Sync already in progress for {kb_id}')
+    _active_sync.add(kb_id)
+
     # Clear any stale cancel flag from a previous run
     clear_sync_cancel(kb_id)
 
+    try:
+        return await _sync_knowledge_base_inner(kb_id, model, force)
+    finally:
+        _active_sync.discard(kb_id)
+
+
+async def _sync_knowledge_base_inner(kb_id: str, model: Any,
+                                     force: bool = False) -> list[str]:
+    """Inner implementation of sync_knowledge_base (called under lock)."""
     # Find the knowledge base config
     kb_cfg = None
     for cfg_raw in _get_all_kb_configs():
@@ -311,7 +329,10 @@ async def sync_knowledge_base(kb_id: str, model: Any,
             except Exception as e:
                 logger.error('Failed to ingest %s: %s', file_path, e)
     except SyncCancelled:
-        clear_sync_cancel(kb_id)
+        # Only clear the cancel flag — active run IDs are already cleaned up
+        # by each ingest_file's finally block. Do NOT clear _active_run_ids
+        # here because a new sync could have already started registering IDs.
+        _sync_cancel_flags.pop(kb_id, None)
         raise
 
     return all_written

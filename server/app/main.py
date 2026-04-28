@@ -594,6 +594,9 @@ async def api_sync_knowledge(knowledge_id: str, request: Request):
         # Pages already ingested are kept on disk — just report cancellation.
         # Frontend will reload wiki data to reflect the partial results.
         return {'ok': True, 'id': knowledge_id, 'cancelled': True}
+    except ValueError as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=409, detail=str(e))
     return {'ok': True, 'id': knowledge_id, 'pages_written': len(written), 'pages': written}
 
 

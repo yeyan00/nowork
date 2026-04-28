@@ -183,15 +183,18 @@ export function KnowledgePage() {
 
   const handleSync = useCallback(async () => {
     if (!selectedId) return;
-    // If already syncing, cancel via backend + abort fetch
+    // If already syncing, cancel via backend first (stops LLM calls),
+    // then abort the frontend fetch.
     if (_activeSyncAbort) {
       const ac = _activeSyncAbort;
       _activeSyncAbort = null;
-      ac.abort();
-      setSyncing(false);
       try {
         await cancelWikiSync(selectedId);
       } catch { /* best effort */ }
+      ac.abort();
+      setSyncing(false);
+      // Reload to show partial results
+      loadWikiData();
       return;
     }
 
