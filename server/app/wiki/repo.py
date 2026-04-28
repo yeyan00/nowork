@@ -151,45 +151,52 @@ class WikiRepository:
             search: Filter by title/content keyword.
         """
         pages: list[dict[str, Any]] = []
-
-        scan_dirs = []
-        if category:
-            scan_dirs.append(self.wiki_dir / category)
-        else:
-            # Also scan wiki/ root-level files (index.md, overview.md, log.md)
-            for sub in ('entities', 'concepts', 'sources', 'queries'):
-                scan_dirs.append(self.wiki_dir / sub)
-
         search_lower = search.lower() if search else ''
 
-        for scan_dir in scan_dirs:
-            if not scan_dir.exists():
-                continue
-            for md_file in sorted(scan_dir.rglob('*.md')):
-                rel = md_file.relative_to(self.wiki_dir)
-                content = md_file.read_text(encoding='utf-8', errors='replace')
-                meta, body = _parse_frontmatter(content)
+        def _process_file(md_file: Path) -> None:
+            rel = md_file.relative_to(self.wiki_dir)
+            content = md_file.read_text(encoding='utf-8', errors='replace')
+            meta, body = _parse_frontmatter(content)
 
-                title = meta.get('title', md_file.stem)
-                page_type = meta.get('type', '')
+            title = meta.get('title', md_file.stem)
+            page_type = meta.get('type', '')
 
-                # Search filter
-                if search_lower:
-                    if search_lower not in title.lower() and search_lower not in body.lower():
-                        continue
+            # Search filter
+            if search_lower:
+                if search_lower not in title.lower() and search_lower not in body.lower():
+                    return
 
-                pages.append({
-                    'path': f"wiki/{rel.as_posix()}",
-                    'title': str(title),
-                    'type': str(page_type),
-                    'tags': meta.get('tags', []),
-                    'related': meta.get('related', []),
-                    'sources': meta.get('sources', []),
-                    'created': str(meta.get('created', '')),
-                    'updated': str(meta.get('updated', '')),
-                    'size': len(content),
-                    'summary': body[:200].strip() if body else '',
-                })
+            pages.append({
+                'path': f"wiki/{rel.as_posix()}",
+                'title': str(title),
+                'type': str(page_type),
+                'tags': meta.get('tags', []),
+                'related': meta.get('related', []),
+                'sources': meta.get('sources', []),
+                'created': str(meta.get('created', '')),
+                'updated': str(meta.get('updated', '')),
+                'size': len(content),
+                'summary': body[:200].strip() if body else '',
+            })
+
+        if category:
+            # Only scan the requested sub-directory
+            scan_dir = self.wiki_dir / category
+            if scan_dir.exists():
+                for md_file in sorted(scan_dir.rglob('*.md')):
+                    _process_file(md_file)
+        else:
+            # Scan wiki/ root-level files (index.md, overview.md, log.md)
+            if self.wiki_dir.exists():
+                for f in sorted(self.wiki_dir.iterdir()):
+                    if f.is_file() and f.suffix.lower() == '.md':
+                        _process_file(f)
+            # Scan sub-directories
+            for sub in ('entities', 'concepts', 'sources', 'queries'):
+                scan_dir = self.wiki_dir / sub
+                if scan_dir.exists():
+                    for md_file in sorted(scan_dir.rglob('*.md')):
+                        _process_file(md_file)
 
         return pages
 

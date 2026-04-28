@@ -600,6 +600,13 @@ async def api_sync_knowledge(knowledge_id: str, request: Request):
     return {'ok': True, 'id': knowledge_id, 'pages_written': len(written), 'pages': written}
 
 
+@app.get('/api/knowledge/{knowledge_id}/sync/status')
+async def api_sync_status(knowledge_id: str):
+    """Check whether a sync is currently in progress."""
+    from app.wiki.ingest import _active_sync
+    return {'syncing': knowledge_id in _active_sync, 'id': knowledge_id}
+
+
 @app.post('/api/knowledge/{knowledge_id}/sync/cancel')
 async def api_cancel_sync(knowledge_id: str):
     """Cancel a running sync."""

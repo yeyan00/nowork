@@ -1,4 +1,5 @@
 81d243bd2c585b0f4821__mypyc
+PIL
 PyISAPI_loader
 __pycache__
 _cffi_backend
@@ -44,7 +45,10 @@ distro
 distro-1.9.0.dist-info
 docstring_parser
 docstring_parser-0.17.0.dist-info
+docx
 dotenv
+et_xmlfile
+et_xmlfile-2.0.0.dist-info
 exchange
 fastapi
 fastapi-0.135.3.dist-info
@@ -84,6 +88,8 @@ jsonschema-4.26.0.dist-info
 jsonschema_specifications
 jsonschema_specifications-2025.9.1.dist-info
 jwt
+lxml
+lxml-6.1.0.dist-info
 mapi
 markdown_it
 markdown_it_py-4.0.0.dist-info
@@ -99,6 +105,8 @@ numpy.libs
 odbc
 openai
 openai-2.31.0.dist-info
+openpyxl
+openpyxl-3.1.5.dist-info
 orjson
 orjson-3.11.8.dist-info
 packaging
@@ -108,6 +116,8 @@ pandas-3.0.2.dist-info
 pandas.libs
 perfmon
 perfmondata
+pillow-12.2.0.dist-info
+pptx
 propsys
 protobuf-7.34.1.dist-info
 pycparser
@@ -126,9 +136,11 @@ pymilvus-2.6.12.dist-info
 pymupdf
 pymupdf-1.27.2.3.dist-info
 python_dateutil-2.9.0.post0.dist-info
+python_docx-1.2.0.dist-info
 python_dotenv-1.2.2.dist-info
 python_multipart
 python_multipart-0.0.26.dist-info
+python_pptx-1.0.2.dist-info
 pythoncom
 pythonwin
 pywin32-311.dist-info
@@ -238,4 +250,6 @@ win32ts
 win32ui
 win32uiole
 win32wnet
+xlsxwriter
+xlsxwriter-3.2.9.dist-info
 yaml
