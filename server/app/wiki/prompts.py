@@ -120,6 +120,10 @@ def generation_prompt(locale: str | None, schema: str, purpose: str,
     """Build the Step-2 generation prompt in the given locale."""
     lang = _resolve(locale)
     source_base = source_file_name.rsplit('.', 1)[0] if '.' in source_file_name else source_file_name
+    # Note: Path.stem treats dotfiles as having no extension (e.g. ".gitignore" → ".gitignore")
+    # whereas rsplit would give "". Handle dotfiles explicitly:
+    if source_file_name.startswith('.') and '.' not in source_file_name[1:]:
+        source_base = source_file_name
 
     if lang == 'zh':
         return _generation_zh(schema, purpose, index, source_file_name, source_base, overview)

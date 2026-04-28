@@ -468,6 +468,15 @@ from app.knowledge_repo import (
 )
 
 
+def _get_kb_language(kb_id: str) -> str | None:
+    """Read the 'language' field from the knowledge base's raw config."""
+    kb = _get_kb(kb_id)
+    if kb is None:
+        return None
+    raw = kb.get('_raw', kb)
+    return raw.get('language') or None
+
+
 @app.get('/api/knowledge')
 def api_list_knowledge() -> list[dict[str, object]]:
     return _list_kb()
@@ -614,7 +623,7 @@ async def api_ingest_knowledge(knowledge_id: str, request: Request):
 
     all_written: list[str] = []
     for f in files:
-        written = await ingest_file(knowledge_id, f, model, force=force)
+        written = await ingest_file(knowledge_id, f, model, force=force, locale=_get_kb_language(knowledge_id))
         all_written.extend(written)
 
     return {'ok': True, 'id': knowledge_id, 'pages_written': len(all_written), 'pages': all_written}
