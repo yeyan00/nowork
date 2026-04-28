@@ -506,6 +506,32 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
     });
   }, [activeSessionId, currentSession, defaultModelRef, isStreaming, updateSessionState, updateWorkerState, worker, workerDefaultModelRef]);
 
+  const handleLearningToggle = useCallback((enabled: boolean) => {
+    if (!worker || !activeSessionId || !currentSession || isStreaming) return;
+
+    // enabled=true means follow worker default (null), enabled=false means explicitly off
+    const nextValue = enabled ? null : false;
+    const previousValue = currentSession.learningEnabled ?? null;
+
+    updateWorkerState(worker.id, (workerState) => {
+      workerState.sessions = workerState.sessions.map((session) => (
+        session.id === activeSessionId
+          ? { ...session, learningEnabled: nextValue }
+          : session
+      ));
+      return workerState;
+    });
+
+    void updateSession(activeSessionId, { learningEnabled: nextValue }).catch(() => {
+      updateWorkerState(worker.id, (workerState) => {
+        workerState.sessions = workerState.sessions.map((session) => (
+          session.id === activeSessionId ? { ...session, learningEnabled: previousValue } : session
+        ));
+        return workerState;
+      });
+    });
+  }, [activeSessionId, currentSession, isStreaming, updateWorkerState, worker]);
+
   const addAttachments = useCallback(async (kind: ChatAttachment['kind']) => {
     if (!worker) return;
     const paths = await pickLocalPaths(kind);
@@ -1339,6 +1365,23 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                 <span className="composer-model-badge">override</span>
               )}
             </div>
+            <button
+              type="button"
+              className={`composer-memory-toggle ${currentSession?.learningEnabled === false ? 'off' : 'on'}`}
+              onClick={() => handleLearningToggle(currentSession?.learningEnabled === false)}
+              disabled={isStreaming || !activeSessionId}
+              title={currentSession?.learningEnabled === false ? t('chat.memoryOff') : t('chat.memoryOn')}
+              aria-label={t('chat.memoryToggle')}
+            >
+              <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 2C7.24 2 5 4.24 5 7c0 1.34.53 2.55 1.39 3.45L10 16l3.61-5.55A4.97 4.97 0 0015 7c0-2.76-2.24-5-5-5z"/>
+                <path d="M7.5 7a2.5 2.5 0 015 0"/>
+                <line x1="10" y1="7" x2="10" y2="11"/>
+              </svg>
+              {currentSession?.learningEnabled === false && (
+                <span className="composer-memory-badge">off</span>
+              )}
+            </button>
             {isStreaming ? (
               <button type="button" className="cancel-button" onClick={handleCancel}>
                 {t('chat.cancel')}

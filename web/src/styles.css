@@ -973,6 +973,49 @@ button {
   font-weight: 600;
 }
 
+/* Memory toggle */
+.composer-memory-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(132, 146, 170, 0.24);
+  background: #f4f7fb;
+  color: #31415d;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.composer-memory-toggle:hover {
+  background: #edf1f7;
+}
+
+.composer-memory-toggle.on {
+  color: #3f61d7;
+}
+
+.composer-memory-toggle.off {
+  color: #9ba8b9;
+  opacity: 0.7;
+}
+
+.composer-memory-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.composer-memory-badge {
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(200, 60, 60, 0.1);
+  color: #b33a3a;
+  font-size: 10px;
+  font-weight: 600;
+}
+
 /* Workspace dropdown inside composer tools */
 .composer-ws-dropdown-wrapper {
   position: relative;

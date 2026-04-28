@@ -418,7 +418,7 @@ async def build_agent_os(workers: list[dict[str, Any]], base_app: Any | None = N
     return AgentOS(agents=agents, teams=teams, base_app=base_app)
 
 
-async def _build_single_agent(raw: dict[str, Any]) -> Agent | None:
+async def _build_single_agent(raw: dict[str, Any], learning_enabled: bool | None = None) -> Agent | None:
     skills_dir = Path(__file__).resolve().parents[1] / 'skills'
     block = _extract_block(raw)
 
@@ -458,11 +458,14 @@ async def _build_single_agent(raw: dict[str, Any]) -> Agent | None:
     history = _merge_history(raw)
     _apply_history(agent_kwargs, history)
 
-    learning_cfg = _merge_learning(raw)
-    model_for_learning = agent_kwargs.get('model')
-    learning = _build_learning(learning_cfg, db, model_for_learning)
-    if learning:
-        agent_kwargs['learning'] = learning
+    if learning_enabled is False:
+        agent_kwargs['learning'] = False
+    else:
+        learning_cfg = _merge_learning(raw)
+        model_for_learning = agent_kwargs.get('model')
+        learning = _build_learning(learning_cfg, db, model_for_learning)
+        if learning:
+            agent_kwargs['learning'] = learning
 
     knowledge = _build_knowledge_for_worker(raw.get('knowledge'))
     if knowledge:
@@ -471,7 +474,8 @@ async def _build_single_agent(raw: dict[str, Any]) -> Agent | None:
     return Agent(**agent_kwargs)
 
 
-async def _build_single_team(raw: dict[str, Any], existing_agents: list[Agent]) -> Team | None:
+async def _build_single_team(raw: dict[str, Any], existing_agents: list[Agent],
+                             learning_enabled: bool | None = None) -> Team | None:
     skills_dir = Path(__file__).resolve().parents[1] / 'skills'
     block = _extract_block(raw)
 
@@ -514,11 +518,14 @@ async def _build_single_team(raw: dict[str, Any], existing_agents: list[Agent]) 
     history = _merge_history(raw)
     _apply_history(team_kwargs, history)
 
-    learning_cfg = _merge_learning(raw)
-    model_for_learning = team_kwargs.get('model')
-    learning = _build_learning(learning_cfg, db, model_for_learning)
-    if learning:
-        team_kwargs['learning'] = learning
+    if learning_enabled is False:
+        team_kwargs['learning'] = False
+    else:
+        learning_cfg = _merge_learning(raw)
+        model_for_learning = team_kwargs.get('model')
+        learning = _build_learning(learning_cfg, db, model_for_learning)
+        if learning:
+            team_kwargs['learning'] = learning
 
     knowledge = _build_knowledge_for_worker(raw.get('knowledge'))
     if knowledge:

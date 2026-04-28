@@ -199,7 +199,7 @@ export async function createSession(workerId: string, title: string, workspaces?
   return (await response.json()) as SessionSummary;
 }
 
-export async function updateSession(sessionId: string, payload: { title?: string; workspaces?: string[] | null; modelOverride?: string | null }): Promise<SessionSummary> {
+export async function updateSession(sessionId: string, payload: { title?: string; workspaces?: string[] | null; modelOverride?: string | null; learningEnabled?: boolean | null }): Promise<SessionSummary> {
   const response = await fetchFromApi(`/api/sessions/${sessionId}`, {
     method: 'PUT',
     body: JSON.stringify(payload),

@@ -39,6 +39,7 @@ class WorkerSessionRow(Base):
     worker_id = Column(String, nullable=False, index=True)
     status = Column(String, default='active')  # active / archived
     model_override = Column(String, nullable=True)
+    learning_enabled = Column(String, nullable=True)  # 'true'/'false'/NULL = follow worker default
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
@@ -88,6 +89,8 @@ def _migrate_schema(engine) -> None:
             cols = [row[1] for row in conn.execute(text('PRAGMA table_info(worker_sessions)')).fetchall()]
             if 'model_override' not in cols:
                 conn.execute(text('ALTER TABLE worker_sessions ADD COLUMN model_override VARCHAR'))
+            if 'learning_enabled' not in cols:
+                conn.execute(text('ALTER TABLE worker_sessions ADD COLUMN learning_enabled VARCHAR'))
     except Exception as e:
         logger.warning('Session DB schema migration skipped/failed: %s', e)
 
@@ -322,6 +325,7 @@ def _serialize_worker_session(ws: WorkerSessionRow) -> dict[str, Any]:
         'title': ws.title or '',
         'status': ws.status,
         'model_override': ws.model_override,
+        'learning_enabled': ws.learning_enabled,
         'created_at': ws.created_at.isoformat() if ws.created_at else '',
         'updated_at': ws.updated_at.isoformat() if ws.updated_at else '',
     }

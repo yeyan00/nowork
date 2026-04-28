@@ -27,6 +27,7 @@ class SessionRuntimeEntry:
     worker_id: str
     worker_type: str
     model_ref: str
+    learning_enabled: bool | None  # None=follow worker default, True=on, False=off
     runtime: Any
     created_at: float
     last_used_at: float
@@ -34,6 +35,14 @@ class SessionRuntimeEntry:
 
 _SESSION_RUNTIME_CACHE: dict[str, SessionRuntimeEntry] = {}
 _SESSION_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+
+def _parse_learning_enabled(val: str | None) -> bool | None:
+    """Parse learning_enabled DB value ('true'/'false'/None) to bool|None."""
+    if val is None:
+        return None
+    return str(val).lower() == 'true'
 
 
 def _resolve_worker_id_from_session(session_id: str, agent_os: Any) -> str | None:
@@ -115,7 +124,8 @@ def clear_worker_session_runtime_cache(worker_id: str) -> None:
         _SESSION_RUNTIME_CACHE.pop(sid, None)
 
 
-async def _build_runtime_for_session(worker: dict[str, Any], model_ref: str, agent_os: Any | None) -> Any:
+async def _build_runtime_for_session(worker: dict[str, Any], model_ref: str, agent_os: Any | None,
+                                     learning_enabled: bool | None = None) -> Any:
     from app.runtime import _build_single_agent, _build_single_team
 
     raw = worker.get('_raw', worker)
@@ -125,8 +135,8 @@ async def _build_runtime_for_session(worker: dict[str, Any], model_ref: str, age
 
     if worker_type == 'Team':
         existing_agents = list(getattr(agent_os, 'agents', []) or []) if agent_os is not None else []
-        return await _build_single_team(raw_copy, existing_agents)
-    return await _build_single_agent(raw_copy)
+        return await _build_single_team(raw_copy, existing_agents, learning_enabled=learning_enabled)
+    return await _build_single_agent(raw_copy, learning_enabled=learning_enabled)
 
 
 async def _resolve_runtime_for_session(worker: dict[str, Any], session_id: str, agent_os: Any | None) -> Any | None:
@@ -134,26 +144,35 @@ async def _resolve_runtime_for_session(worker: dict[str, Any], session_id: str, 
     ws = session_manager.get_worker_session(session_id)
     if ws is not None:
         model_ref = ws.get('model_override')
+        learning_enabled_raw = ws.get('learning_enabled')
+        learning_enabled = None
+        if learning_enabled_raw is not None:
+            learning_enabled = str(learning_enabled_raw).lower() == 'true'
 
-    if not model_ref:
+    # Need custom runtime if model overridden or learning explicitly disabled
+    needs_custom_runtime = bool(model_ref) or learning_enabled is False
+
+    if not needs_custom_runtime:
         if agent_os is None:
             return None
         return _find_agent_os_worker(agent_os, worker['id'], worker.get('type', 'Agent'))
 
     now = time.time()
     cached = _SESSION_RUNTIME_CACHE.get(session_id)
-    if cached is not None and cached.model_ref == model_ref:
+    if cached is not None and cached.model_ref == model_ref and cached.learning_enabled == learning_enabled:
         cached.last_used_at = now
         return cached.runtime
 
-    runtime = await _build_runtime_for_session(worker, str(model_ref), agent_os)
+    runtime = await _build_runtime_for_session(
+        worker, model_ref or '', agent_os, learning_enabled=learning_enabled)
     if runtime is None:
         return None
 
     _SESSION_RUNTIME_CACHE[session_id] = SessionRuntimeEntry(
         worker_id=str(worker['id']),
         worker_type=str(worker.get('type', 'Agent')),
-        model_ref=str(model_ref),
+        model_ref=model_ref or '',
+        learning_enabled=learning_enabled,
         runtime=runtime,
         created_at=now,
         last_used_at=now,
@@ -573,6 +592,7 @@ def list_sessions(worker_id: str, agent_os: Any | None = None) -> list[dict[str,
             'title': ws.get('title', '') or 'Untitled',
             'workspaces': _extract_session_workspaces(agno_s) if agno_s else None,
             'modelOverride': ws.get('model_override'),
+            'learningEnabled': _parse_learning_enabled(ws.get('learning_enabled')),
             'createdAt': ws.get('created_at', ''),
             'updatedAt': str(getattr(agno_s, 'updated_at', '')) if agno_s and getattr(agno_s, 'updated_at', None) else ws.get('updated_at', ''),
             'runCount': int((seg or {}).get('run_count') or len(getattr(agno_s, 'runs', None) or [])),
@@ -601,6 +621,7 @@ def list_sessions(worker_id: str, agent_os: Any | None = None) -> list[dict[str,
                 'title': title or 'Untitled',
                 'workspaces': _extract_session_workspaces(agno_s),
                 'modelOverride': None,
+                'learningEnabled': None,
                 'createdAt': str(getattr(agno_s, 'created_at', '')),
                 'updatedAt': str(getattr(agno_s, 'updated_at', '') or getattr(agno_s, 'created_at', '')),
                 'runCount': len(getattr(agno_s, 'runs', None) or []),
@@ -658,6 +679,7 @@ def create_session(worker_id: str, title: str, workspaces: list[str] | None = No
         'title': title,
         'workspaces': workspaces,
         'modelOverride': None,
+        'learningEnabled': None,
         'createdAt': now,
     }
 
@@ -697,6 +719,7 @@ def get_session(session_id: str, agent_os: Any | None = None) -> dict[str, Any] 
         'title': title,
         'workspaces': workspaces,
         'modelOverride': model_override,
+        'learningEnabled': _parse_learning_enabled(ws.get('learning_enabled') if ws else None),
         'createdAt': created_at,
         'updatedAt': updated_at,
     }
@@ -715,6 +738,14 @@ def update_session(session_id: str, payload: dict[str, Any], agent_os: Any | Non
     if 'modelOverride' in payload:
         model_override = payload.get('modelOverride')
         session_updates['model_override'] = str(model_override).strip() if model_override else None
+        clear_session_runtime_cache(session_id)
+    if 'learningEnabled' in payload:
+        val = payload.get('learningEnabled')
+        # Store as 'true'/'false'/None string in DB
+        if val is None:
+            session_updates['learning_enabled'] = None
+        else:
+            session_updates['learning_enabled'] = 'true' if val else 'false'
         clear_session_runtime_cache(session_id)
 
     if ws is not None and session_updates:
