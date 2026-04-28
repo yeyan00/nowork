@@ -760,6 +760,7 @@ export interface WikiSyncResult {
   id: string;
   pages_written: number;
   pages: string[];
+  cancelled?: boolean;
 }
 
 export interface WikiIngestResult {
@@ -820,6 +821,12 @@ export async function syncWikiKnowledgeBase(id: string, signal?: AbortSignal): P
   const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}/sync`, { method: 'POST', signal });
   if (!response.ok) throw new Error('Failed to sync wiki knowledge base');
   return (await response.json()) as WikiSyncResult;
+}
+
+export async function cancelWikiSync(id: string): Promise<{ ok: boolean }> {
+  const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}/sync/cancel`, { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to cancel sync');
+  return (await response.json()) as { ok: boolean };
 }
 
 export async function ingestWikiFiles(id: string, files: string[], force = false): Promise<WikiIngestResult> {

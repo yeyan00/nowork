@@ -19,6 +19,37 @@ from app.wiki.prompts import (
 logger = logging.getLogger('nowork')
 
 
+# ── Sync Cancellation ───────────────────────────────────────────
+
+_sync_cancel_flags: dict[str, bool] = {}
+
+
+def request_sync_cancel(kb_id: str) -> None:
+    """Mark a running sync for cancellation."""
+    _sync_cancel_flags[kb_id] = True
+    logger.info('Sync cancellation requested for kb %s', kb_id)
+
+
+def _check_cancelled(kb_id: str) -> bool:
+    """Check if sync was cancelled. Raises SyncCancelled if so."""
+    if _sync_cancel_flags.get(kb_id):
+        logger.info('Sync cancelled for kb %s', kb_id)
+        raise SyncCancelled(kb_id)
+    return False
+
+
+def clear_sync_cancel(kb_id: str) -> None:
+    """Clear cancellation flag (called when sync starts or ends)."""
+    _sync_cancel_flags.pop(kb_id, None)
+
+
+class SyncCancelled(Exception):
+    """Raised when a sync is cancelled by the user."""
+    def __init__(self, kb_id: str):
+        self.kb_id = kb_id
+        super().__init__(f'Sync cancelled for {kb_id}')
+
+
 # ── FILE Block Parsing ──────────────────────────────────────────
 
 FILE_OPENER = re.compile(r'^---\s*FILE:\s*(.+?)\s*---\s*$', re.IGNORECASE)
@@ -85,8 +116,13 @@ async def ingest_file(kb_id: str, source_path: str, model: Any,
 
     Returns:
         List of written Wiki page paths.
+
+    Raises:
+        SyncCancelled: If the sync was cancelled by the user.
     """
     from agno.agent import Agent
+
+    _check_cancelled(kb_id)
 
     repo = WikiRepository(kb_id)
     cache = WikiCache(repo.cache_dir)
@@ -97,6 +133,8 @@ async def ingest_file(kb_id: str, source_path: str, model: Any,
         if cached is not None:
             logger.info('Cache hit for %s, skipping', source_path)
             return cached.get('files', [])
+
+    _check_cancelled(kb_id)
 
     # 2. Extract text
     text = extract_text(source_path)
@@ -115,7 +153,9 @@ async def ingest_file(kb_id: str, source_path: str, model: Any,
     overview = repo.read_overview()
     file_name = Path(source_path).name
 
-    # 4. Step 1: Analysis
+    _check_cancelled(kb_id)
+
+    # 4. Step 1: Analysis (expensive LLM call)
     analyst = Agent(
         name='wiki-analyst',
         model=model,
@@ -125,7 +165,9 @@ async def ingest_file(kb_id: str, source_path: str, model: Any,
         ingest_run_message(locale, file_name) + text,
     )
 
-    # 5. Step 2: Generation
+    _check_cancelled(kb_id)
+
+    # 5. Step 2: Generation (expensive LLM call)
     generator = Agent(
         name='wiki-generator',
         model=model,
@@ -136,6 +178,8 @@ async def ingest_file(kb_id: str, source_path: str, model: Any,
     generation = await generator.arun(
         ingest_generate_message(locale, file_name, analysis.content, text),
     )
+
+    _check_cancelled(kb_id)
 
     # 6. Parse and write
     blocks = parse_file_blocks(generation.content)
@@ -175,8 +219,14 @@ async def sync_knowledge_base(kb_id: str, model: Any,
 
     Returns:
         List of all written Wiki page paths.
+
+    Raises:
+        SyncCancelled: If the sync was cancelled by the user.
     """
     from app.config import load_knowledge_config, list_knowledge_refs
+
+    # Clear any stale cancel flag from a previous run
+    clear_sync_cancel(kb_id)
 
     # Find the knowledge base config
     kb_cfg = None
@@ -204,14 +254,17 @@ async def sync_knowledge_base(kb_id: str, model: Any,
 
     logger.info('Found %d changed files for kb %s', len(changed), kb_id)
 
-    # Serial ingest
+    # Serial ingest — check cancellation between each file
     all_written: list[str] = []
     for file_path in changed:
+        _check_cancelled(kb_id)
         try:
             written = await ingest_file(
                 kb_id, file_path, model, force=force, locale=locale,
             )
             all_written.extend(written)
+        except SyncCancelled:
+            raise  # propagate to caller
         except Exception as e:
             logger.error('Failed to ingest %s: %s', file_path, e)
 

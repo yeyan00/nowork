@@ -9,6 +9,7 @@ import {
   updateKnowledgeBase,
   reloadKnowledgeBase,
   syncWikiKnowledgeBase,
+  cancelWikiSync,
   listWikiPages,
   readWikiPage,
   writeWikiPage,
@@ -182,11 +183,15 @@ export function KnowledgePage() {
 
   const handleSync = useCallback(async () => {
     if (!selectedId) return;
-    // If already syncing, cancel
+    // If already syncing, cancel via backend + abort fetch
     if (_activeSyncAbort) {
-      _activeSyncAbort.abort();
+      const ac = _activeSyncAbort;
       _activeSyncAbort = null;
+      ac.abort();
       setSyncing(false);
+      try {
+        await cancelWikiSync(selectedId);
+      } catch { /* best effort */ }
       return;
     }
 
@@ -203,15 +208,18 @@ export function KnowledgePage() {
 
       const result = await syncWikiKnowledgeBase(selectedId, ac.signal);
       loadWikiData();
-      alert(`Synced: ${result.pages_written} pages written`);
+      if (result.cancelled) {
+        alert('Sync cancelled.');
+      } else {
+        alert(`Synced: ${result.pages_written} pages written`);
+      }
     } catch (e: any) {
       if (e.name === 'AbortError') {
-        // User cancelled — no alert needed
+        // Frontend aborted — backend cancel was already called above
       } else {
         alert('Sync failed: ' + e.message);
       }
     } finally {
-      // Only clear if this is still the active controller
       if (_activeSyncAbort === ac) {
         _activeSyncAbort = null;
       }

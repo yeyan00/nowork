@@ -587,9 +587,20 @@ async def api_sync_knowledge(knowledge_id: str, request: Request):
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail=f'Model error: {e}')
 
-    from app.wiki.ingest import sync_knowledge_base
-    written = await sync_knowledge_base(knowledge_id, model)
+    from app.wiki.ingest import sync_knowledge_base, SyncCancelled
+    try:
+        written = await sync_knowledge_base(knowledge_id, model)
+    except SyncCancelled:
+        return {'ok': True, 'id': knowledge_id, 'cancelled': True, 'pages_written': 0, 'pages': []}
     return {'ok': True, 'id': knowledge_id, 'pages_written': len(written), 'pages': written}
+
+
+@app.post('/api/knowledge/{knowledge_id}/sync/cancel')
+async def api_cancel_sync(knowledge_id: str):
+    """Cancel a running sync."""
+    from app.wiki.ingest import request_sync_cancel
+    request_sync_cancel(knowledge_id)
+    return {'ok': True, 'id': knowledge_id}
 
 
 @app.post('/api/knowledge/{knowledge_id}/ingest')
