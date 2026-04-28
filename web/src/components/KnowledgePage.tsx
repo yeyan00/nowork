@@ -54,6 +54,7 @@ export function KnowledgePage() {
   const [wikiPages, setWikiPages] = useState<WikiPageSummary[]>([]);
   const [wikiStats, setWikiStats] = useState<WikiStats | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [syncAbortRef, setSyncAbortRef] = useState<AbortController | null>(null);
   const [selectedPagePath, setSelectedPagePath] = useState<string | null>(null);
   const [pageContent, setPageContent] = useState<WikiPage | null>(null);
   const [editingPage, setEditingPage] = useState(false);
@@ -177,17 +178,41 @@ export function KnowledgePage() {
     void reloadKnowledgeBase(id).catch(() => {});
   }, []);
 
-  const handleSync = useCallback(() => {
+  const handleSync = useCallback(async () => {
     if (!selectedId) return;
+    // If already syncing, cancel
+    if (syncAbortRef) {
+      syncAbortRef.abort();
+      setSyncAbortRef(null);
+      setSyncing(false);
+      return;
+    }
+
+    // Save language to backend first, then sync
     setSyncing(true);
-    void syncWikiKnowledgeBase(selectedId)
-      .then((result) => {
-        loadWikiData();
-        alert(`Synced: ${result.pages_written} pages written`);
-      })
-      .catch((e) => alert('Sync failed: ' + e.message))
-      .finally(() => setSyncing(false));
-  }, [selectedId, loadWikiData]);
+    const ac = new AbortController();
+    setSyncAbortRef(ac);
+
+    try {
+      // Save language setting before sync so backend reads the correct locale
+      await updateKnowledgeBase(selectedId, { language });
+      // Update local items list to reflect saved language
+      setItems((prev) => prev.map((kb) => (kb.id === selectedId ? { ...kb, language } : kb)));
+
+      const result = await syncWikiKnowledgeBase(selectedId, ac.signal);
+      loadWikiData();
+      alert(`Synced: ${result.pages_written} pages written`);
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+        // User cancelled — no alert needed
+      } else {
+        alert('Sync failed: ' + e.message);
+      }
+    } finally {
+      setSyncing(false);
+      setSyncAbortRef(null);
+    }
+  }, [selectedId, language, syncAbortRef, loadWikiData]);
 
   const handleSavePage = useCallback(() => {
     if (!selectedId || !selectedPagePath) return;
@@ -429,13 +454,21 @@ export function KnowledgePage() {
                     <option value="sources">Sources</option>
                     <option value="queries">Queries</option>
                   </select>
+                  <select
+                    className="settings-select"
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    title={t('knowledge.ingestLanguageHint')}
+                  >
+                    <option value="en">EN</option>
+                    <option value="zh">中文</option>
+                  </select>
                   <button
                     type="button"
-                    className="secondary-button"
-                    disabled={syncing}
+                    className={syncing ? 'danger-button' : 'secondary-button'}
                     onClick={handleSync}
                   >
-                    {syncing ? t('knowledge.syncing') : t('knowledge.sync')}
+                    {syncing ? t('knowledge.cancelSync') : t('knowledge.sync')}
                   </button>
                   <button
                     type="button"

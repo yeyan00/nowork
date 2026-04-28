@@ -258,6 +258,7 @@
     "tabGraph": "Graph",
     "sync": "Sync",
     "syncing": "Syncing...",
+    "cancelSync": "Cancel",
     "ingestFiles": "Ingest Files",
     "pages": "pages",
     "searchPlaceholder": "Search wiki pages...",

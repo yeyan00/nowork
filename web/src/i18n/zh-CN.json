@@ -258,6 +258,7 @@
     "tabGraph": "图谱",
     "sync": "同步",
     "syncing": "同步中...",
+    "cancelSync": "取消",
     "ingestFiles": "导入文件",
     "pages": "个页面",
     "searchPlaceholder": "搜索 Wiki 页面...",

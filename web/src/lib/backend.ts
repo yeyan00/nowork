@@ -816,8 +816,8 @@ export async function reloadKnowledgeBase(id: string): Promise<{ ok: boolean }> 
 // Wiki Knowledge APIs
 // =============================================================================
 
-export async function syncWikiKnowledgeBase(id: string): Promise<WikiSyncResult> {
-  const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}/sync`, { method: 'POST' });
+export async function syncWikiKnowledgeBase(id: string, signal?: AbortSignal): Promise<WikiSyncResult> {
+  const response = await fetchFromApi(`/api/knowledge/${encodeURIComponent(id)}/sync`, { method: 'POST', signal });
   if (!response.ok) throw new Error('Failed to sync wiki knowledge base');
   return (await response.json()) as WikiSyncResult;
 }
