@@ -512,16 +512,13 @@ def _build_team_messages(runtime: Any, agno_session_id: str, worker_name: str | 
 
 def list_workers(worker_type: str | None = None, agent_os: Any | None = None) -> list[dict[str, Any]]:
     workers = repository.list_workers(worker_type)
+
+    # Batch-fetch recent timestamps for all workers in one query (avoids N+1)
+    worker_ids = [str(w.get('id', '')) for w in workers]
+    recent_map = session_manager.get_workers_recent_batch(worker_ids)
     for worker in workers:
-        sessions = list_sessions(str(worker.get('id', '')), agent_os=agent_os)
-        worker['recent'] = next(
-            (
-                session.get('updatedAt') or ''
-                for session in sessions
-                if int(session.get('runCount') or 0) > 0 and (session.get('updatedAt') or '')
-            ),
-            '',
-        )
+        worker['recent'] = recent_map.get(str(worker.get('id', '')), '')
+
     workers.sort(key=lambda worker: (str(worker.get('recent') or ''), str(worker.get('name') or '')), reverse=True)
     return workers
 

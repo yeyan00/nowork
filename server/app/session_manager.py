@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine, Index, text
+from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine, Index, text, func
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.config import get_compaction_config, get_session_config, resolve_server_root, load_config
@@ -332,6 +332,40 @@ def _serialize_worker_session(ws: WorkerSessionRow) -> dict[str, Any]:
 
 
 # =============================================================================
+def get_workers_recent_batch(worker_ids: list[str]) -> dict[str, str]:
+    """Get the most recent session update time for each worker in one query.
+
+    Returns {worker_id: updated_at_iso} for workers that have at least one
+    session with run_count > 0.  Workers with no matching sessions are omitted.
+    """
+    if not worker_ids:
+        return {}
+
+    db = get_db_session()
+    try:
+        # Join worker_sessions + session_segments, filter by run_count > 0,
+        # group by worker_id, pick the latest updated_at per worker.
+        rows = (db.query(
+                    WorkerSessionRow.worker_id,
+                    func.max(WorkerSessionRow.updated_at),
+                )
+                .join(SessionSegmentRow,
+                      SessionSegmentRow.worker_session_id == WorkerSessionRow.id)
+                .filter(
+                    WorkerSessionRow.worker_id.in_(worker_ids),
+                    SessionSegmentRow.run_count > 0,
+                )
+                .group_by(WorkerSessionRow.worker_id)
+                .all())
+
+        return {
+            row[0]: row[1].isoformat() if row[1] else ''
+            for row in rows
+        }
+    finally:
+        db.close()
+
+
 # SessionSegment CRUD
 # =============================================================================
 
