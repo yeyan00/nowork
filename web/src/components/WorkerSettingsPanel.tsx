@@ -422,7 +422,7 @@ export function WorkerSettingsPanel({
                   Description
                   <button
                     type="button"
-                    title="Auto-translate description to Chinese"
+                    title={t('workerSettings.translateDesc')}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, opacity: translating ? 0.5 : 0.7 }}
                     disabled={translating || !description.trim()}
                     onClick={() => void (async () => {
@@ -444,7 +444,7 @@ export function WorkerSettingsPanel({
               {/* Editable localized description */}
               {i18n?.['zh-CN']?.description && (
                 <label className="settings-label" style={{ marginTop: 4 }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>中文描述</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('workerSettings.zhDesc')}</span>
                   <input
                     className="settings-input"
                     style={{ borderColor: 'var(--accent-color, #4a9eff)' }}

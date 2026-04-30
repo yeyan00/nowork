@@ -137,6 +137,8 @@
     "noKnowledge": "没有知识库。",
     "skills": "技能",
     "noSkills": "没有可用的技能",
+    "translateDesc": "自动翻译为中文",
+    "zhDesc": "中文描述",
     "learning": "学习",
     "learnedData": "已学数据",
     "profile": "画像",

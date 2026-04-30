@@ -137,6 +137,8 @@
     "noKnowledge": "No knowledge bases.",
     "skills": "Skills",
     "noSkills": "No skills available",
+    "translateDesc": "Auto-translate to Chinese",
+    "zhDesc": "Chinese Description",
     "learning": "Learning",
     "learnedData": "Learned Data",
     "profile": "Profile",
