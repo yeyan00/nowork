@@ -84,3 +84,4 @@ scripts/build-local.ps1
 scripts/build-local.cmd
 scripts/build-update-test.ps1
 NUL
+scripts/package-allowlist.txt
