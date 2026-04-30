@@ -47,6 +47,7 @@ class PrerequisiteStep:
                 result = subprocess.run(
                     [self.check_cmd, *self.version_args],
                     capture_output=True, text=True, timeout=10,
+                    shell=True,  # Required for .CMD wrappers on Windows
                 )
                 # Some CLIs output version to stderr (e.g., npm wrappers on Windows)
                 output = (result.stdout or '').strip()
