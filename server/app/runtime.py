@@ -531,14 +531,15 @@ def _build_pi_agent_sync(raw: dict[str, Any]) -> Any:
     """Build a PiAgent from worker config."""
     from agno.agents.pi import PiAgent
     block = _extract_block(raw)
+    model_str = raw.get('model', '')
     return PiAgent(
         id=block.get('id', raw.get('id', '')),
         name=block.get('name', raw.get('name', '')),
         provider=block.get('provider'),
-        model=block.get('model'),
+        model=model_str or None,
         system_prompt=block.get('instructions'),
         thinking=block.get('thinking'),
-        tools=block.get('tools'),
+        tools=block.get('thinking_config'),  # Pi-specific config key
         no_tools=block.get('no_tools', False),
         session_dir=block.get('session_dir'),
         extra_args=block.get('extra_args', []),
@@ -549,11 +550,12 @@ def _build_claude_agent_sync(raw: dict[str, Any]) -> Any:
     """Build a ClaudeAgent from worker config."""
     from agno.agents.claude import ClaudeAgent
     block = _extract_block(raw)
+    model_str = raw.get('model', '')
     return ClaudeAgent(
         id=block.get('id', raw.get('id', '')),
         name=block.get('name', raw.get('name', '')),
         system_prompt=block.get('instructions'),
-        model=block.get('model'),
+        model=model_str or None,
         allowed_tools=block.get('allowed_tools'),
         disallowed_tools=block.get('disallowed_tools'),
         permission_mode=block.get('permission_mode'),
@@ -567,10 +569,11 @@ def _build_opencode_agent_sync(raw: dict[str, Any]) -> Any:
     """Build an OpenCodeAgent from worker config."""
     from agno.agents.opencode import OpenCodeAgent
     block = _extract_block(raw)
+    model_str = raw.get('model', '')
     return OpenCodeAgent(
         id=block.get('id', raw.get('id', '')),
         name=block.get('name', raw.get('name', '')),
-        model=block.get('model'),
+        model=model_str or None,
         agent=block.get('agent'),
         cwd=block.get('cwd'),
         permission_mode=block.get('permission_mode'),
