@@ -565,11 +565,15 @@ def list_sessions(worker_id: str, agent_os: Any | None = None) -> list[dict[str,
                 except Exception:
                     pass
 
+    # Batch-fetch active segments for all WorkerSessions (avoids N+1)
+    ws_ids = [ws['id'] for ws in ws_rows]
+    seg_map = session_manager.get_active_segments_batch(ws_ids)
+
     # Build agno_session_id → WorkerSession mapping
     # so we can match agno sessions to their WorkerSession
     agno_to_ws: dict[str, dict] = {}
     for ws in ws_rows:
-        seg = session_manager.get_active_segment(ws['id'])
+        seg = seg_map.get(ws['id'])
         if seg:
             agno_to_ws[seg['agno_session_id']] = ws
 
@@ -579,7 +583,7 @@ def list_sessions(worker_id: str, agent_os: Any | None = None) -> list[dict[str,
     # 1. WorkerSession entries (with agno metadata enrichment)
     for ws in ws_rows:
         seen_ws_ids.add(ws['id'])
-        seg = session_manager.get_active_segment(ws['id'])
+        seg = seg_map.get(ws['id'])
         agno_sid = seg['agno_session_id'] if seg else None
         agno_s = agno_sessions.get(agno_sid) if agno_sid else None
 

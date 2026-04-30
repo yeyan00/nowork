@@ -385,6 +385,39 @@ def get_active_segment(ws_id: str) -> dict[str, Any] | None:
         db.close()
 
 
+def get_active_segments_batch(ws_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """Get active segments for multiple WorkerSessions in one query.
+
+    Returns {ws_id: segment_dict} for sessions that have an active segment.
+    """
+    if not ws_ids:
+        return {}
+
+    db = get_db_session()
+    try:
+        # Subquery: latest segment_order per worker_session_id (status='active')
+        subq = (db.query(
+                    SessionSegmentRow.worker_session_id,
+                    func.max(SessionSegmentRow.segment_order).label('max_order'),
+                )
+                .filter(
+                    SessionSegmentRow.worker_session_id.in_(ws_ids),
+                    SessionSegmentRow.status == 'active',
+                )
+                .group_by(SessionSegmentRow.worker_session_id)
+                .subquery())
+
+        # Join back to get the full row
+        rows = (db.query(SessionSegmentRow)
+                .join(subq, (SessionSegmentRow.worker_session_id == subq.c.worker_session_id) &
+                             (SessionSegmentRow.segment_order == subq.c.max_order))
+                .all())
+
+        return {seg.worker_session_id: _serialize_segment(seg) for seg in rows}
+    finally:
+        db.close()
+
+
 def get_compacted_segments(ws_id: str, limit: int | None = None) -> list[dict[str, Any]]:
     """Get compacted segments for summary injection, ordered by segment_order."""
     db = get_db_session()

@@ -1,8 +1,13 @@
-"""Knowledge graph builder — extract nodes and edges from Wiki [[wikilink]] syntax."""
+"""Knowledge graph builder — extract nodes and edges from Wiki [[wikilink]] syntax.
+
+Single-pass implementation: traverses all .md files once to build nodes
+and collect edges simultaneously.
+"""
 
 from __future__ import annotations
 
 import logging
+import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -22,9 +27,11 @@ TYPE_COLORS: dict[str, str] = {
 
 DEFAULT_COLOR = '#8492aa'
 
+WIKILINK_RE = re.compile(r'\[\[([^\]]+)\]\]')
+
 
 def build_graph(kb_id: str) -> dict[str, Any]:
-    """Build the knowledge graph's nodes and edges.
+    """Build the knowledge graph's nodes and edges in a single file traversal.
 
     Returns:
         {
@@ -40,11 +47,14 @@ def build_graph(kb_id: str) -> dict[str, Any]:
 
     page_id_to_path: dict[str, str] = {}
     node_map: dict[str, dict[str, Any]] = {}
+    edges: list[dict[str, str]] = []
+    has_incoming: set[str] = set()
 
+    # -- Single pass: build nodes and edges simultaneously --
     for md_file in wiki_dir.rglob('*.md'):
         rel = f"wiki/{md_file.relative_to(wiki_dir).as_posix()}"
         content = md_file.read_text(encoding='utf-8', errors='replace')
-        meta, body = _parse_frontmatter(content)
+        meta, _body = _parse_frontmatter(content)
 
         page_id = md_file.stem
         page_type = str(meta.get('type', 'other'))
@@ -59,36 +69,31 @@ def build_graph(kb_id: str) -> dict[str, Any]:
             'group': TYPE_COLORS.get(page_type, DEFAULT_COLOR),
         }
 
-    all_links = repo.collect_all_links()
-
-    edges: list[dict[str, str]] = []
-    has_incoming: set[str] = set()
-
-    for source_path, targets in all_links.items():
-        source_id = Path(source_path).stem
+        # Collect edges from this page's wikilinks
+        targets = WIKILINK_RE.findall(content)
         for target in targets:
-            if target in page_id_to_path:
+            if target in page_id_to_path or target in node_map:
                 edges.append({
-                    'source': source_id,
+                    'source': page_id,
                     'target': target,
-                    'source_path': source_path,
+                    'source_path': rel,
                 })
                 has_incoming.add(target)
             else:
-                target_node = {
-                    'id': target,
-                    'title': target,
-                    'type': 'missing',
-                    'path': '',
-                    'group': '#e53935',
-                }
+                # Missing target — create placeholder node
                 if target not in node_map:
-                    node_map[target] = target_node
+                    node_map[target] = {
+                        'id': target,
+                        'title': target,
+                        'type': 'missing',
+                        'path': '',
+                        'group': '#e53935',
+                    }
                     page_id_to_path[target] = ''
                 edges.append({
-                    'source': source_id,
+                    'source': page_id,
                     'target': target,
-                    'source_path': source_path,
+                    'source_path': rel,
                 })
                 has_incoming.add(target)
 
