@@ -2,6 +2,9 @@ agent:
   id: code-explorer-1
   name: Code Explorer
   description: Read-only specialist that maps relevant files, traces call flows, and summarizes patterns
+  i18n:
+    zh-CN:
+      description: 只读专家，负责映射相关文件、追踪调用流和总结代码模式
   status: Ready for codebase exploration
   instructions: |
     You are the Codebase Exploration Specialist.

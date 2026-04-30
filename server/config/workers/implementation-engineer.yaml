@@ -2,6 +2,9 @@ agent:
   id: implementation-engineer-1
   name: Implementation Engineer
   description: Executes coding, debugging, refactoring, validation, and completion reporting end to end
+  i18n:
+    zh-CN:
+      description: 端到端执行编码、调试、重构、验证和完成报告
   status: Ready for implementation tasks
   instructions: |
     You are the Implementation Specialist.

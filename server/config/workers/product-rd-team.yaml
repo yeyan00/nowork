@@ -6,6 +6,9 @@ team:
     and documentation research. The team leader acts as an orchestrator: classify
     intent, delegate to the right specialist, verify outputs, and synthesize the
     final response.
+  i18n:
+    zh-CN:
+      description: 协调规划、实施、架构评审、代码探索和文档研究。团队负责人作为调度中心：分类意图、分派给合适的专家、验证结果并综合最终响应
   instructions: |
     You are the R&D Team Leader.
 

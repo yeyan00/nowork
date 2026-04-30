@@ -16,6 +16,7 @@ export interface WorkerSummary {
   name: string;
   type: WorkerType;
   agentType?: string;
+  i18n?: Record<string, { description?: string }>;
   description: string;
   status: string;
   recent: string;

@@ -2,6 +2,11 @@ import { useMemo, useState } from 'react';
 import { useI18n } from '../i18n';
 import type { WorkerSummary } from '../types';
 
+/** Get localized description from i18n map, fallback to default description. */
+function getLocalizedDesc(worker: WorkerSummary, locale: string): string {
+  return worker.i18n?.[locale]?.description || worker.description;
+}
+
 interface WorkerListProps {
   workers: WorkerSummary[];
   activeWorkerId?: string;
@@ -57,7 +62,7 @@ export function WorkerList({ workers, activeWorkerId, runningWorkerIds = new Set
     const keyword = query.trim().toLowerCase();
     if (!keyword) return workers;
     return workers.filter((worker) => {
-      const haystack = [worker.name, worker.description, worker.type]
+      const haystack = [worker.name, worker.description, getLocalizedDesc(worker, locale), worker.type]
         .join(' ')
         .toLowerCase();
       return haystack.includes(keyword);
@@ -111,7 +116,7 @@ export function WorkerList({ workers, activeWorkerId, runningWorkerIds = new Set
                   <strong className="worker-name" title={worker.name}>{worker.name}</strong>
                   {runningWorkerIds.has(worker.id) && <span className="worker-running-dot" aria-label="Worker is running" />}
                 </div>
-                <span className="worker-summary" title={worker.description}>{worker.description}</span>
+                <span className="worker-summary" title={getLocalizedDesc(worker, locale)}>{getLocalizedDesc(worker, locale)}</span>
                 {recentLabel && (
                   <span className="worker-recent" title={worker.recent || recentLabel}>
                     {recentLabel}

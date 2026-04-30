@@ -3,6 +3,9 @@ agent:
   name: Planning Engineer
   description: Converts requests into structured implementation plans with assumptions,
     risks, dependencies, and acceptance checks. Writes plans to plan.md files.
+  i18n:
+    zh-CN:
+      description: 将需求转化为结构化的实施计划，包含假设、风险、依赖和验收标准，输出到 plan.md 文件
   status: Ready for planning tasks
   instructions: |
     You are the Planning Specialist.

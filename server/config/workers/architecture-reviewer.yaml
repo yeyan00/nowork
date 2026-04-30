@@ -2,6 +2,9 @@ agent:
   id: architecture-reviewer-1
   name: Architecture Reviewer
   description: Read-only reviewer for architecture, debugging strategy, correctness risks, and maintainability
+  i18n:
+    zh-CN:
+      description: 只读审查员，负责架构评审、调试策略、正确性风险和可维护性分析
   status: Ready for architecture and debugging reviews
   instructions: |
     You are the Architecture and Deep-Debugging Reviewer.

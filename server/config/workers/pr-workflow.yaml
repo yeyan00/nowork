@@ -2,6 +2,9 @@ workflow:
   id: pr-workflow-1
   name: PR Workflow
   description: Spec -> prototype -> review -> ship
+  i18n:
+    zh-CN:
+      description: 规格说明 → 原型开发 → 代码审查 → 发布上线
 
 
 database:

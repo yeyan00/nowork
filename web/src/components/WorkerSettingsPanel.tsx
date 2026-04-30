@@ -24,6 +24,7 @@ import {
   listModels,
   listSkills,
   listToolsCatalog,
+  translateText,
   updateUserMemory,
   updateWorker,
 } from '../lib/backend';
@@ -114,6 +115,8 @@ export function WorkerSettingsPanel({
   const [installOutput, setInstallOutput] = useState<string[]>([]);
   const [installing, setInstalling] = useState(false);
   const installAbortRef = useRef<AbortController | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [i18n, setI18n] = useState<Record<string, { description?: string }>>({});
 
   // Load catalogs once
   useEffect(() => {
@@ -143,6 +146,7 @@ export function WorkerSettingsPanel({
     setSelectedSkills((cfg['skills'] as string[]) ?? []);
     setModelRef((cfg['model'] as string) ?? '');
     setAgentType((worker as unknown as Record<string, unknown>).agentType as string ?? 'agno');
+    setI18n((worker as unknown as { i18n?: Record<string, { description?: string }> }).i18n ?? {});
 
     const wsRaw = (cfg['workspaces'] as Array<Record<string, string>>) ?? [];
     setWorkspaces(wsRaw.map((w) => ({ path: w.path, permission: w.permission })));
@@ -256,6 +260,7 @@ export function WorkerSettingsPanel({
       const saved = await updateWorker(worker.id, {
         name, description,
         agentType: agentType !== 'agno' ? agentType : undefined,
+        i18n: Object.keys(i18n).length > 0 ? i18n : undefined,
         config: {
           model: modelRef || undefined,
           instructions: instructions || undefined,
@@ -412,7 +417,45 @@ export function WorkerSettingsPanel({
 
             <div className="settings-form">
               <label className="settings-label">Name<input className="settings-input" value={name} onChange={(e) => { setName(e.target.value); markDirty(); }} /></label>
-              <label className="settings-label">Description<input className="settings-input" value={description} onChange={(e) => { setDescription(e.target.value); markDirty(); }} /></label>
+              <label className="settings-label">
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  Description
+                  <button
+                    type="button"
+                    title="Auto-translate description to Chinese"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, opacity: translating ? 0.5 : 0.7 }}
+                    disabled={translating || !description.trim()}
+                    onClick={() => void (async () => {
+                      setTranslating(true);
+                      try {
+                        const zh = await translateText(description, 'zh-CN');
+                        setI18n((prev) => ({ ...prev, 'zh-CN': { ...prev['zh-CN'], description: zh } }));
+                        markDirty();
+                      } catch (e) {
+                        console.error('Translation failed:', e);
+                      } finally {
+                        setTranslating(false);
+                      }
+                    })()}
+                  >🌐</button>
+                </span>
+                <input className="settings-input" value={description} onChange={(e) => { setDescription(e.target.value); markDirty(); }} />
+              </label>
+              {/* Editable localized description */}
+              {i18n?.['zh-CN']?.description && (
+                <label className="settings-label" style={{ marginTop: 4 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>中文描述</span>
+                  <input
+                    className="settings-input"
+                    style={{ borderColor: 'var(--accent-color, #4a9eff)' }}
+                    value={i18n['zh-CN'].description}
+                    onChange={(e) => {
+                      setI18n((prev) => ({ ...prev, 'zh-CN': { ...prev['zh-CN'], description: e.target.value } }));
+                      markDirty();
+                    }}
+                  />
+                </label>
+              )}
             </div>
             {/* Hide instructions for opencode (doesn't support system prompts) */}
             {!(agentType === 'opencode') && (

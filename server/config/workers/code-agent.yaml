@@ -2,6 +2,9 @@ agent:
   id: code-agent-1
   name: Code Agent
   description: Handles coding and debugging tasks
+  i18n:
+    zh-CN:
+      description: 处理编码和调试任务
   instructions: 'You are a skilled software developer.
 
     Help users with coding, debugging, and technical questions.

@@ -1063,3 +1063,17 @@ export async function installPrerequisite(command: string): Promise<Response> {
     body: JSON.stringify({ command }),
   });
 }
+
+// =============================================================================
+// Translation
+// =============================================================================
+
+export async function translateText(text: string, targetLang: string = 'zh-CN'): Promise<string> {
+  const response = await fetchFromApi('/api/translate', {
+    method: 'POST',
+    body: JSON.stringify({ text, target_lang: targetLang }),
+  });
+  if (!response.ok) throw new Error('Translation failed');
+  const data = await response.json() as { translated: string };
+  return data.translated;
+}

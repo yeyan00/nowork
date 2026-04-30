@@ -17,6 +17,7 @@ class WorkerUpdatePayload(BaseModel):
     description: Optional[str] = None
     status: Optional[str] = None
     agentType: Optional[str] = None
+    i18n: Optional[dict[str, Any]] = None
     config: dict[str, Any] = Field(default_factory=dict)
 
 

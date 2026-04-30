@@ -2,6 +2,9 @@ agent:
   id: doc-agent-1
   name: Doc Agent
   description: Handles documents, web research, and knowledge base queries
+  i18n:
+    zh-CN:
+      description: 处理文档、网络搜索和知识库查询
   instructions: 'You are a document and web research specialist.
 
     You can create, edit and analyze Word (.docx), PDF, Excel (.xlsx), and PowerPoint

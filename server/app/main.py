@@ -813,6 +813,46 @@ async def api_install_prerequisite(payload: dict[str, object]):
 # =============================================================================
 
 
+@app.post('/api/translate')
+async def api_translate(payload: dict[str, object]):
+    """Translate text using the configured LLM."""
+    text = payload.get('text', '')
+    target_lang = payload.get('target_lang', 'zh-CN')
+    if not text or not isinstance(text, str):
+        raise HTTPException(status_code=400, detail='text is required')
+
+    lang_map = {'zh-CN': 'Chinese', 'en': 'English', 'ja': 'Japanese', 'ko': 'Korean'}
+    target_name = lang_map.get(target_lang, target_lang)
+
+    try:
+        from agno.models.openai import OpenAIChat
+        from app.config import get_full_model_config
+
+        model_cfg = get_full_model_config()
+        model = OpenAIChat(
+            id=model_cfg.get('model_id', 'gpt-4o-mini'),
+            api_key=model_cfg.get('api_key', ''),
+            base_url=model_cfg.get('base_url'),
+        )
+
+        prompt = (
+            f'Translate the following text to {target_name}. '
+            f'Output ONLY the translation, no explanations, no quotes.\n\n{text}'
+        )
+
+        response = await model.ainvoke(prompt)
+        translated = response.strip() if response else text
+        return {'translated': translated}
+    except Exception as e:
+        logger.warning('Translation failed: %s', e)
+        raise HTTPException(status_code=500, detail=f'Translation failed: {e}')
+
+
+# =============================================================================
+# Session Compaction APIs
+# =============================================================================
+
+
 @app.get('/api/session-config')
 def api_get_session_config() -> dict[str, object]:
     return get_session_config_info()
