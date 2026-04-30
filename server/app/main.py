@@ -773,6 +773,42 @@ async def api_uninstall_extension(ext_id: str) -> dict[str, object]:
 
 
 # =============================================================================
+# Agent Types & Prerequisites
+# =============================================================================
+
+@app.get('/api/agent-types')
+def api_list_agent_types() -> list[dict[str, object]]:
+    from app.agent_types import get_agent_types
+    return get_agent_types()
+
+
+@app.get('/api/prerequisites/{agent_type}')
+def api_check_prerequisites(agent_type: str) -> dict[str, object]:
+    from app.prerequisites import check_prerequisites
+    result = check_prerequisites(agent_type)
+    return result
+
+
+@app.post('/api/prerequisites/install')
+async def api_install_prerequisite(payload: dict[str, object]):
+    from app.prerequisites import stream_install
+    command = payload.get('command', '')
+    if not command or not isinstance(command, str):
+        raise HTTPException(status_code=400, detail='command is required')
+
+    # Allowlist: only npm install, winget install, brew install
+    allowed_prefixes = ('npm install', 'winget install', 'brew install', 'curl ')
+    if not any(command.strip().startswith(p) for p in allowed_prefixes):
+        raise HTTPException(status_code=400, detail='Command not allowed')
+
+    return StreamingResponse(
+        stream_install(command),
+        media_type='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
+
+
+# =============================================================================
 # Session Compaction APIs
 # =============================================================================
 

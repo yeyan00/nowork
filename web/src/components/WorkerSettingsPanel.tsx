@@ -9,13 +9,16 @@
  * tools, MCP servers, knowledge bases) and manages all setting state internally.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import {
   addUserMemory,
+  checkPrerequisites,
   deleteUserMemory,
   getUserMemory,
   getUserProfile,
+  installPrerequisite,
+  listAgentTypes,
   listKnowledgeBases,
   listMCPServers,
   listModels,
@@ -24,6 +27,7 @@ import {
   updateUserMemory,
   updateWorker,
 } from '../lib/backend';
+import type { AgentTypeInfo, AgentTypeConfigField, PrerequisiteStatus } from '../lib/backend';
 import type { KnowledgeBase, MCPServer, ProviderInfo, SkillSummary, ToolCatalogEntry } from '../lib/backend';
 import type { WorkerSummary } from '../types';
 
@@ -103,6 +107,14 @@ export function WorkerSettingsPanel({
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [toolsCatalog, setToolsCatalog] = useState<ToolCatalogEntry[]>([]);
 
+  // Agent type
+  const [agentType, setAgentType] = useState('agno');
+  const [agentTypes, setAgentTypes] = useState<AgentTypeInfo[]>([]);
+  const [prereqStatus, setPrereqStatus] = useState<PrerequisiteStatus | null>(null);
+  const [installOutput, setInstallOutput] = useState<string[]>([]);
+  const [installing, setInstalling] = useState(false);
+  const installAbortRef = useRef<AbortController | null>(null);
+
   // Load catalogs once
   useEffect(() => {
     void listSkills().then(setAllSkills).catch(() => {});
@@ -110,7 +122,17 @@ export function WorkerSettingsPanel({
     void listToolsCatalog().then(setToolsCatalog).catch(() => {});
     void listMCPServers().then(setAllMCPServers).catch(() => {});
     void listKnowledgeBases().then(setAllKnowledgeBases).catch(() => {});
+    void listAgentTypes().then(setAgentTypes).catch(() => {});
   }, []);
+
+  // Check prerequisites when agentType changes
+  useEffect(() => {
+    if (agentType === 'agno') {
+      setPrereqStatus(null);
+      return;
+    }
+    void checkPrerequisites(agentType).then(setPrereqStatus).catch(() => setPrereqStatus(null));
+  }, [agentType]);
 
   // Load worker config
   useEffect(() => {
@@ -120,6 +142,7 @@ export function WorkerSettingsPanel({
     setInstructions((cfg['instructions'] as string) ?? '');
     setSelectedSkills((cfg['skills'] as string[]) ?? []);
     setModelRef((cfg['model'] as string) ?? '');
+    setAgentType((worker as unknown as Record<string, unknown>).agentType as string ?? 'agno');
 
     const wsRaw = (cfg['workspaces'] as Array<Record<string, string>>) ?? [];
     setWorkspaces(wsRaw.map((w) => ({ path: w.path, permission: w.permission })));
@@ -232,29 +255,43 @@ export function WorkerSettingsPanel({
     try {
       const saved = await updateWorker(worker.id, {
         name, description,
+        agentType: agentType !== 'agno' ? agentType : undefined,
         config: {
           model: modelRef || undefined,
           instructions: instructions || undefined,
-          skills: selectedSkills,
+          skills: agentType === 'agno' ? selectedSkills : undefined,
           workspaces: workspaces.length > 0 ? workspaces : undefined,
-          tools: buildToolsPayload().length > 0 ? buildToolsPayload() : undefined,
+          tools: agentType === 'agno' && buildToolsPayload().length > 0 ? buildToolsPayload() : undefined,
           members: worker.type === 'Team' && members.length > 0 ? members : undefined,
-          mcp: selectedMCPs,
-          knowledge: selectedKnowledge,
-          learning: { user_profile: learningUserProfile, user_memory: learningUserMemory, session_context: learningSessionContext, entity_memory: learningEntityMemory, decision_log: learningDecisionLog },
+          mcp: agentType === 'agno' || agentType === 'claude' ? selectedMCPs : undefined,
+          knowledge: agentType === 'agno' ? selectedKnowledge : undefined,
+          learning: agentType === 'agno' ? { user_profile: learningUserProfile, user_memory: learningUserMemory, session_context: learningSessionContext, entity_memory: learningEntityMemory, decision_log: learningDecisionLog } : undefined,
         },
       });
       setDirty(false);
       onSave?.(saved);
     } catch (e) { setSaveError(e instanceof Error ? e.message : 'Save failed'); } finally { setSaving(false); }
-  }, [worker.id, worker.type, name, description, modelRef, instructions, selectedSkills, workspaces, buildToolsPayload, members, selectedMCPs, selectedKnowledge, learningUserProfile, learningUserMemory, learningSessionContext, learningEntityMemory, learningDecisionLog, onSave]);
+  }, [worker.id, worker.type, agentType, name, description, modelRef, instructions, selectedSkills, workspaces, buildToolsPayload, members, selectedMCPs, selectedKnowledge, learningUserProfile, learningUserMemory, learningSessionContext, learningEntityMemory, learningDecisionLog, onSave]);
 
   const selectedProvider = providers.find((p) => modelRef ? modelRef.startsWith(`${p.id}/`) : false);
 
   const dirExists = useCallback((p: string) => { try { return p.length > 0 && /^[A-Za-z]:\\|^\/|^~/.test(p); } catch { return false; } }, []);
 
+  // Determine supported features for the current agent type
+  const currentAgentTypeInfo = agentTypes.find((a) => a.id === agentType);
+  const supportedFeatures = new Set(currentAgentTypeInfo?.supports ?? ['tools', 'skills', 'mcp', 'knowledge', 'learning', 'history', 'workspaces']);
+  const isAgnoAgent = agentType === 'agno';
+
   const navItems = [
-    ...ALL_NAV_ITEMS,
+    ...ALL_NAV_ITEMS.filter((item) => {
+      // Always show basic and model
+      if (item.id === 'basic' || item.id === 'model') return true;
+      // Workspace always shown (maps to cwd for external agents)
+      if (item.id === 'workspace') return true;
+      // Hide feature-specific sections for non-agno agents unless explicitly supported
+      if (!isAgnoAgent && !supportedFeatures.has(item.id)) return false;
+      return true;
+    }),
     ...(worker.type === 'Team' ? [{ id: 'members' as ConfigSection, labelKey: 'workerSettings.members', icon: '👥' }] : []),
     ...(extraSections ?? []).filter((s) => !ALL_NAV_ITEMS.some((n) => n.id === s) && s !== 'members').map((s) => ({ id: s, labelKey: '', icon: '•' })),
   ];
@@ -276,12 +313,112 @@ export function WorkerSettingsPanel({
 
         {section === 'basic' && (
           <div className="settings-section">
+            {/* Agent Type Selector */}
+            <div className="settings-form" style={{ marginBottom: 16 }}>
+              <label className="settings-label">
+                Agent Type
+                <select
+                  className="settings-select"
+                  value={agentType}
+                  onChange={(e) => { setAgentType(e.target.value); markDirty(); }}
+                >
+                  {agentTypes.map((at) => (
+                    <option key={at.id} value={at.id}>{at.name}</option>
+                  ))}
+                  {agentTypes.length === 0 && <option value="agno">Agno Agent</option>}
+                </select>
+              </label>
+              {agentType !== 'agno' && (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                  {agentTypes.find((a) => a.id === agentType)?.description}
+                </p>
+              )}
+            </div>
+
+            {/* Prerequisites Panel (for external agents) */}
+            {agentType !== 'agno' && prereqStatus && !prereqStatus.ready && (
+              <div style={{ marginBottom: 16, padding: 12, border: '1px solid var(--border-color)', borderRadius: 6, background: 'var(--bg-tertiary)' }}>
+                <h4 style={{ margin: '0 0 8px', fontSize: 13 }}>⚠ Prerequisites</h4>
+                {prereqStatus.chain.map((step) => (
+                  <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, fontSize: 12, opacity: step.blocked ? 0.5 : 1 }}>
+                    <span>{step.installed ? '✅' : step.blocked ? '⏳' : '❌'}</span>
+                    <span>{step.name}{step.version ? ` ${step.version}` : ''}</span>
+                    {!step.installed && !step.blocked && step.install_cmd && (
+                      <code style={{ fontSize: 11, color: 'var(--text-muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {step.install_cmd}
+                      </code>
+                    )}
+                  </div>
+                ))}
+                {prereqStatus.install_cmd && (
+                  <>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      style={{ marginTop: 8, fontSize: 12, padding: '4px 12px' }}
+                      disabled={installing}
+                      onClick={() => void (async () => {
+                        setInstalling(true);
+                        setInstallOutput([]);
+                        const ac = new AbortController();
+                        installAbortRef.current = ac;
+                        try {
+                          const resp = await installPrerequisite(prereqStatus.install_cmd!);
+                          const reader = resp.body?.getReader();
+                          if (!reader) return;
+                          const decoder = new TextDecoder();
+                          let buf = '';
+                          while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            buf += decoder.decode(value, { stream: true });
+                            const lines = buf.split('\n');
+                            buf = lines.pop() ?? '';
+                            for (const line of lines) {
+                              if (line.startsWith('data: ')) {
+                                try {
+                                  const evt = JSON.parse(line.slice(6));
+                                  if (evt.event === 'stdout' && evt.content) {
+                                    setInstallOutput((prev) => [...prev, evt.content]);
+                                  } else if (evt.event === 'done') {
+                                    // Refresh prerequisites
+                                    void checkPrerequisites(agentType).then(setPrereqStatus);
+                                  }
+                                } catch { /* skip */ }
+                              }
+                            }
+                          }
+                        } catch (e) {
+                          setInstallOutput((prev) => [...prev, `Error: ${e}`]);
+                        } finally {
+                          setInstalling(false);
+                          installAbortRef.current = null;
+                        }
+                      })()}
+                    >
+                      {installing ? 'Installing...' : prereqStatus.install_label ?? 'Install'}
+                    </button>
+                    {installOutput.length > 0 && (
+                      <pre style={{ marginTop: 8, fontSize: 11, maxHeight: 120, overflow: 'auto', background: 'var(--bg-primary)', padding: 8, borderRadius: 4 }}>
+                        {installOutput.join('\n')}
+                      </pre>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             <div className="settings-form">
               <label className="settings-label">Name<input className="settings-input" value={name} onChange={(e) => { setName(e.target.value); markDirty(); }} /></label>
               <label className="settings-label">Description<input className="settings-input" value={description} onChange={(e) => { setDescription(e.target.value); markDirty(); }} /></label>
             </div>
-            <h3 className="settings-section-title">{t('workerSettings.instructions')}</h3>
-            <textarea className="settings-textarea" value={instructions} onChange={(e) => { setInstructions(e.target.value); markDirty(); }} placeholder="Agent instructions (system prompt)..." rows={8} />
+            {/* Hide instructions for opencode (doesn't support system prompts) */}
+            {!(agentType === 'opencode') && (
+              <>
+                <h3 className="settings-section-title">{t('workerSettings.instructions')}</h3>
+                <textarea className="settings-textarea" value={instructions} onChange={(e) => { setInstructions(e.target.value); markDirty(); }} placeholder="Agent instructions (system prompt)..." rows={8} />
+              </>
+            )}
           </div>
         )}
 

@@ -1002,3 +1002,64 @@ export async function updateSessionConfig(updates: {
   if (!response.ok) throw new Error('Failed to update session config');
   return (await response.json()) as { session: unknown };
 }
+
+// =============================================================================
+// Agent Types & Prerequisites
+// =============================================================================
+
+export interface AgentTypeInfo {
+  id: string;
+  name: string;
+  description: string;
+  framework: string;
+  prerequisites: string[];
+  supports: string[];
+  config_fields: AgentTypeConfigField[];
+}
+
+export interface AgentTypeConfigField {
+  key: string;
+  type: 'string' | 'textarea' | 'select' | 'multiselect' | 'number';
+  label: string;
+  placeholder?: string;
+  options?: string[];
+  default?: unknown;
+  optional?: boolean;
+}
+
+export interface PrerequisiteStep {
+  id: string;
+  name: string;
+  installed: boolean;
+  version: string | null;
+  blocked?: boolean;
+  install_cmd?: string;
+  install_label?: string;
+}
+
+export interface PrerequisiteStatus {
+  ready: boolean;
+  chain: PrerequisiteStep[];
+  missing: string[];
+  install_cmd: string | null;
+  install_label: string | null;
+}
+
+export async function listAgentTypes(): Promise<AgentTypeInfo[]> {
+  const response = await fetchFromApi('/api/agent-types');
+  if (!response.ok) throw new Error('Failed to list agent types');
+  return (await response.json()) as AgentTypeInfo[];
+}
+
+export async function checkPrerequisites(agentType: string): Promise<PrerequisiteStatus> {
+  const response = await fetchFromApi(`/api/prerequisites/${encodeURIComponent(agentType)}`);
+  if (!response.ok) throw new Error('Failed to check prerequisites');
+  return (await response.json()) as PrerequisiteStatus;
+}
+
+export async function installPrerequisite(command: string): Promise<Response> {
+  return fetchFromApi('/api/prerequisites/install', {
+    method: 'POST',
+    body: JSON.stringify({ command }),
+  });
+}

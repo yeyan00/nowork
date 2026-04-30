@@ -62,6 +62,7 @@ def _serialize_worker(worker_cfg: dict[str, Any]) -> dict[str, Any]:
     return {
         'id': block.get('id') or '',
         'type': worker_type,
+        'agentType': block.get('agent_type', 'agno'),
         'name': block.get('name') or '',
         'description': block.get('description') or '',
         'status': block.get('status') or '',
@@ -176,6 +177,10 @@ def update_worker(worker_id: str, payload: dict[str, Any]) -> dict[str, Any] | N
         block['status'] = payload['status']
 
     config = payload.get('config', {})
+    if 'agent_type' in payload:
+        block['agent_type'] = payload['agent_type']
+    elif 'agentType' in payload:
+        block['agent_type'] = payload['agentType']
     if 'model' in config:
         raw['model'] = config['model']
     if 'workspaces' in config:

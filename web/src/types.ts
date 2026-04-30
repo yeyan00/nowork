@@ -15,6 +15,7 @@ export interface WorkerSummary {
   id: string;
   name: string;
   type: WorkerType;
+  agentType?: string;
   description: string;
   status: string;
   recent: string;

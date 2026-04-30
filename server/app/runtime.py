@@ -525,7 +525,83 @@ async def build_agent_os(workers: list[dict[str, Any]], base_app: Any | None = N
     return AgentOS(agents=agents, teams=teams, base_app=base_app)
 
 
-async def _build_single_agent(raw: dict[str, Any], learning_enabled: bool | None = None) -> Agent | None:
+# ── External Agent Builders ────────────────────────────────────
+
+def _build_pi_agent_sync(raw: dict[str, Any]) -> Any:
+    """Build a PiAgent from worker config."""
+    from agno.agents.pi import PiAgent
+    block = _extract_block(raw)
+    return PiAgent(
+        id=block.get('id', raw.get('id', '')),
+        name=block.get('name', raw.get('name', '')),
+        provider=block.get('provider'),
+        model=block.get('model'),
+        system_prompt=block.get('instructions'),
+        thinking=block.get('thinking'),
+        tools=block.get('tools'),
+        no_tools=block.get('no_tools', False),
+        session_dir=block.get('session_dir'),
+        extra_args=block.get('extra_args', []),
+    )
+
+
+def _build_claude_agent_sync(raw: dict[str, Any]) -> Any:
+    """Build a ClaudeAgent from worker config."""
+    from agno.agents.claude import ClaudeAgent
+    block = _extract_block(raw)
+    return ClaudeAgent(
+        id=block.get('id', raw.get('id', '')),
+        name=block.get('name', raw.get('name', '')),
+        system_prompt=block.get('instructions'),
+        model=block.get('model'),
+        allowed_tools=block.get('allowed_tools'),
+        disallowed_tools=block.get('disallowed_tools'),
+        permission_mode=block.get('permission_mode'),
+        max_turns=block.get('max_turns'),
+        cwd=block.get('cwd'),
+        mcp_servers=block.get('mcp_servers'),
+    )
+
+
+def _build_opencode_agent_sync(raw: dict[str, Any]) -> Any:
+    """Build an OpenCodeAgent from worker config."""
+    from agno.agents.opencode import OpenCodeAgent
+    block = _extract_block(raw)
+    return OpenCodeAgent(
+        id=block.get('id', raw.get('id', '')),
+        name=block.get('name', raw.get('name', '')),
+        model=block.get('model'),
+        agent=block.get('agent'),
+        cwd=block.get('cwd'),
+        permission_mode=block.get('permission_mode'),
+        extra_args=block.get('extra_args', []),
+    )
+
+
+# Map agent_type → builder function
+_EXTERNAL_AGENT_BUILDERS: dict[str, Any] = {
+    'pi': _build_pi_agent_sync,
+    'claude': _build_claude_agent_sync,
+    'opencode': _build_opencode_agent_sync,
+}
+
+
+# ── Main Agent Builder ─────────────────────────────────────────
+
+async def _build_single_agent(raw: dict[str, Any], learning_enabled: bool | None = None) -> Agent | Any | None:
+    block = _extract_block(raw)
+    agent_type = block.get('agent_type', 'agno')
+
+    # External agent types (pi, claude, opencode)
+    if agent_type != 'agno':
+        builder = _EXTERNAL_AGENT_BUILDERS.get(agent_type)
+        if builder is None:
+            logger.warning('Unknown agent_type "%s", falling back to agno Agent', agent_type)
+        else:
+            logger.info('Building external agent: type=%s id=%s', agent_type, block.get('id', ''))
+            return builder(raw)
+
+    # Default: build standard Agno Agent
     skills_dir = Path(__file__).resolve().parents[1] / 'skills'
     block = _extract_block(raw)
 
