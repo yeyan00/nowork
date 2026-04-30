@@ -1,0 +1,4 @@
+fix: always show prerequisites status panel for external agent types
+
+Shows check/cross status for all prerequisites even when everything is
+installed, so users can confirm environment readiness.

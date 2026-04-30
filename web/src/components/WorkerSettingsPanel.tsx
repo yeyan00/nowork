@@ -336,9 +336,11 @@ export function WorkerSettingsPanel({
             </div>
 
             {/* Prerequisites Panel (for external agents) */}
-            {agentType !== 'agno' && prereqStatus && !prereqStatus.ready && (
+            {agentType !== 'agno' && prereqStatus && (
               <div style={{ marginBottom: 16, padding: 12, border: '1px solid var(--border-color)', borderRadius: 6, background: 'var(--bg-tertiary)' }}>
-                <h4 style={{ margin: '0 0 8px', fontSize: 13 }}>⚠ Prerequisites</h4>
+                <h4 style={{ margin: '0 0 8px', fontSize: 13 }}>
+                  {prereqStatus.ready ? '✅ Prerequisites' : '⚠ Prerequisites'}
+                </h4>
                 {prereqStatus.chain.map((step) => (
                   <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, fontSize: 12, opacity: step.blocked ? 0.5 : 1 }}>
                     <span>{step.installed ? '✅' : step.blocked ? '⏳' : '❌'}</span>
