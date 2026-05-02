@@ -87,3 +87,5 @@ scripts/build-local.cmd
 scripts/build-update-test.ps1
 NUL
 scripts/package-allowlist.txt
+scripts/upload-release-local.cmd
+scripts/upload-release-local.ps1
