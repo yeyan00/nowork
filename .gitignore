@@ -78,6 +78,8 @@ knowledge
 server/config/config.yaml
 server/config/models/*.yaml
 !server/config/models/*.example.yamlnul
+server/config/channels.yaml
+!server/config/channels.yaml.example
 
 # === Local scripts with machine-specific paths ===
 scripts/build-local.ps1

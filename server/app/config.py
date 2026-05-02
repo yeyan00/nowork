@@ -461,3 +461,29 @@ def delete_knowledge_config(knowledge_ref: str) -> bool:
         k_file.unlink()
         return True
     return False
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Channels config
+# ═══════════════════════════════════════════════════════════════════
+
+CHANNELS_CONFIG_FILE = 'channels.yaml'
+
+
+def load_channels_config() -> list[dict]:
+    """Load channel configurations from channels.yaml."""
+    cfg_dir = resolve_config_dir()
+    ch_file = cfg_dir / CHANNELS_CONFIG_FILE
+    if not ch_file.exists():
+        return []
+    with open(ch_file, encoding='utf-8') as f:
+        data = yaml.safe_load(f) or {}
+    return data.get('channels', [])
+
+
+def save_channels_config(channels: list[dict]) -> None:
+    """Save channel configurations to channels.yaml."""
+    cfg_dir = resolve_config_dir()
+    ch_file = cfg_dir / CHANNELS_CONFIG_FILE
+    with open(ch_file, 'w', encoding='utf-8') as f:
+        yaml.dump({'channels': channels}, f, default_flow_style=False, allow_unicode=True, sort_keys=False)

@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 
 from app.schemas import MessageCreatePayload, SchedulePayload, SessionCreatePayload, SessionUpdatePayload, WorkerCreatePayload, WorkerUpdatePayload
 from app.schedules import create_schedule, delete_schedule, get_schedule, list_schedule_runs, list_schedules, schedule_manager, update_schedule
+from app.channels.manager import ChannelManager
 from app.services import (
     _resolve_worker_id,
     cancel_run,
@@ -81,10 +82,18 @@ async def lifespan(application: FastAPI):
         logger.info('Session compaction DB initialized')
     except Exception as e:
         logger.warning('Failed to initialize session DB: %s', e)
+    # Initialize ChannelManager
+    channel_manager = ChannelManager()
+    application.state.channel_manager = channel_manager
+    try:
+        await channel_manager.start_all(application.state.agent_os)
+    except Exception as e:
+        logger.warning('Failed to start channels: %s', e)
     await schedule_manager.start(getattr(application.state, 'agent_os', None))
     try:
         yield
     finally:
+        await channel_manager.stop_all()
         await schedule_manager.stop()
 
 
@@ -896,6 +905,10 @@ def api_get_session_segments(ws_id: str) -> list[dict[str, object]]:
 @app.post('/api/compaction-sessions/{ws_id}/compact')
 async def api_trigger_compaction(ws_id: str, request: Request) -> dict[str, object]:
     return await trigger_manual_compaction(ws_id, agent_os=_get_agent_os(request))
+
+
+from app.channels_api import router as channels_router
+app.include_router(channels_router)
 
 
 class LogRequestsMiddleware:

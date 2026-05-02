@@ -3,6 +3,7 @@ export type WorkerType = 'Agent' | 'Team' | 'Workflow';
 export type AppPage =
   | 'Chat'
   | 'Workers'
+  | 'Channels'
   | 'Schedules'
   | 'Skills'
   | 'Extensions'
@@ -175,4 +176,21 @@ export interface ScheduleRun {
   status: 'running' | 'success' | 'failed' | 'skipped';
   error?: string | null;
   outputPreview?: string | null;
+}
+
+export interface ChannelSummary {
+  id: string;
+  platform: string;
+  name: string;
+  enabled: boolean;
+  worker_id: string;
+  config: Record<string, unknown>;
+  status?: string;
+  detail?: string;
+}
+
+export interface ChannelPlatform {
+  id: string;
+  name: string;
+  available: boolean;
 }

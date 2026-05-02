@@ -1,0 +1,40 @@
+# Channel 频道配置示例
+# 复制此文件为 channels.yaml 并填入真实凭据
+# channels.yaml 已加入 .gitignore，不会上传
+
+channels:
+  # ── 钉钉 ──────────────────────────────────
+  - id: my-dingtalk          # 唯一标识
+    platform: dingtalk       # 平台类型: dingtalk | feishu | wecom
+    name: 我的钉钉机器人      # 显示名称
+    enabled: false           # 设为 true 启用
+    worker_id: ""            # ⚠️ 必填：绑定的 Worker ID（在 Workers 页面查看）
+    config:
+      client_id: ""          # ⚠️ 必填：钉钉应用 Client ID（AppKey）
+      client_secret: ""      # ⚠️ 必填：钉钉应用 Client Secret（AppSecret）
+      robot_code: ""         # 可选：机器人编码，群聊时建议配置
+      message_type: markdown # markdown | text
+      # media_dir: ""        # 可选：媒体文件下载目录
+
+  # ── 飞书 ──────────────────────────────────
+  # - id: my-feishu
+  #   platform: feishu
+  #   name: 我的飞书机器人
+  #   enabled: false
+  #   worker_id: ""
+  #   config:
+  #     app_id: ""            # ⚠️ 必填：飞书应用 App ID
+  #     app_secret: ""        # ⚠️ 必填：飞书应用 App Secret
+  #     domain: feishu        # feishu(国内) | lark(国际版)
+  #     # media_dir: ""
+
+  # ── 企业微信 ──────────────────────────────
+  # - id: my-wecom
+  #   platform: wecom
+  #   name: 我的企微机器人
+  #   enabled: false
+  #   worker_id: ""
+  #   config:
+  #     bot_id: ""            # ⚠️ 必填：企微机器人 Bot ID
+  #     secret: ""            # ⚠️ 必填：企微机器人 Secret
+  #     # media_dir: ""

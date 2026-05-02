@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackendStatus } from './components/BackendStatus';
 import { ChatWorkspace } from './components/ChatWorkspace';
+import { ChannelsPage } from './components/ChannelsPage';
 import { ExtensionsPage } from './components/ExtensionsPage';
 import { HelpPanel } from './components/HelpPanel';
 import { KnowledgePage } from './components/KnowledgePage';
@@ -168,6 +169,8 @@ export default function App() {
     content = <WorkersManager onWorkerUpdate={(updated) => {
       setWorkers((current) => current.map((w) => w.id === updated.id ? updated : w));
     }} />;
+  } else if (activePage === 'Channels') {
+    content = <ChannelsPage />;
   } else if (activePage === 'Schedules') {
     content = <SchedulesPage onOpenChatSession={openChatSession} />;
   } else if (activePage === 'Skills') {

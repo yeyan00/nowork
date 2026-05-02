@@ -42,8 +42,7 @@ skills:
 - finishing-a-development-branch
 - test-driven-development
 - verification-before-completion
-mcp:
-- test1
+
 history: {}
 learning:
   user_profile: true
@@ -51,5 +50,3 @@ learning:
   session_context: false
   entity_memory: false
   decision_log: false
-knowledge:
-- kb-0bf573ea

@@ -20,3 +20,7 @@ PyMuPDF
 python-docx
 openpyxl
 python-pptx
+
+# --- Channel platforms ---
+aiohttp
+dingtalk-stream

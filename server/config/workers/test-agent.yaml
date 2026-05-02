@@ -40,3 +40,6 @@ learning:
   session_context: false
   entity_memory: false
   decision_log: false
+
+knowledge:
+- kb-0bf573ea

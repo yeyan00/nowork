@@ -4,6 +4,7 @@ import type { AppPage } from '../types';
 const pages: Array<{ page: AppPage; icon: string; i18nKey: string }> = [
   { page: 'Chat', icon: 'C', i18nKey: 'nav.Chat' },
   { page: 'Workers', icon: 'W', i18nKey: 'nav.Workers' },
+  { page: 'Channels', icon: 'H', i18nKey: 'nav.Channels' },
   { page: 'Schedules', icon: 'Q', i18nKey: 'nav.Schedules' },
   { page: 'Skills', icon: 'S', i18nKey: 'nav.Skills' },
   { page: 'Knowledge', icon: 'K', i18nKey: 'nav.Knowledge' },
