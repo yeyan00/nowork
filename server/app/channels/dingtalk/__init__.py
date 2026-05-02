@@ -40,13 +40,18 @@ if HAS_DINGTALK:
             self._channel = channel
             self._main_loop = main_loop
 
-        async def process(self, callback: ChatbotMessage):
-            """Called by dingtalk_stream when a message arrives."""
+        async def process(self, callback: 'dingtalk_stream.CallbackMessage'):
+            """Called by dingtalk_stream when a message arrives.
+
+            callback is a CallbackMessage; we parse ChatbotMessage from callback.data.
+            """
             try:
-                await self._channel._handle_message(callback)
+                incoming = ChatbotMessage.from_dict(callback.data)
+                await self._channel._handle_message(incoming)
             except Exception as e:
                 logger.exception('Error handling DingTalk message: %s', e)
-            return self.ACK  # type: ignore
+            from dingtalk_stream import AckMessage
+            return AckMessage.STATUS_OK, 'OK'
 
     class DingTalkChannel(BaseChannel):
         """DingTalk channel using Stream mode (dingtalk-stream SDK)."""
@@ -92,26 +97,27 @@ if HAS_DINGTALK:
             self._client = None
             logger.info('DingTalk channel %s stopped', self.channel_id)
 
-        async def _handle_message(self, callback: ChatbotMessage) -> None:
-            """Process an incoming DingTalk message."""
+        async def _handle_message(self, incoming: ChatbotMessage) -> None:
+            """Process an incoming DingTalk message (ChatbotMessage parsed from CallbackMessage.data)."""
             text = ''
-            conversation_id = getattr(callback, 'conversation_id', '') or ''
-            sender_id = getattr(callback, 'sender_staff_id', '') or getattr(callback, 'sender_id', '') or ''
-            sender_nick = getattr(callback, 'sender_nick', '') or ''
-            conversation_type = getattr(callback, 'conversation_type', '') or ''
-            session_webhook = getattr(callback, 'session_webhook', '') or ''
+            conversation_id = incoming.conversation_id or ''
+            sender_id = incoming.sender_staff_id or incoming.sender_id or ''
+            sender_nick = incoming.sender_nick or ''
+            conversation_type = incoming.conversation_type or ''
+            session_webhook = incoming.session_webhook or ''
             is_group = conversation_type == '2'
 
-            # Parse message content
-            msgtype = getattr(callback, 'msgtype', '') or ''
-            content = getattr(callback, 'content', None)
-            if content and isinstance(content, dict):
-                if msgtype == 'text':
-                    text = content.get('text', content.get('content', ''))
-                elif msgtype == 'markdown':
-                    text = content.get('text', content.get('title', ''))
-                else:
-                    text = str(content)
+            # Extract text content
+            if incoming.message_type == 'text' and incoming.text:
+                text = incoming.text.content or ''
+            elif incoming.message_type == 'richText' and incoming.rich_text_content:
+                parts = []
+                for item in (incoming.rich_text_content.rich_text_list or []):
+                    if isinstance(item, dict) and 'text' in item:
+                        parts.append(item['text'])
+                text = ''.join(parts)
+            elif incoming.message_type == 'markdown' and incoming.text:
+                text = incoming.text.content or ''
 
             if not text.strip():
                 logger.debug('DingTalk: empty message from %s, skipping', sender_id)
