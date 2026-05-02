@@ -1106,7 +1106,14 @@ export async function createChannel(params: {
     method: 'POST',
     body: JSON.stringify(params),
   });
-  if (!response.ok) throw new Error('Failed to create channel');
+  if (!response.ok) {
+    if (response.status === 409) {
+      const detail = await response.json().catch(() => ({}));
+      throw new Error((detail as { detail?: string }).detail || 'Channel already exists');
+    }
+    const detail = await response.json().catch(() => ({}));
+    throw new Error((detail as { detail?: string }).detail || 'Failed to create channel');
+  }
   return (await response.json()) as ChannelSummary;
 }
 
@@ -1117,7 +1124,14 @@ export async function updateChannel(channelId: string, params: {
     method: 'PUT',
     body: JSON.stringify(params),
   });
-  if (!response.ok) throw new Error('Failed to update channel');
+  if (!response.ok) {
+    if (response.status === 409) {
+      const detail = await response.json().catch(() => ({}));
+      throw new Error((detail as { detail?: string }).detail || 'Duplicate channel');
+    }
+    const detail = await response.json().catch(() => ({}));
+    throw new Error((detail as { detail?: string }).detail || 'Failed to update channel');
+  }
   return (await response.json()) as ChannelSummary;
 }
 

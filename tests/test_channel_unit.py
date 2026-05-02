@@ -328,3 +328,81 @@ class TestChannelAPI:
         assert '/api/channels' in paths
         assert '/api/channels/platforms' in paths
         assert '/api/channels/{channel_id}' in paths
+
+
+class TestChannelDedup:
+    """Test business dedup: same worker + same platform app key."""
+
+    def test_no_conflict(self):
+        from app.channels_api import _check_business_duplicate
+        configs = []
+        err = _check_business_duplicate(configs, 'dingtalk', 'w1', {'client_id': 'abc'})
+        assert err is None
+
+    def test_dingtalk_duplicate_worker_and_client(self):
+        from app.channels_api import _check_business_duplicate
+        configs = [{
+            'id': 'dt-1', 'platform': 'dingtalk', 'worker_id': 'w1',
+            'config': {'client_id': 'abc', 'client_secret': 'xxx'},
+        }]
+        err = _check_business_duplicate(configs, 'dingtalk', 'w1', {'client_id': 'abc'})
+        assert err is not None
+        assert 'dt-1' in err
+        assert 'client_id' in err
+
+    def test_dingtalk_same_client_different_worker_ok(self):
+        """Same client_id but different worker — allowed."""
+        from app.channels_api import _check_business_duplicate
+        configs = [{
+            'id': 'dt-1', 'platform': 'dingtalk', 'worker_id': 'w1',
+            'config': {'client_id': 'abc'},
+        }]
+        err = _check_business_duplicate(configs, 'dingtalk', 'w2', {'client_id': 'abc'})
+        assert err is None
+
+    def test_dingtalk_same_worker_different_client_ok(self):
+        """Same worker but different client_id — allowed."""
+        from app.channels_api import _check_business_duplicate
+        configs = [{
+            'id': 'dt-1', 'platform': 'dingtalk', 'worker_id': 'w1',
+            'config': {'client_id': 'abc'},
+        }]
+        err = _check_business_duplicate(configs, 'dingtalk', 'w1', {'client_id': 'xyz'})
+        assert err is None
+
+    def test_feishu_duplicate_worker_and_app(self):
+        from app.channels_api import _check_business_duplicate
+        configs = [{
+            'id': 'fs-1', 'platform': 'feishu', 'worker_id': 'w1',
+            'config': {'app_id': 'cli_abc', 'app_secret': 'xxx'},
+        }]
+        err = _check_business_duplicate(configs, 'feishu', 'w1', {'app_id': 'cli_abc'})
+        assert err is not None
+        assert 'fs-1' in err
+        assert 'app_id' in err
+
+    def test_exclude_self_on_update(self):
+        """When updating, the channel being updated should be excluded from dedup check."""
+        from app.channels_api import _check_business_duplicate
+        configs = [{
+            'id': 'fs-1', 'platform': 'feishu', 'worker_id': 'w1',
+            'config': {'app_id': 'cli_abc'},
+        }]
+        err = _check_business_duplicate(
+            configs, 'feishu', 'w1', {'app_id': 'cli_abc'}, exclude_id='fs-1')
+        assert err is None
+
+    def test_unknown_platform_no_check(self):
+        from app.channels_api import _check_business_duplicate
+        err = _check_business_duplicate([], 'unknown_platform', 'w1', {'key': 'val'})
+        assert err is None
+
+    def test_empty_app_key_no_check(self):
+        """If the unique key value is empty, skip dedup (can't check)."""
+        from app.channels_api import _check_business_duplicate
+        configs = [{
+            'id': 'dt-1', 'platform': 'dingtalk', 'worker_id': 'w1',
+            'config': {'client_id': 'abc'},
+        }]
+        err = _check_business_duplicate(configs, 'dingtalk', 'w1', {'client_id': ''})
+        assert err is None

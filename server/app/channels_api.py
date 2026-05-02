@@ -68,26 +68,67 @@ def api_get_channel(channel_id: str, request: Request) -> dict[str, Any]:
     raise HTTPException(status_code=404, detail='Channel not found')
 
 
+# Per-platform key used for business dedup (worker_id + platform app key)
+_PLATFORM_UNIQUE_KEYS = {
+    'dingtalk': 'client_id',
+    'feishu': 'app_id',
+    'wecom': 'bot_id',
+}
+
+
+def _check_business_duplicate(
+    configs: list[dict], platform: str, worker_id: str, config: dict,
+    exclude_id: str | None = None,
+) -> str | None:
+    """Return an error message if the same worker is already bound to the same
+    platform app, or None if no conflict."""
+    unique_key = _PLATFORM_UNIQUE_KEYS.get(platform)
+    if not unique_key:
+        return None
+    app_key_value = config.get(unique_key, '').strip()
+    if not app_key_value:
+        return None  # can't check without the key
+    for c in configs:
+        if exclude_id and c.get('id') == exclude_id:
+            continue
+        if (c.get('platform') == platform
+                and c.get('worker_id') == worker_id
+                and c.get('config', {}).get(unique_key, '') == app_key_value):
+            return (
+                f'Worker "{worker_id}" already has a {platform} channel '
+                f'with {unique_key}="{app_key_value}" (channel: {c.get("id")})'
+            )
+    return None
+
+
 @router.post('', status_code=201)
 async def api_create_channel(request: Request) -> dict[str, Any]:
     from app.config import load_channels_config, save_channels_config
     body = await request.json()
     channel_id = body.get('id', '').strip()
     platform = body.get('platform', '').strip()
+    worker_id = body.get('worker_id', '').strip()
     if not channel_id:
         raise HTTPException(status_code=400, detail='id is required')
+    if not worker_id:
+        raise HTTPException(status_code=400, detail='worker_id is required')
     if platform not in SUPPORTED_PLATFORMS:
         raise HTTPException(status_code=400, detail=f'Unsupported platform: {platform}')
     configs = load_channels_config()
     existing_ids = {c.get('id') for c in configs}
     if channel_id in existing_ids:
         raise HTTPException(status_code=409, detail=f'Channel id "{channel_id}" already exists')
+    # Business dedup: same worker + same platform app key
+    dup_msg = _check_business_duplicate(
+        configs, platform, worker_id, body.get('config', {}))
+    if dup_msg:
+        raise HTTPException(status_code=409, detail=dup_msg)
     new_channel = {
         'id': channel_id,
         'platform': platform,
         'name': body.get('name', ''),
         'enabled': body.get('enabled', False),
-        'worker_id': body.get('worker_id', ''),
+        'worker_id': worker_id,
         'config': body.get('config', {}),
     }
     configs.append(new_channel)
@@ -126,6 +167,14 @@ async def api_update_channel(channel_id: str, request: Request) -> dict[str, Any
         existing['worker_id'] = body['worker_id']
     if 'config' in body:
         existing['config'] = body['config']
+    # Business dedup on update
+    upd_platform = existing.get('platform', '')
+    upd_worker = existing.get('worker_id', '')
+    dup_msg = _check_business_duplicate(
+        configs, upd_platform, upd_worker, existing.get('config', {}),
+        exclude_id=channel_id)
+    if dup_msg:
+        raise HTTPException(status_code=409, detail=dup_msg)
     configs[found] = existing
     save_channels_config(configs)
     mgr = _get_manager(request)
