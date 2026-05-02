@@ -41,6 +41,8 @@ const PLATFORM_CONFIG_FIELDS: Record<string, ConfigField[]> = {
   feishu: [
     { key: 'app_id', labelKey: 'channels.appId', type: 'text', required: true },
     { key: 'app_secret', labelKey: 'channels.appSecret', type: 'password', required: true },
+    { key: 'encrypt_key', labelKey: 'channels.encryptKey', type: 'password' },
+    { key: 'verification_token', labelKey: 'channels.verificationToken', type: 'password' },
     {
       key: 'domain', labelKey: 'channels.domain', type: 'select',
       options: [

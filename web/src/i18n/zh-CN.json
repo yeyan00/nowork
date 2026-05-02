@@ -375,6 +375,8 @@
     "running": "运行中",
     "stopped": "已停止",
     "error": "错误",
-    "starting": "启动中"
+    "starting": "启动中",
+    "encryptKey": "加密密钥",
+    "verificationToken": "验证 Token"
   }
 }

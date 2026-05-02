@@ -29,6 +29,10 @@ def load_builtin_channels() -> None:
         from . import dingtalk as _dt  # noqa: F401
     except ImportError:
         logger.debug('dingtalk channel not available (missing dependency)')
+    try:
+        from . import feishu as _fs  # noqa: F401
+    except ImportError:
+        logger.debug('feishu channel not available (missing dependency)')
 
 
 load_builtin_channels()

@@ -375,6 +375,8 @@
     "running": "Running",
     "stopped": "Stopped",
     "error": "Error",
-    "starting": "Starting"
+    "starting": "Starting",
+    "encryptKey": "Encrypt Key",
+    "verificationToken": "Verification Token"
   }
 }

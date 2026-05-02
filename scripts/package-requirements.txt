@@ -24,3 +24,4 @@ python-pptx
 # --- Channel platforms ---
 aiohttp
 dingtalk-stream
+lark-oapi

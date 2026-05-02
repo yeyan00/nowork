@@ -4,29 +4,29 @@
 
 channels:
   # ── 钉钉 ──────────────────────────────────
-  - id: my-dingtalk          # 唯一标识
-    platform: dingtalk       # 平台类型: dingtalk | feishu | wecom
-    name: 我的钉钉机器人      # 显示名称
-    enabled: false           # 设为 true 启用
-    worker_id: ""            # ⚠️ 必填：绑定的 Worker ID（在 Workers 页面查看）
+  - id: my-dingtalk
+    platform: dingtalk
+    name: 我的钉钉机器人
+    enabled: false
+    worker_id: ""            # ⚠️ 必填：绑定的 Worker ID
     config:
-      client_id: ""          # ⚠️ 必填：钉钉应用 Client ID（AppKey）
-      client_secret: ""      # ⚠️ 必填：钉钉应用 Client Secret（AppSecret）
-      robot_code: ""         # 可选：机器人编码，群聊时建议配置
+      client_id: ""          # ⚠️ 必填
+      client_secret: ""      # ⚠️ 必填
+      robot_code: ""         # 可选
       message_type: markdown # markdown | text
-      # media_dir: ""        # 可选：媒体文件下载目录
 
   # ── 飞书 ──────────────────────────────────
-  # - id: my-feishu
-  #   platform: feishu
-  #   name: 我的飞书机器人
-  #   enabled: false
-  #   worker_id: ""
-  #   config:
-  #     app_id: ""            # ⚠️ 必填：飞书应用 App ID
-  #     app_secret: ""        # ⚠️ 必填：飞书应用 App Secret
-  #     domain: feishu        # feishu(国内) | lark(国际版)
-  #     # media_dir: ""
+  - id: my-feishu
+    platform: feishu
+    name: 我的飞书机器人
+    enabled: false
+    worker_id: ""            # ⚠️ 必填
+    config:
+      app_id: ""             # ⚠️ 必填
+      app_secret: ""         # ⚠️ 必填
+      encrypt_key: ""        # 可选
+      verification_token: "" # 可选
+      domain: feishu         # feishu | lark
 
   # ── 企业微信 ──────────────────────────────
   # - id: my-wecom
@@ -35,6 +35,5 @@ channels:
   #   enabled: false
   #   worker_id: ""
   #   config:
-  #     bot_id: ""            # ⚠️ 必填：企微机器人 Bot ID
-  #     secret: ""            # ⚠️ 必填：企微机器人 Secret
-  #     # media_dir: ""
+  #     bot_id: ""
+  #     secret: ""
