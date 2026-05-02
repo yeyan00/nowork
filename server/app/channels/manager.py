@@ -143,8 +143,9 @@ class ChannelManager:
                 from app.session_manager import list_worker_sessions
                 existing = list_worker_sessions(worker_id)
                 for ws in existing:
+                    # Match by title: title is set to msg.session_id on creation
                     title = ws.get('title', '')
-                    if title == map_key or title == f'{msg.platform}:{msg.sender_id}':
+                    if title == map_key:
                         nowork_session_id = ws['id']
                         break
             except Exception:
@@ -153,7 +154,7 @@ class ChannelManager:
         if not nowork_session_id:
             new_session = create_session(
                 worker_id,
-                title=f'{msg.platform}:{msg.sender_id}',
+                title=map_key,
                 agent_os=self._agent_os,
             )
             nowork_session_id = new_session['id']
