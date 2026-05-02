@@ -10,6 +10,7 @@ import {
   listWorkers,
 } from '../lib/backend';
 import type { ChannelSummary, ChannelPlatform, WorkerSummary } from '../types';
+import { ChannelGuideModal } from './ChannelGuideModal';
 
 const PLATFORM_ICONS: Record<string, string> = {
   dingtalk: '📌',
@@ -67,6 +68,7 @@ export function ChannelsPage() {
   const [isNew, setIsNew] = useState(false);
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
+  const [guidePlatform, setGuidePlatform] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -248,15 +250,24 @@ export function ChannelsPage() {
             {isNew && (
               <label style={{ fontSize: 13 }}>
                 {t('channels.platform')} *
-                <select value={selectedPlatform} onChange={e => { updateForm('platform', e.target.value); setForm(prev => ({ ...prev, config: {} })); }}
-                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, marginTop: 4, fontSize: 13, boxSizing: 'border-box' }}>
-                  <option value="">{t('channels.selectPlatform')}</option>
-                  {platforms.map(p => (
-                    <option key={p.id} value={p.id} disabled={!p.available}>
-                      {p.name} {!p.available ? '(SDK not installed)' : ''}
-                    </option>
-                  ))}
-                </select>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+                  <select value={selectedPlatform} onChange={e => { updateForm('platform', e.target.value); setForm(prev => ({ ...prev, config: {} })); }}
+                    style={{ flex: 1, padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}>
+                    <option value="">{t('channels.selectPlatform')}</option>
+                    {platforms.map(p => (
+                      <option key={p.id} value={p.id} disabled={!p.available}>
+                        {p.name} {!p.available ? '(SDK not installed)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedPlatform && (
+                    <button type="button" onClick={() => setGuidePlatform(selectedPlatform)}
+                      title={t('channels.setupGuide')}
+                      style={{ padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, background: '#f8fafc', cursor: 'pointer', fontSize: 16, lineHeight: 1, whiteSpace: 'nowrap' }}>
+                      📖
+                    </button>
+                  )}
+                </div>
               </label>
             )}
 
@@ -284,8 +295,13 @@ export function ChannelsPage() {
 
             {configFields.length > 0 && (
               <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 14, marginTop: 4 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
                   {t('channels.config')} — {t(`channels.${selectedPlatform}`)}
+                  <button type="button" onClick={() => setGuidePlatform(selectedPlatform)}
+                    title={t('channels.setupGuide')}
+                    style={{ padding: '2px 8px', border: '1px solid #d1d5db', borderRadius: 4, background: '#f8fafc', cursor: 'pointer', fontSize: 12, lineHeight: 1.5 }}>
+                    📖 {t('channels.setupGuide')}
+                  </button>
                 </div>
                 {configFields.map(field => (
                   <label key={field.key} style={{ fontSize: 13, display: 'block', marginBottom: 10 }}>
@@ -333,6 +349,9 @@ export function ChannelsPage() {
             </button>
           </div>
         </div>
+      )}
+      {guidePlatform && (
+        <ChannelGuideModal platform={guidePlatform} onClose={() => setGuidePlatform(null)} />
       )}
     </div>
   );

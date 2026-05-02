@@ -377,6 +377,8 @@
     "error": "错误",
     "starting": "启动中",
     "encryptKey": "加密密钥",
-    "verificationToken": "验证 Token"
+    "verificationToken": "验证 Token",
+    "setupGuide": "设置指南",
+    "noGuideForPlatform": "该平台暂无设置指南"
   }
 }

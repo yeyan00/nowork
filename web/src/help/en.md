@@ -280,6 +280,43 @@ models:
 ### Q: How do I add a new model provider?
 **A:** Go to Models → + Add Provider → fill in Provider ID, Base URL, API Key → Fetch from API or add models manually → Save.
 
+### Q: How do I configure channels (DingTalk/Feishu)?
+**A:** Go to the Channels page → click + Add Channel → select a platform → click the 📖 Setup Guide button for detailed steps → fill in credentials → select a Worker → save and enable.
+
+---
+
+## Channels
+
+Channels connect instant messaging platforms (DingTalk, Feishu, etc.) to Workers, letting you chat with AI directly in your messaging app.
+
+### DingTalk
+
+1. Open the [DingTalk Developer Console](https://open-dev.dingtalk.com/) and create an internal enterprise app
+2. Under "App Capabilities", add "Robot" and set the message mode to **Stream Mode**
+3. Create a version and publish
+4. Under "Credentials & Basic Info", copy the **Client ID** and **Client Secret**
+5. (Optional) Under "Security Settings → Server Egress IP", add your public IP (required for downloading images/files)
+6. In NoWork's Channels page, fill in the credentials, select a Worker, save and enable
+
+> 💡 Search for your bot name in DingTalk to start chatting. You can also add it to a group via "Group Settings → Bots".
+
+### Feishu
+
+1. Open the [Feishu Developer Platform](https://open.feishu.cn/app) and create an enterprise self-built app
+2. Under "Credentials & Basic Info", copy the **App ID** and **App Secret**
+3. ⚠️ **Important: First fill in App ID/Secret in NoWork and start the service**, then return to the Feishu platform to continue configuration
+4. Enable the "Bot" capability
+5. Under "Permission Management", batch-import the permissions JSON (see the 📖 Setup Guide in the UI for details)
+6. Under "Events & Callbacks", select **Long Connection (WebSocket)** mode
+7. Add event: search for "Receive Message" and subscribe to "Receive Message v2.0"
+8. Create a version and publish
+
+> ⚠️ The order of operations is critical: you must start NoWork first (with App ID/Secret filled in) before configuring the long connection on the Feishu platform, or verification will fail.
+
+### WeCom
+
+The WeCom channel is under development. Stay tuned.
+
 ---
 
 ## Keyboard Shortcuts

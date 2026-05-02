@@ -377,6 +377,8 @@
     "error": "Error",
     "starting": "Starting",
     "encryptKey": "Encrypt Key",
-    "verificationToken": "Verification Token"
+    "verificationToken": "Verification Token",
+    "setupGuide": "Setup Guide",
+    "noGuideForPlatform": "No setup guide available for this platform"
   }
 }

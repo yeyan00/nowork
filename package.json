@@ -1,14 +1,14 @@
 {
-  "name": "nowork-desktop",
-  "private": true,
-  "version": "0.0.6",
-  "scripts": {
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
-    "build:release": "powershell -ExecutionPolicy Bypass -File ./scripts/build-release.ps1",
-    "build:update-test": "powershell -ExecutionPolicy Bypass -File ./scripts/build-update-test.ps1"
-  },
-  "devDependencies": {
-    "@tauri-apps/cli": "^2.0.0"
-  }
+    "name":  "nowork-desktop",
+    "private":  true,
+    "version":  "0.0.7",
+    "scripts":  {
+                    "tauri:dev":  "tauri dev",
+                    "tauri:build":  "tauri build",
+                    "build:release":  "powershell -ExecutionPolicy Bypass -File ./scripts/build-release.ps1",
+                    "build:update-test":  "powershell -ExecutionPolicy Bypass -File ./scripts/build-update-test.ps1"
+                },
+    "devDependencies":  {
+                            "@tauri-apps/cli":  "^2.0.0"
+                        }
 }
