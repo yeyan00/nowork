@@ -1,0 +1,42 @@
+agent:
+  id: test-agent-1
+  name: Test Agent
+  description: Local testing agent with debug-friendly config — not bundled in release builds
+  i18n:
+    zh-CN:
+      description: 本地测试助手，调试配置，不随正式版打包
+  instructions: 'You are a test agent for local debugging.
+
+    Be verbose and log your reasoning steps.
+
+    When uncertain, ask clarifying questions rather than guessing.
+
+    '
+  status: null
+  debug: true
+tools:
+- module: app.tools.codingTools
+  class: CodingTools
+  config:
+    base_dirs:
+    - ~/nowork-workspace
+    default_readable: true
+    all: true
+database:
+  db_file: db/test_agent.db
+  db_id: test_agent_db
+workspaces:
+- path: ~/nowork-workspace
+  permission: read-write
+response:
+  stream: true
+  markdown: true
+skills: []
+
+history: {}
+learning:
+  user_profile: true
+  user_memory: true
+  session_context: false
+  entity_memory: false
+  decision_log: false

@@ -41,7 +41,14 @@ Get-ChildItem 'server\config\models\*.example.yaml' -ErrorAction SilentlyContinu
   Copy-Item $_.FullName "$targetConfig\models" -Force
 }
 if (Test-Path 'server\config\workers') {
-  Copy-Item 'server\config\workers' "$targetConfig\workers" -Recurse -Force
+  # Exclude test-only agents from release builds
+  $testExcludes = @('test-agent.yaml')
+  $workerItems = Get-ChildItem 'server\config\workers' -Exclude $testExcludes
+  $destWorkers = "$targetConfig\workers"
+  New-Item -ItemType Directory -Force -Path $destWorkers | Out-Null
+  $workerItems | ForEach-Object {
+    Copy-Item $_.FullName $destWorkers -Recurse -Force
+  }
 }
 Copy-Item 'server\skills' $targetServer -Recurse -Force
 # requirements.txt not needed at runtime (deps in Python runtime site-packages)
