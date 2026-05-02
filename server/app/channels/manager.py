@@ -23,6 +23,7 @@ class ChannelManager:
         self._channels: dict[str, BaseChannel] = {}
         self._agent_os: Any = None
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._session_map: dict[str, str] = {}  # channel_session_id -> nowork_session_id
 
     def set_agent_os(self, agent_os: Any) -> None:
         self._agent_os = agent_os
@@ -111,15 +112,13 @@ class ChannelManager:
 
     async def _on_message(self, msg: ChannelMessage) -> str:
         """Route an incoming message to the bound worker via stream_message."""
-        from app.services import stream_message, _resolve_worker_id
+        from app.services import stream_message, create_session
 
         if self._agent_os is None:
             logger.error('AgentOS not available for channel message')
             return 'Error: server not ready'
 
-        # Resolve or create session for the worker bound to this channel
-        nowork_session_id = msg.session_id
-
+        # Find the worker bound to this channel
         worker_id = None
         for cfg in self.load_configs():
             if cfg.id == msg.channel_id:
@@ -130,16 +129,36 @@ class ChannelManager:
             logger.error('No worker bound for channel %s', msg.channel_id)
             return 'Error: no worker configured'
 
-        existing_session = _resolve_worker_id(nowork_session_id, self._agent_os)
-        if existing_session is None:
-            from app.services import create_session
+        # Map channel session (e.g. "dingtalk:sender123") → nowork session ID
+        # We keep a simple in-memory mapping so repeated messages from the same
+        # user reuse the same nowork session.
+        map_key = msg.session_id
+        nowork_session_id = self._session_map.get(map_key)
+
+        if not nowork_session_id:
+            # Check if worker has any existing session for this channel sender
+            # by searching session titles
+            try:
+                from app.session_manager import list_worker_sessions
+                existing = list_worker_sessions(worker_id)
+                for ws in existing:
+                    title = ws.get('title', '')
+                    if title == map_key or title == f'{msg.platform}:{msg.sender_id}':
+                        nowork_session_id = ws['id']
+                        break
+            except Exception:
+                pass
+
+        if not nowork_session_id:
             new_session = create_session(
                 worker_id,
-                title=f'{msg.platform}:{msg.sender_id[:20]}',
+                title=f'{msg.platform}:{msg.sender_id}',
                 agent_os=self._agent_os,
             )
-            nowork_session_id = new_session.get('id', nowork_session_id)
+            nowork_session_id = new_session['id']
             logger.info('Created session %s for channel %s sender %s', nowork_session_id, msg.channel_id, msg.sender_id)
+
+        self._session_map[map_key] = nowork_session_id
 
         # Collect the full reply from the stream
         full_reply = ''

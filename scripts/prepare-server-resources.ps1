@@ -31,6 +31,7 @@ Copy-Item 'server\app' $targetServer -Recurse -Force
 # - keep only model examples (no real provider secrets)
 # - do not bundle mcp.yaml
 # - do not bundle knowledge definitions/content
+# - do not bundle channels.yaml (contains real credentials)
 $targetConfig = Join-Path $targetServer 'config'
 New-Item -ItemType Directory -Force -Path $targetConfig | Out-Null
 New-Item -ItemType Directory -Force -Path "$targetConfig\models" | Out-Null
@@ -39,6 +40,10 @@ Copy-Item 'server\config\config.setup.yaml' "$targetConfig\config.yaml" -Force
 
 Get-ChildItem 'server\config\models\*.example.yaml' -ErrorAction SilentlyContinue | ForEach-Object {
   Copy-Item $_.FullName "$targetConfig\models" -Force
+}
+# Copy channels.yaml.example (template without secrets) if present
+if (Test-Path 'server\config\channels.yaml.example') {
+  Copy-Item 'server\config\channels.yaml.example' "$targetConfig\channels.yaml.example" -Force
 }
 if (Test-Path 'server\config\workers') {
   # Exclude test-only agents from release builds
