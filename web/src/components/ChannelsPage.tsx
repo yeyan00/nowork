@@ -1,17 +1,15 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useI18n } from '../i18n';
+import {
+  listChannels,
+  listChannelPlatforms,
+  createChannel,
+  updateChannel,
+  deleteChannel,
+  testChannel,
+  listWorkers,
+} from '../lib/backend';
 import type { ChannelSummary, ChannelPlatform, WorkerSummary } from '../types';
-
-const API = '/api';
-
-async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
-  const resp = await fetch(url, init);
-  if (!resp.ok) {
-    const body = await resp.text();
-    throw new Error(`${resp.status}: ${body}`);
-  }
-  return resp.json();
-}
 
 const PLATFORM_ICONS: Record<string, string> = {
   dingtalk: '📌',
@@ -72,9 +70,9 @@ export function ChannelsPage() {
     setLoading(true);
     try {
       const [ch, pl, wk] = await Promise.all([
-        fetchJSON<ChannelSummary[]>(`${API}/channels`),
-        fetchJSON<ChannelPlatform[]>(`${API}/channels/platforms`),
-        fetchJSON<WorkerSummary[]>(`${API}/workers`),
+        listChannels(),
+        listChannelPlatforms(),
+        listWorkers(),
       ]);
       setChannels(ch);
       setPlatforms(pl);
@@ -120,25 +118,17 @@ export function ChannelsPage() {
     setSaving(true);
     try {
       const payload = {
-        id: form.id,
-        platform: form.platform,
-        name: form.name,
-        enabled: form.enabled,
-        worker_id: form.worker_id,
-        config: form.config,
+        id: form.id as string,
+        platform: form.platform as string,
+        name: form.name as string,
+        enabled: form.enabled as boolean,
+        worker_id: form.worker_id as string,
+        config: form.config as Record<string, unknown>,
       };
       if (isNew) {
-        await fetchJSON(`${API}/channels`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
+        await createChannel(payload);
       } else {
-        await fetchJSON(`${API}/channels/${form.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
+        await updateChannel(form.id as string, payload);
       }
       closeDrawer();
       loadData();
@@ -153,7 +143,7 @@ export function ChannelsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm(`Delete channel "${id}"?`)) return;
     try {
-      await fetchJSON(`${API}/channels/${id}`, { method: 'DELETE' });
+      await deleteChannel(id);
       closeDrawer();
       loadData();
     } catch (e) {
@@ -163,7 +153,7 @@ export function ChannelsPage() {
 
   const handleTest = async (id: string) => {
     try {
-      const result = await fetchJSON<{ ok: boolean; error?: string }>(`${API}/channels/${id}/test`, { method: 'POST' });
+      const result = await testChannel(id);
       alert(result.ok ? '✅ Connection OK' : `❌ ${result.error || 'Connection failed'}`);
     } catch (e) {
       alert(`Test failed: ${e}`);

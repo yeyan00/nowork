@@ -1,4 +1,4 @@
-import type { ChatAttachment, ChatMessage, MemberActivitiesByRun, ScheduleRun, ScheduleSummary, SendMessageResult, SessionSummary, ToolCall, WorkerSummary } from '../types';
+import type { ChannelPlatform, ChannelSummary, ChatAttachment, ChatMessage, MemberActivitiesByRun, ScheduleRun, ScheduleSummary, SendMessageResult, SessionSummary, ToolCall, WorkerSummary } from '../types';
 
 // Lazy-loaded Tauri invoke — only available when running inside Tauri desktop shell
 let _invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null | undefined;
@@ -1076,4 +1076,62 @@ export async function translateText(text: string, targetLang: string = 'zh-CN'):
   if (!response.ok) throw new Error('Translation failed');
   const data = await response.json() as { translated: string };
   return data.translated;
+}
+
+// ── Channel APIs ────────────────────────────────────────────
+
+export async function listChannels(): Promise<ChannelSummary[]> {
+  const response = await fetchFromApi('/api/channels');
+  if (!response.ok) throw new Error('Failed to load channels');
+  return (await response.json()) as ChannelSummary[];
+}
+
+export async function listChannelPlatforms(): Promise<ChannelPlatform[]> {
+  const response = await fetchFromApi('/api/channels/platforms');
+  if (!response.ok) throw new Error('Failed to load platforms');
+  return (await response.json()) as ChannelPlatform[];
+}
+
+export async function getChannel(channelId: string): Promise<ChannelSummary> {
+  const response = await fetchFromApi(`/api/channels/${encodeURIComponent(channelId)}`);
+  if (!response.ok) throw new Error('Failed to load channel');
+  return (await response.json()) as ChannelSummary;
+}
+
+export async function createChannel(params: {
+  id: string; platform: string; name: string; enabled: boolean;
+  worker_id: string; config: Record<string, unknown>;
+}): Promise<ChannelSummary> {
+  const response = await fetchFromApi('/api/channels', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+  if (!response.ok) throw new Error('Failed to create channel');
+  return (await response.json()) as ChannelSummary;
+}
+
+export async function updateChannel(channelId: string, params: {
+  name?: string; enabled?: boolean; worker_id?: string; config?: Record<string, unknown>;
+}): Promise<ChannelSummary> {
+  const response = await fetchFromApi(`/api/channels/${encodeURIComponent(channelId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(params),
+  });
+  if (!response.ok) throw new Error('Failed to update channel');
+  return (await response.json()) as ChannelSummary;
+}
+
+export async function deleteChannel(channelId: string): Promise<void> {
+  const response = await fetchFromApi(`/api/channels/${encodeURIComponent(channelId)}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) throw new Error('Failed to delete channel');
+}
+
+export async function testChannel(channelId: string): Promise<{ ok: boolean; error?: string; status?: string; detail?: string }> {
+  const response = await fetchFromApi(`/api/channels/${encodeURIComponent(channelId)}/test`, {
+    method: 'POST',
+  });
+  if (!response.ok) throw new Error('Failed to test channel');
+  return (await response.json()) as { ok: boolean; error?: string; status?: string; detail?: string };
 }
