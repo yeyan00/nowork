@@ -14,6 +14,23 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
+
+
+def _utc_isoformat(dt: datetime | None) -> str:
+    """Convert datetime to ISO format string with UTC timezone.
+
+    SQLite stores datetimes without timezone info, so when we read them back,
+    they're naive datetimes. This function ensures they're interpreted as UTC
+    and formatted with +00:00 suffix for proper frontend parsing.
+    """
+    if dt is None:
+        return ''
+    # If already has timezone, convert to UTC; otherwise assume UTC
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.isoformat()
 from pathlib import Path
 from typing import Any
 
@@ -326,8 +343,8 @@ def _serialize_worker_session(ws: WorkerSessionRow) -> dict[str, Any]:
         'status': ws.status,
         'model_override': ws.model_override,
         'learning_enabled': ws.learning_enabled,
-        'created_at': ws.created_at.isoformat() if ws.created_at else '',
-        'updated_at': ws.updated_at.isoformat() if ws.updated_at else '',
+        'created_at': _utc_isoformat(ws.created_at),
+        'updated_at': _utc_isoformat(ws.updated_at),
     }
 
 
@@ -359,7 +376,7 @@ def get_workers_recent_batch(worker_ids: list[str]) -> dict[str, str]:
                 .all())
 
         return {
-            row[0]: row[1].isoformat() if row[1] else ''
+            row[0]: _utc_isoformat(row[1])
             for row in rows
         }
     finally:
@@ -479,8 +496,8 @@ def _serialize_segment(seg: SessionSegmentRow) -> dict[str, Any]:
         'compaction_summary': seg.compaction_summary,
         'compaction_meta': meta,
         'status': seg.status,
-        'created_at': seg.created_at.isoformat() if seg.created_at else '',
-        'compacted_at': seg.compacted_at.isoformat() if seg.compacted_at else None,
+        'created_at': _utc_isoformat(seg.created_at),
+        'compacted_at': _utc_isoformat(seg.compacted_at) or None,
     }
 
 
