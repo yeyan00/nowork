@@ -14,7 +14,7 @@
                     "capabilities": [
                         {
                             "identifier": "default",
-                            "permissions": ["notification:default", "notification:allow-is-permission-granted", "notification:allow-request-permission", "notification:allow-send"]
+                            "permissions": ["notification:default"]
                         }
                     ]
                 },

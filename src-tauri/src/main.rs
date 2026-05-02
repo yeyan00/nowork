@@ -160,9 +160,18 @@ fn main() {
             }
 
             // Setup system tray with menu
-            let show_item = MenuItem::with_id(app, "show", "打开", true, None::<&str>)
+            // Determine menu text based on system locale
+            let locale = sys_locale::get_locale().unwrap_or_else(|| "en".to_string());
+            let is_chinese = locale.starts_with("zh");
+            let (show_text, quit_text) = if is_chinese {
+                ("打开", "退出")
+            } else {
+                ("Show", "Quit")
+            };
+
+            let show_item = MenuItem::with_id(app, "show", show_text, true, None::<&str>)
                 .expect("failed to create show menu item");
-            let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)
+            let quit_item = MenuItem::with_id(app, "quit", quit_text, true, None::<&str>)
                 .expect("failed to create quit menu item");
             let menu = Menu::with_items(app, &[&show_item, &quit_item])
                 .expect("failed to create tray menu");

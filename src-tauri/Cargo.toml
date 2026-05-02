@@ -12,6 +12,7 @@ tauri = { version = "2", features = ["devtools", "tray-icon"] }
 rfd = "0.15"
 dunce = "1"  # Simplify Windows UNC paths (\\?\) to regular DOS paths
 tauri-plugin-notification = "2.3.3"
+sys-locale = "0.3.2"
 
 [features]
 default = ["custom-protocol"]
