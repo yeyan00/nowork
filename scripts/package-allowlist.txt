@@ -8,7 +8,7 @@ _yaml
 adodbapi
 adsi
 agno
-agno-2.5.17.dist-info
+agno-2.6.3.dist-info
 annotated_doc
 annotated_doc-0.0.4.dist-info
 annotated_types
