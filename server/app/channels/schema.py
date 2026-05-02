@@ -31,7 +31,11 @@ class ChannelMessage(BaseModel):
     meta: dict[str, Any] = {}
     # Callback for streaming reply chunks.  Not serialized.
     # Signature: async (chunk_text: str) -> None
+    # Returns: None (钉钉) or message_id (飞书，用于后续编辑)
     on_reply_chunk: Optional[Callable[[str], Any]] = None
+    # Callback for editing an existing message (飞书 only).  Not serialized.
+    # Signature: async (message_id: str, chunk_text: str) -> None
+    on_edit_message: Optional[Callable[[str, str], Any]] = None
 
 
 class ChannelStatus(BaseModel):

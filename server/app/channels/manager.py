@@ -113,9 +113,11 @@ class ChannelManager:
     async def _on_message(self, msg: ChannelMessage) -> str:
         """Route an incoming message to the bound worker via stream_message.
 
-        Streams reply incrementally: calls msg.on_reply_chunk for each
-        paragraph-sized chunk so the channel can push it to the user
-        (e.g. via DingTalk sessionWebhook).  Returns the final full reply.
+        Platform-specific streaming:
+          - Feishu: incremental send + edit (best UX, one message)
+          - DingTalk: accumulate and send once at completion (clean single message)
+
+        Returns the final full reply.
         """
         from app.services import stream_message, create_session
 
@@ -162,9 +164,22 @@ class ChannelManager:
 
         self._session_map[map_key] = nowork_session_id
 
-        # Stream the reply, collecting content and emitting paragraph chunks
+        # ── Platform-specific streaming logic ──
+        # Both Feishu and DingTalk: accumulate and send once at completion
+        # (Feishu edit API has validation issues, use single message for stability)
+        return await self._stream_accumulate(msg, nowork_session_id)
+
+    async def _stream_feishu(self, msg: ChannelMessage, nowork_session_id: str) -> str:
+        """Feishu streaming: send first chunk, then edit with accumulated content.
+        User sees one message that gradually fills in.
+        """
+        from app.services import stream_message
+        import json
+
         full_reply = ''
-        pending = ''  # buffer for paragraph-based streaming
+        message_id: str | None = None
+        accumulated = ''
+
         try:
             async for sse_line in stream_message(
                 nowork_session_id, msg.text, attachments=[], agent_os=self._agent_os
@@ -181,28 +196,80 @@ class ChannelManager:
                 if event_type == 'RunContent':
                     content = event_data.get('content', '')
                     if content:
-                        pending += content
-                        # Emit chunk when we have a paragraph break
-                        if '\n\n' in pending:
-                            chunk, pending = pending.rsplit('\n\n', 1)
-                            chunk = chunk.strip()
-                            if chunk and msg.on_reply_chunk:
-                                await msg.on_reply_chunk(chunk)
+                        accumulated += content
+                        if message_id and msg.on_edit_message:
+                            # Edit existing message with accumulated content
+                            await msg.on_edit_message(message_id, accumulated)
+                        elif msg.on_reply_chunk and not message_id:
+                            # First chunk: send new message
+                            message_id = await msg.on_reply_chunk(accumulated)
 
                 elif event_type == 'RunCompleted':
                     full_reply = event_data.get('content', '')
-                    # Flush remaining pending content
-                    pending_stripped = pending.strip()
-                    if pending_stripped and msg.on_reply_chunk:
-                        await msg.on_reply_chunk(pending_stripped)
-                    pending = ''
+                    # Final edit with complete content
+                    if message_id and msg.on_edit_message and full_reply:
+                        await msg.on_edit_message(message_id, full_reply)
 
                 elif event_type == 'RunError':
                     full_reply = f'Error: {event_data.get("content", "unknown error")}'
-                    pending = ''
+                    if message_id and msg.on_edit_message:
+                        await msg.on_edit_message(message_id, full_reply)
+                    elif msg.on_reply_chunk:
+                        await msg.on_reply_chunk(full_reply)
 
         except Exception as e:
             logger.exception('Error streaming message for channel %s: %s', msg.channel_id, e)
             full_reply = f'Error: {e}'
+            if message_id and msg.on_edit_message:
+                await msg.on_edit_message(message_id, full_reply)
+            elif msg.on_reply_chunk:
+                await msg.on_reply_chunk(full_reply)
+
+        return full_reply or 'Sorry, I could not generate a response.'
+
+    async def _stream_accumulate(self, msg: ChannelMessage, nowork_session_id: str) -> str:
+        """DingTalk / others: accumulate all content and send once at completion.
+        Clean single message, but user waits longer for any response.
+        """
+        from app.services import stream_message
+        import json
+
+        full_reply = ''
+        accumulated = ''
+
+        try:
+            async for sse_line in stream_message(
+                nowork_session_id, msg.text, attachments=[], agent_os=self._agent_os
+            ):
+                if not sse_line.startswith('data: '):
+                    continue
+                try:
+                    event_data = json.loads(sse_line[6:])
+                except (json.JSONDecodeError, IndexError):
+                    continue
+
+                event_type = event_data.get('event', '')
+
+                if event_type == 'RunContent':
+                    content = event_data.get('content', '')
+                    if content:
+                        accumulated += content
+
+                elif event_type == 'RunCompleted':
+                    full_reply = event_data.get('content', '')
+                    # Send complete message once
+                    if msg.on_reply_chunk and full_reply:
+                        await msg.on_reply_chunk(full_reply)
+
+                elif event_type == 'RunError':
+                    full_reply = f'Error: {event_data.get("content", "unknown error")}'
+                    if msg.on_reply_chunk:
+                        await msg.on_reply_chunk(full_reply)
+
+        except Exception as e:
+            logger.exception('Error streaming message for channel %s: %s', msg.channel_id, e)
+            full_reply = f'Error: {e}'
+            if msg.on_reply_chunk:
+                await msg.on_reply_chunk(full_reply)
 
         return full_reply or 'Sorry, I could not generate a response.'

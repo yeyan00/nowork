@@ -162,14 +162,12 @@ if HAS_DINGTALK:
             await self._on_message(msg)
 
         def _make_chunk_sender(self, webhook_url: str, is_group: bool, sender_staff_id: str):
-            """Create a callback that sends paragraph chunks via sessionWebhook."""
-            _sent_any = False
-
+            """Create a callback that sends message via sessionWebhook.
+            Called once at completion with full reply content.
+            """
             async def _send_chunk(chunk: str) -> None:
-                nonlocal _sent_any
                 if not webhook_url or not chunk.strip():
                     return
-                _sent_any = True
                 await self._send_via_webhook(
                     webhook_url, chunk,
                     is_group=is_group, sender_staff_id=sender_staff_id,

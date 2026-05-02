@@ -55,6 +55,8 @@ try:
         CreateMessageRequest,
         CreateMessageRequestBody,
         P2ImMessageReceiveV1,
+        UpdateMessageRequest,
+        UpdateMessageRequestBody,
     )
     # Patch the SDK's event loop reference
     import lark_oapi.ws.client as _ws_mod  # type: ignore
@@ -413,6 +415,7 @@ if HAS_FEISHU:
                     text=text,
                     meta=meta,
                     on_reply_chunk=self._make_chunk_sender(session_key),
+                    on_edit_message=self._make_edit_sender(session_key),
                 )
 
                 logger.info(
@@ -428,18 +431,44 @@ if HAS_FEISHU:
         # ── Message sending ───────────────────────────────
 
         def _make_chunk_sender(self, session_key: str):
-            """Create a callback that sends paragraph chunks via Feishu OpenAPI."""
-            async def _send_chunk(chunk: str) -> None:
+            """Create a callback that sends message via Feishu OpenAPI.
+            Returns message_id on first call, which can be used for subsequent edits.
+            """
+            _first_message_id: str | None = None
+
+            async def _send_chunk(chunk: str) -> str | None:
+                nonlocal _first_message_id
                 if not chunk.strip():
+                    return None
+                entry = self._receive_id_store.get(session_key)
+                if not entry:
+                    logger.warning('Feishu: no receive_id for session %s', session_key)
+                    return None
+                receive_id_type, receive_id = entry
+                if _first_message_id is None:
+                    # First send: create new message
+                    _first_message_id = await self._send_text(receive_id_type, receive_id, chunk)
+                    return _first_message_id
+                else:
+                    # Subsequent: edit existing message
+                    await self._edit_text(receive_id_type, receive_id, chunk, _first_message_id)
+                    return _first_message_id
+
+            return _send_chunk
+
+        def _make_edit_sender(self, session_key: str):
+            """Create a callback that edits an existing message."""
+            async def _edit_chunk(message_id: str, chunk: str) -> None:
+                if not message_id or not chunk.strip():
                     return
                 entry = self._receive_id_store.get(session_key)
                 if not entry:
                     logger.warning('Feishu: no receive_id for session %s', session_key)
                     return
                 receive_id_type, receive_id = entry
-                await self._send_text(receive_id_type, receive_id, chunk)
+                await self._edit_text(receive_id_type, receive_id, chunk, message_id)
 
-            return _send_chunk
+            return _edit_chunk
 
         async def send(self, session_id: str, text: str, meta: dict[str, Any] | None = None) -> None:
             """Proactive send — look up stored receive_id and send."""
@@ -459,7 +488,7 @@ if HAS_FEISHU:
             await self._send_text(receive_id_type, receive_id, text)
 
         async def _send_text(self, receive_id_type: str, receive_id: str, body: str) -> str | None:
-            """Send a text/post message via Feishu OpenAPI."""
+            """Send a text message via Feishu OpenAPI."""
             if not self._client:
                 logger.warning('Feishu _send_text: no client')
                 return None
@@ -468,14 +497,8 @@ if HAS_FEISHU:
             if len(body) > 15000:
                 body = body[:15000] + '\n...(消息过长已截断)'
 
-            # Send as post (markdown) for better formatting
-            post_content = {
-                'zh_cn': {
-                    'title': '',
-                    'content': [[{'tag': 'text', 'text': body}]],
-                }
-            }
-            content = json.dumps(post_content, ensure_ascii=False)
+            # Send as text type for easier editing later
+            content = json.dumps({'text': body}, ensure_ascii=False)
 
             try:
                 req = (
@@ -484,7 +507,7 @@ if HAS_FEISHU:
                     .request_body(
                         CreateMessageRequestBody.builder()
                         .receive_id(receive_id)
-                        .msg_type('post')
+                        .msg_type('text')
                         .content(content)
                         .build(),
                     )
@@ -504,6 +527,44 @@ if HAS_FEISHU:
             except Exception:
                 logger.exception('Feishu _send_text failed')
                 return None
+
+        async def _edit_text(self, receive_id_type: str, receive_id: str, body: str, message_id: str) -> bool:
+            """Edit an existing text message via Feishu OpenAPI."""
+            if not self._client or not message_id:
+                logger.warning('Feishu _edit_text: no client or message_id')
+                return False
+
+            # Truncate long messages
+            if len(body) > 15000:
+                body = body[:15000] + '\n...(消息过长已截断)'
+
+            # Edit as text type (same as original message)
+            content = json.dumps({'text': body}, ensure_ascii=False)
+
+            try:
+                req = (
+                    UpdateMessageRequest.builder()
+                    .message_id(message_id)
+                    .request_body(
+                        UpdateMessageRequestBody.builder()
+                        .content(content)
+                        .build(),
+                    )
+                    .build()
+                )
+                resp = await self._client.im.v1.message.aupdate(req)
+                if not resp.success():
+                    logger.warning(
+                        'Feishu edit failed: code=%s msg=%s',
+                        getattr(resp, 'code', ''),
+                        getattr(resp, 'msg', ''),
+                    )
+                    return False
+                logger.debug('Feishu edit OK: msg_id=%s', message_id[:20])
+                return True
+            except Exception:
+                logger.exception('Feishu _edit_text failed')
+                return False
 
     # Register with the channel registry
     register_channel('feishu', FeishuChannel)
