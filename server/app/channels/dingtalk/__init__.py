@@ -153,14 +153,29 @@ if HAS_DINGTALK:
                     'sender_nick': sender_nick,
                     'is_group': is_group,
                 },
+                on_reply_chunk=self._make_chunk_sender(session_webhook, is_group, sender_id),
             )
 
             # Route to manager which calls stream_message and returns reply
-            reply_text = await self._on_message(msg)
+            # Streaming chunks are sent via on_reply_chunk callback.
+            # If no chunks were streamed (e.g. error path), send the final reply.
+            await self._on_message(msg)
 
-            # Send reply via sessionWebhook
-            if reply_text and session_webhook:
-                await self._send_via_webhook(session_webhook, reply_text, is_group=is_group, sender_staff_id=sender_id)
+        def _make_chunk_sender(self, webhook_url: str, is_group: bool, sender_staff_id: str):
+            """Create a callback that sends paragraph chunks via sessionWebhook."""
+            _sent_any = False
+
+            async def _send_chunk(chunk: str) -> None:
+                nonlocal _sent_any
+                if not webhook_url or not chunk.strip():
+                    return
+                _sent_any = True
+                await self._send_via_webhook(
+                    webhook_url, chunk,
+                    is_group=is_group, sender_staff_id=sender_staff_id,
+                )
+
+            return _send_chunk
 
         async def send(self, session_id: str, text: str, meta: dict[str, Any] | None = None) -> None:
             """Proactive send — look up stored webhook and send."""

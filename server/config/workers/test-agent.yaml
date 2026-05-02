@@ -31,7 +31,23 @@ workspaces:
 response:
   stream: true
   markdown: true
-skills: []
+response:
+  stream: true
+  markdown: true
+skills:
+- task-tracker
+- systematic-debugging
+- code-review
+- writing-plans
+- brainstorming
+- executing-plans
+- finishing-a-development-branch
+- verification-before-completion
+- docx
+- pdf
+- pptx
+- xlsx
+- browser-use
 
 history: {}
 learning:

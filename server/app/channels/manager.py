@@ -111,7 +111,12 @@ class ChannelManager:
         return result
 
     async def _on_message(self, msg: ChannelMessage) -> str:
-        """Route an incoming message to the bound worker via stream_message."""
+        """Route an incoming message to the bound worker via stream_message.
+
+        Streams reply incrementally: calls msg.on_reply_chunk for each
+        paragraph-sized chunk so the channel can push it to the user
+        (e.g. via DingTalk sessionWebhook).  Returns the final full reply.
+        """
         from app.services import stream_message, create_session
 
         if self._agent_os is None:
@@ -130,14 +135,10 @@ class ChannelManager:
             return 'Error: no worker configured'
 
         # Map channel session (e.g. "dingtalk:sender123") → nowork session ID
-        # We keep a simple in-memory mapping so repeated messages from the same
-        # user reuse the same nowork session.
         map_key = msg.session_id
         nowork_session_id = self._session_map.get(map_key)
 
         if not nowork_session_id:
-            # Check if worker has any existing session for this channel sender
-            # by searching session titles
             try:
                 from app.session_manager import list_worker_sessions
                 existing = list_worker_sessions(worker_id)
@@ -160,8 +161,9 @@ class ChannelManager:
 
         self._session_map[map_key] = nowork_session_id
 
-        # Collect the full reply from the stream
+        # Stream the reply, collecting content and emitting paragraph chunks
         full_reply = ''
+        pending = ''  # buffer for paragraph-based streaming
         try:
             async for sse_line in stream_message(
                 nowork_session_id, msg.text, attachments=[], agent_os=self._agent_os
@@ -174,14 +176,29 @@ class ChannelManager:
                     continue
 
                 event_type = event_data.get('event', '')
-                if event_type == 'RunCompleted':
-                    full_reply = event_data.get('content', full_reply)
-                elif event_type == 'RunError':
-                    full_reply = f'Error: {event_data.get("content", "unknown error")}'
-                elif event_type == 'RunContent':
+
+                if event_type == 'RunContent':
                     content = event_data.get('content', '')
                     if content:
-                        full_reply = content
+                        pending += content
+                        # Emit chunk when we have a paragraph break
+                        if '\n\n' in pending:
+                            chunk, pending = pending.rsplit('\n\n', 1)
+                            chunk = chunk.strip()
+                            if chunk and msg.on_reply_chunk:
+                                await msg.on_reply_chunk(chunk)
+
+                elif event_type == 'RunCompleted':
+                    full_reply = event_data.get('content', '')
+                    # Flush remaining pending content
+                    pending_stripped = pending.strip()
+                    if pending_stripped and msg.on_reply_chunk:
+                        await msg.on_reply_chunk(pending_stripped)
+                    pending = ''
+
+                elif event_type == 'RunError':
+                    full_reply = f'Error: {event_data.get("content", "unknown error")}'
+                    pending = ''
 
         except Exception as e:
             logger.exception('Error streaming message for channel %s: %s', msg.channel_id, e)

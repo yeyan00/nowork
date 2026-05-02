@@ -1,8 +1,8 @@
 """Channel data schemas."""
 from __future__ import annotations
 
-from typing import Any, Optional
-from pydantic import BaseModel
+from typing import Any, Callable, Optional
+from pydantic import BaseModel, ConfigDict
 
 
 SUPPORTED_PLATFORMS = ('dingtalk', 'feishu', 'wecom')
@@ -21,12 +21,17 @@ class ChannelConfig(BaseModel):
 
 
 class ChannelMessage(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     channel_id: str
     platform: str
     sender_id: str
     session_id: str
     text: str = ''
     meta: dict[str, Any] = {}
+    # Callback for streaming reply chunks.  Not serialized.
+    # Signature: async (chunk_text: str) -> None
+    on_reply_chunk: Optional[Callable[[str], Any]] = None
 
 
 class ChannelStatus(BaseModel):
