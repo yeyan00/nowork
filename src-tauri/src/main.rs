@@ -7,7 +7,11 @@ use std::process::Child;
 use std::sync::{Arc, Mutex};
 
 use rfd::FileDialog;
-use tauri::{AppHandle, Manager, RunEvent, WebviewWindow};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::TrayIconBuilder,
+    AppHandle, Manager, RunEvent, WindowEvent,
+};
 
 #[tauri::command]
 fn open_attachment_dialog(kind: String, multiple: bool) -> Result<Vec<String>, String> {
@@ -124,6 +128,7 @@ fn main() {
     let child_for_exit = Arc::clone(&backend_child);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![open_attachment_dialog, get_runtime_config, get_backend_error, open_external_url])
         .setup(move |app| {
             let paths = backend_paths::resolve_paths(&app.handle());
@@ -154,11 +159,49 @@ fn main() {
                 waited_ms += 200;
             }
 
+            // Setup system tray with menu
+            let show_item = MenuItem::with_id(app, "show", "打开", true, None::<&str>)
+                .expect("failed to create show menu item");
+            let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)
+                .expect("failed to create quit menu item");
+            let menu = Menu::with_items(app, &[&show_item, &quit_item])
+                .expect("failed to create tray menu");
+
+            let _tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "show" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .build(app)
+                .expect("failed to build tray icon");
+
+            // Intercept window close request → hide to tray instead of exit
+            if let Some(window) = app.get_webview_window("main") {
+                let window_clone = window.clone();
+                window.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = window_clone.hide();
+                    }
+                });
+            }
+
             Ok(())
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(move |app_handle, event| match event {
+        .run(move |_app_handle, event| match event {
             RunEvent::Exit => {
                 let mut guard = child_for_exit.lock().expect("failed to lock backend child");
                 if let Some(child) = guard.as_mut() {

@@ -10,6 +10,14 @@
                   "devUrl":  "http://localhost:5173"
               },
     "app":  {
+                "security": {
+                    "capabilities": [
+                        {
+                            "identifier": "default",
+                            "permissions": ["notification:default", "notification:allow-is-permission-granted", "notification:allow-request-permission", "notification:allow-send"]
+                        }
+                    ]
+                },
                 "windows":  [
                                 {
                                     "title":  "nowork",

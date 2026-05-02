@@ -3,6 +3,7 @@ import { useI18n } from '../i18n';
 import { cancelRun, createSession, listMessages, listModels, listSessions, sendMessageStream, updateSession } from '../lib/backend';
 import type { AgentEvent, ProviderInfo } from '../lib/backend';
 import type { ChatAttachment, ChatMessage, MemberActivity, ToolCall, WorkerSummary, WorkspaceBinding } from '../types';
+import { notifyWorkerDone } from '../lib/notify';
 import type { CachedSessionState, CachedWorkerState } from './chatState';
 import { createEmptyWorkerState, ensureSessionState, getVisibleAndOverflowSessionIds, type MemberActivitiesByRun } from './chatState';
 import { MarkdownContent } from './MarkdownContent';
@@ -999,6 +1000,10 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
               outputTokens: finalOutput || undefined,
             } : message),
           }));
+          // Send system notification when task completes and window is hidden
+          if (document.hidden && worker?.name && userContent) {
+            void notifyWorkerDone(worker.name, userContent);
+          }
           return;
         }
 
