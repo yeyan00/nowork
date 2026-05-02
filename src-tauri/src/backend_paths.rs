@@ -3,6 +3,24 @@ use std::path::PathBuf;
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager};
 
+// On Windows, Tauri's path().resolve() may return UNC paths (\\?\C:\...).
+// Python's pycryptodome fails to load .pyd files when __file__ has UNC prefix.
+// Use dunce to convert UNC paths to regular DOS paths.
+#[cfg(windows)]
+use dunce;
+
+/// Normalize path to regular DOS format on Windows (remove \\?\ prefix)
+fn normalize_path(path: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    {
+        dunce::simplified(&path).to_path_buf()
+    }
+    #[cfg(not(windows))]
+    {
+        path
+    }
+}
+
 pub struct BundledBackendPaths {
     pub python_executable: PathBuf,
     pub server_directory: PathBuf,
@@ -115,9 +133,9 @@ pub fn resolve_paths(app: &AppHandle) -> BundledBackendPaths {
     };
 
     BundledBackendPaths {
-        python_executable,
-        server_directory,
-        runtime_directory,
-        site_packages_directory,
+        python_executable: normalize_path(python_executable),
+        server_directory: normalize_path(server_directory),
+        runtime_directory: normalize_path(runtime_directory),
+        site_packages_directory: normalize_path(site_packages_directory),
     }
 }
