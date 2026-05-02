@@ -165,12 +165,14 @@ if HAS_FEISHU:
             """Start the Feishu WebSocket client."""
             self._loop = asyncio.get_running_loop()
 
-            # Create lark client for sending messages
+            # Create lark client for sending messages (builder pattern)
             domain = lark.LARK_DOMAIN if self.domain == 'lark' else lark.FEISHU_DOMAIN
-            self._client = lark.Client(
-                app_id=self.app_id,
-                app_secret=self.app_secret,
-                domain=domain,
+            self._client = (
+                lark.Client.builder()
+                .app_id(self.app_id)
+                .app_secret(self.app_secret)
+                .domain(domain)
+                .build()
             )
 
             self._stop_event.clear()
@@ -276,12 +278,16 @@ if HAS_FEISHU:
         def _on_message_sync(self, data: 'P2ImMessageReceiveV1') -> None:
             """Sync handler called from WebSocket thread."""
             if self._closed:
+                logger.info('Feishu _on_message_sync: channel closed, ignoring')
                 return
+
+            logger.info('Feishu _on_message_sync called')
 
             # Guard against cross-instance dispatch
             header = getattr(data, 'header', None)
             event_app_id = getattr(header, 'app_id', None)
             if event_app_id and event_app_id != self.app_id:
+                logger.debug('Feishu: ignoring message from different app_id=%s', event_app_id)
                 return
 
             # Drop stale messages
@@ -294,14 +300,18 @@ if HAS_FEISHU:
                     return
 
             if not self._loop or not self._loop.is_running():
-                logger.warning('Feishu: main loop not running, drop message')
+                logger.warning('Feishu: main loop not running (loop=%s, running=%s), drop message',
+                               self._loop, self._loop.is_running() if self._loop else False)
                 return
 
-            asyncio.run_coroutine_threadsafe(self._on_message(data), self._loop)
+            future = asyncio.run_coroutine_threadsafe(self._handle_event(data), self._loop)
+            logger.info('Feishu: dispatched _handle_event to main loop')
 
-        async def _on_message(self, data: 'P2ImMessageReceiveV1') -> None:
-            """Handle one Feishu message: dedup, parse, route to manager."""
+        async def _handle_event(self, data: 'P2ImMessageReceiveV1') -> None:
+            """Handle one Feishu event: dedup, parse, build ChannelMessage, route to manager."""
+            logger.info('Feishu _handle_event entered')
             if not data or not getattr(data, 'event', None):
+                logger.warning('Feishu _handle_event: no data or no event')
                 return
 
             try:
@@ -309,6 +319,7 @@ if HAS_FEISHU:
                 message = getattr(event, 'message', None)
                 sender = getattr(event, 'sender', None)
                 if not message or not sender:
+                    logger.warning('Feishu _handle_event: no message or sender')
                     return
 
                 # Dedup
@@ -450,6 +461,7 @@ if HAS_FEISHU:
         async def _send_text(self, receive_id_type: str, receive_id: str, body: str) -> str | None:
             """Send a text/post message via Feishu OpenAPI."""
             if not self._client:
+                logger.warning('Feishu _send_text: no client')
                 return None
 
             # Truncate long messages
