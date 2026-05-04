@@ -401,6 +401,9 @@
     "fromMessage": "来自聊天消息",
     "fileTree": "文件树",
     "collapseTree": "收起文件树",
-    "expandTree": "展开文件树"
+    "expandTree": "展开文件树",
+    "emptyDirectory": "目录为空",
+    "pdfSize": "大小",
+    "pdfNotSupported": "暂不支持 PDF 预览，请使用外部查看器打开。"
   }
 }

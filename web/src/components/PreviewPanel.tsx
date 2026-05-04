@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useI18n } from '../i18n';
 import { readFile, readRawFile, getFileCategory, getRelativePath, type FileCategory } from '../lib/filePreview';
 import { MarkdownContent } from './MarkdownContent';
@@ -17,6 +19,7 @@ export function PreviewPanel({ file, workspace, onClose }: PreviewPanelProps) {
   const { t } = useI18n();
   const [content, setContent] = useState('');
   const [imageSrc, setImageSrc] = useState('');
+  const [pdfInfo, setPdfInfo] = useState<{ size: number; path: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'preview' | 'edit'>('preview');
@@ -26,6 +29,7 @@ export function PreviewPanel({ file, workspace, onClose }: PreviewPanelProps) {
     if (!file) {
       setContent('');
       setImageSrc('');
+      setPdfInfo(null);
       setError(null);
       setLoading(false);
       return;
@@ -44,6 +48,7 @@ export function PreviewPanel({ file, workspace, onClose }: PreviewPanelProps) {
           if (!cancelled) {
             setImageSrc(result.dataUrl);
             setContent('');
+            setPdfInfo(null);
             setLoading(false);
           }
         })
@@ -53,11 +58,29 @@ export function PreviewPanel({ file, workspace, onClose }: PreviewPanelProps) {
             setLoading(false);
           }
         });
+    } else if (category === 'pdf') {
+      // PDF: just show info (no embedded viewer yet)
+      void readRawFile(file.path)
+        .then(result => {
+          if (!cancelled) {
+            setPdfInfo({ size: result.size, path: file.path });
+            setContent('');
+            setImageSrc('');
+            setLoading(false);
+          }
+        })
+        .catch(e => {
+          if (!cancelled) {
+            setError(e instanceof Error ? e.message : 'Failed to read PDF');
+            setLoading(false);
+          }
+        });
     } else if (file.content && file.source === 'message') {
       // Content already available from tool call
       if (!cancelled) {
         setContent(file.content);
         setImageSrc('');
+        setPdfInfo(null);
         setLoading(false);
       }
     } else {
@@ -67,6 +90,7 @@ export function PreviewPanel({ file, workspace, onClose }: PreviewPanelProps) {
           if (!cancelled) {
             setContent(result.content);
             setImageSrc('');
+            setPdfInfo(null);
             setLoading(false);
           }
         })
@@ -112,6 +136,7 @@ export function PreviewPanel({ file, workspace, onClose }: PreviewPanelProps) {
 
   const category = file.category;
   const relativePath = workspace ? getRelativePath(file.path, workspace.path) : file.path;
+  const fileDirPath = file.path.replace(/\\/g, '/').split('/').slice(0, -1).join('/');
 
   const canToggleView = category === 'markdown' || category === 'json' || category === 'html';
 
@@ -165,10 +190,24 @@ export function PreviewPanel({ file, workspace, onClose }: PreviewPanelProps) {
             </div>
           )}
 
+          {/* PDF */}
+          {category === 'pdf' && pdfInfo && (
+            <div className="preview-pdf-placeholder">
+              <div className="preview-pdf-icon">📄</div>
+              <div className="preview-pdf-title">{file.name}</div>
+              <div className="preview-pdf-info">
+                {t('filePreview.pdfSize') || 'Size'}: {(pdfInfo.size / 1024).toFixed(1)} KB
+              </div>
+              <div className="preview-pdf-hint">
+                {t('filePreview.pdfNotSupported') || 'PDF preview is not yet supported. Use an external viewer.'}
+              </div>
+            </div>
+          )}
+
           {/* Markdown preview */}
           {category === 'markdown' && viewMode === 'preview' && content && (
             <div className="preview-markdown">
-              <MarkdownContent content={content} />
+              <MarkdownContent content={content} basePath={fileDirPath} />
             </div>
           )}
 
@@ -187,8 +226,30 @@ export function PreviewPanel({ file, workspace, onClose }: PreviewPanelProps) {
             />
           )}
 
-          {/* Text/code view (edit mode for md/json/html, or any code/style file) */}
-          {((category === 'code' || category === 'style') || (viewMode === 'edit' && content)) && (
+          {/* Code with syntax highlighting */}
+          {(category === 'code' || category === 'style') && content && (
+            <div className="preview-code-wrap">
+              <SyntaxHighlighter
+                language={getHighlightLanguage(file.extension || '')}
+                style={oneDark}
+                showLineNumbers
+                wrapLongLines
+                customStyle={{
+                  margin: 0,
+                  padding: '12px',
+                  background: '#1e1e1e',
+                  fontSize: '13px',
+                  lineHeight: '1.5',
+                  borderRadius: '6px',
+                }}
+              >
+                {content}
+              </SyntaxHighlighter>
+            </div>
+          )}
+
+          {/* Edit mode (raw text) for md/json/html */}
+          {viewMode === 'edit' && content && category !== 'code' && category !== 'style' && (
             <pre className="preview-code"><code>{content}</code></pre>
           )}
         </div>
@@ -293,7 +354,56 @@ function getCategoryEmoji(category: FileCategory): string {
     case 'json': return '📋';
     case 'html': return '🌐';
     case 'style': return '🎨';
+    case 'pdf': return '📄';
     case 'code': return '📄';
     default: return '📄';
   }
+}
+
+function getHighlightLanguage(ext: string): string {
+  const map: Record<string, string> = {
+    py: 'python',
+    js: 'javascript',
+    ts: 'typescript',
+    tsx: 'tsx',
+    jsx: 'jsx',
+    json: 'json',
+    html: 'html',
+    css: 'css',
+    scss: 'scss',
+    sass: 'sass',
+    less: 'less',
+    md: 'markdown',
+    sh: 'bash',
+    bash: 'bash',
+    yaml: 'yaml',
+    yml: 'yaml',
+    sql: 'sql',
+    xml: 'xml',
+    java: 'java',
+    go: 'go',
+    rs: 'rust',
+    cpp: 'cpp',
+    c: 'c',
+    h: 'c',
+    hpp: 'cpp',
+    cs: 'csharp',
+    php: 'php',
+    rb: 'ruby',
+    swift: 'swift',
+    kt: 'kotlin',
+    scala: 'scala',
+    lua: 'lua',
+    r: 'r',
+    pl: 'perl',
+    pm: 'perl',
+    dockerfile: 'dockerfile',
+    makefile: 'makefile',
+    toml: 'toml',
+    ini: 'ini',
+    env: 'bash',
+    log: 'text',
+    txt: 'text',
+  };
+  return map[ext.toLowerCase()] || 'text';
 }

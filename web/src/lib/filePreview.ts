@@ -68,13 +68,14 @@ export async function statFile(filePath: string): Promise<FileStatResult> {
 
 // ── File Type Helpers ───────────────────────────────────────────
 
-export type FileCategory = 'image' | 'markdown' | 'json' | 'html' | 'style' | 'code';
+export type FileCategory = 'image' | 'markdown' | 'json' | 'html' | 'style' | 'pdf' | 'code';
 
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp', 'avif']);
 const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown']);
 const JSON_EXTENSIONS = new Set(['json', 'jsonc', 'json5', 'geojson']);
 const HTML_EXTENSIONS = new Set(['html', 'htm']);
 const STYLE_EXTENSIONS = new Set(['css', 'scss', 'sass', 'less']);
+const PDF_EXTENSIONS = new Set(['pdf']);
 
 export function getFileCategory(filePath: string): FileCategory {
   const ext = filePath.split('.').pop()?.toLowerCase() || '';
@@ -83,6 +84,7 @@ export function getFileCategory(filePath: string): FileCategory {
   if (JSON_EXTENSIONS.has(ext)) return 'json';
   if (HTML_EXTENSIONS.has(ext)) return 'html';
   if (STYLE_EXTENSIONS.has(ext)) return 'style';
+  if (PDF_EXTENSIONS.has(ext)) return 'pdf';
   return 'code';
 }
 

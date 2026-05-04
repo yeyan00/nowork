@@ -401,6 +401,9 @@
     "fromMessage": "From chat message",
     "fileTree": "File Tree",
     "collapseTree": "Collapse tree",
-    "expandTree": "Show file tree"
+    "expandTree": "Show file tree",
+    "emptyDirectory": "This directory is empty",
+    "pdfSize": "Size",
+    "pdfNotSupported": "PDF preview is not yet supported. Use an external viewer."
   }
 }

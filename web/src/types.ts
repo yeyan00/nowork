@@ -113,7 +113,7 @@ export interface FileNode {
   extension?: string;
 }
 
-export type FileCategory = 'image' | 'markdown' | 'json' | 'html' | 'style' | 'code';
+export type FileCategory = 'image' | 'markdown' | 'json' | 'html' | 'style' | 'pdf' | 'code';
 
 export interface PreviewingFile {
   workspacePath: string;
