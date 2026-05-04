@@ -80,6 +80,28 @@ foreach ($pattern in $allowlist) {
 
 Write-Host "  Copied: $copiedItems / $totalItems items ($missingItems not found in source)"
 
+# ── Step 2.1: Add package management tools (pip, setuptools, wheel) ───
+# These are not in allowlist (not app dependencies) but needed for user to install extra packages
+Write-Host "  Adding pip, setuptools, wheel for user package management..."
+
+$pkgTools = @('pip', 'setuptools', 'wheel')
+foreach ($tool in $pkgTools) {
+  $srcTool = Join-Path $sourceSP $tool
+  if (Test-Path $srcTool) {
+    Copy-Item $srcTool (Join-Path $targetSP $tool) -Recurse -Force
+    Write-Host "    Copied: $tool"
+  } else {
+    Write-Host "    SKIP (not found): $tool" -ForegroundColor Yellow
+  }
+  
+  # Also copy .dist-info for metadata (pip needs this)
+  $srcDistInfo = Get-ChildItem $sourceSP -Directory -Filter "$tool-*.dist-info" -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($srcDistInfo) {
+    Copy-Item $srcDistInfo.FullName (Join-Path $targetSP $srcDistInfo.Name) -Recurse -Force
+    Write-Host "    Copied: $($srcDistInfo.Name)"
+  }
+}
+
 # ── Step 2.5: Remove unnecessary files ────────────────────────────────
 
 # 1) __pycache__ / .pyc — runtime bytecode cache, auto-regenerated
@@ -117,11 +139,23 @@ if ($cythonCount -gt 0) {
 Write-Host "  Cleaned up $cythonCount Cython source files"
 
 # 5) .dist-info — pip metadata, not needed at runtime, ~3 MB
-$distInfoCount = (Get-ChildItem $targetSP -Directory -Filter '*.dist-info' -ErrorAction SilentlyContinue).Count
-if ($distInfoCount -gt 0) {
-  Get-ChildItem $targetSP -Directory -Filter '*.dist-info' | Remove-Item -Recurse -Force
+# Keep pip/setuptools/wheel dist-info for package management
+$pkgToolsDistInfo = @('pip-', 'setuptools-', 'wheel-')
+$distInfoCount = 0
+Get-ChildItem $targetSP -Directory -Filter '*.dist-info' -ErrorAction SilentlyContinue | ForEach-Object {
+  $keep = $false
+  foreach ($prefix in $pkgToolsDistInfo) {
+    if ($_.Name.StartsWith($prefix)) {
+      $keep = $true
+      break
+    }
+  }
+  if (-not $keep) {
+    Remove-Item $_.FullName -Recurse -Force
+    $distInfoCount++
+  }
 }
-Write-Host "  Cleaned up $distInfoCount .dist-info directories"
+Write-Host "  Cleaned up $distInfoCount .dist-info directories (kept pip/setuptools/wheel)"
 
 # ── Step 3: Summary ───────────────────────────────────────────────────
 Write-Host "`n[3/3] Done!"
