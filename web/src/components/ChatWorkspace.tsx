@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { cancelRun, createSession, listMessages, listModels, listSessions, sendMessageStream, updateSession } from '../lib/backend';
 import type { AgentEvent, ProviderInfo } from '../lib/backend';
-import type { ChatAttachment, ChatMessage, MemberActivity, ToolCall, WorkerSummary, WorkspaceBinding } from '../types';
+import type { ChatAttachment, ChatMessage, MemberActivity, PreviewingFile, ToolCall, WorkerSummary, WorkspaceBinding, WorkspaceInfo } from '../types';
+import { FilePreviewSidebar } from './FilePreviewSidebar';
 import { notifyWorkerDone } from '../lib/notify';
 import type { CachedSessionState, CachedWorkerState } from './chatState';
 import { createEmptyWorkerState, ensureSessionState, getVisibleAndOverflowSessionIds, type MemberActivitiesByRun } from './chatState';
@@ -146,6 +147,9 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
   const [showWorkerSettings, setShowWorkerSettings] = useState(false);
   const [showMemberSidebar, setShowMemberSidebar] = useState(false);
   const [showWsDropdown, setShowWsDropdown] = useState(false);
+  const [showFilePreviewSidebar, setShowFilePreviewSidebar] = useState(false);
+  const [pendingPreviewFile, setPendingPreviewFile] = useState<PreviewingFile | null>(null);
+  const [previewFileHandled, setPreviewFileHandled] = useState(true);
   const [pendingSessionWorkspaces, setPendingSessionWorkspaces] = useState<Record<string, string>>({});
   const [draftAttachments, setDraftAttachments] = useState<Record<string, ChatAttachment[]>>({});
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
@@ -234,6 +238,29 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
 
   const allWorkspacePaths = useMemo(() => workerWorkspaces.map((ws) => ws.path), [workerWorkspaces]);
   const workerCapabilities = useMemo(() => getWorkerCapabilities(worker), [worker]);
+
+  // Workspace info for FilePreviewSidebar
+  const workspaceInfos: WorkspaceInfo[] = useMemo(
+    () => workerWorkspaces.map(ws => ({
+      path: ws.path,
+      name: ws.path.replace(/\\/g, '/').split('/').filter(Boolean).pop() || ws.path,
+      permission: ws.permission,
+    })),
+    [workerWorkspaces],
+  );
+
+  const handlePreviewFile = useCallback((file: PreviewingFile) => {
+    setPendingPreviewFile(file);
+    setPreviewFileHandled(false);
+    if (!showFilePreviewSidebar) {
+      setShowFilePreviewSidebar(true);
+    }
+  }, [showFilePreviewSidebar]);
+
+  const handlePreviewFileHandled = useCallback(() => {
+    setPreviewFileHandled(true);
+  }, []);
+
   const attachmentDraftKey = worker ? `${worker.id}:${composerSessionId}` : DRAFT_SESSION_ID;
   const composerAttachments = draftAttachments[attachmentDraftKey] ?? [];
 
@@ -1101,6 +1128,15 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
         </div>
 
         <div className="header-actions">
+          <button
+            type="button"
+            className={`icon-button tooltip${showFilePreviewSidebar ? ' active' : ''}`}
+            aria-label={t('chat.toggleFilePreview') || 'Files'}
+            title={showFilePreviewSidebar ? (t('chat.hideFilePreview') || 'Hide Files') : (t('chat.showFilePreview') || 'Show Files')}
+            onClick={() => setShowFilePreviewSidebar((v) => !v)}
+          >
+            📁
+          </button>
           {worker.type === 'Team' && (
             <button
               type="button"
@@ -1213,7 +1249,12 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                 ? <div className="message-body"><MarkdownContent content={message.content} /></div>
                 : <div className="message-body">{message.content}</div>}
               {message.role === 'worker' && message.toolCalls && message.toolCalls.length > 0 && (
-                <ToolCallList tools={message.toolCalls} />
+                <ToolCallList
+                  tools={message.toolCalls}
+                  workspacePath={effectiveWorkspaces.length === 1 ? effectiveWorkspaces[0] : null}
+                  onPreviewFile={handlePreviewFile}
+                  messageId={message.id}
+                />
               )}
               {message.role === 'worker' && (() => {
                 // Last worker message in a consecutive group → show tokens
@@ -1418,6 +1459,14 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           onClose={() => setShowMemberSidebar(false)}
         />
       )}
+
+      <FilePreviewSidebar
+        open={showFilePreviewSidebar}
+        onToggle={() => setShowFilePreviewSidebar(v => !v)}
+        workspaces={workspaceInfos}
+        externalPreviewFile={!previewFileHandled ? pendingPreviewFile : null}
+        onExternalPreviewHandled={handlePreviewFileHandled}
+      />
     </section>
   );
 }

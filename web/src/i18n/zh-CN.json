@@ -95,7 +95,10 @@
     "toggleMemberActivities": "切换成员活动显示",
     "showMemberActivities": "显示成员活动",
     "hideMemberActivities": "隐藏成员活动",
-    "noMemberActivities": "暂无成员活动"
+    "noMemberActivities": "暂无成员活动",
+    "toggleFilePreview": "文件",
+    "showFilePreview": "显示文件",
+    "hideFilePreview": "隐藏文件"
   },
   "workerList": {
     "title": "工作助手",
@@ -380,5 +383,24 @@
     "verificationToken": "验证 Token",
     "setupGuide": "设置指南",
     "noGuideForPlatform": "该平台暂无设置指南"
+  },
+  "filePreview": {
+    "files": "文件",
+    "closeSidebar": "关闭侧边栏",
+    "selectWorkspace": "选择工作区",
+    "noWorkspaces": "无工作区",
+    "searchFiles": "搜索文件...",
+    "refresh": "刷新",
+    "loading": "加载中...",
+    "noResults": "无结果",
+    "selectToPreview": "选择文件以预览",
+    "clickFileHint": "点击文件树中的文件或聊天中的文件卡片",
+    "preview": "预览",
+    "switchToEdit": "编辑",
+    "switchToPreview": "预览",
+    "fromMessage": "来自聊天消息",
+    "fileTree": "文件树",
+    "collapseTree": "收起文件树",
+    "expandTree": "展开文件树"
   }
 }

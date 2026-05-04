@@ -110,7 +110,7 @@ export async function fetchHealth(baseUrl: string): Promise<HealthPayload> {
   return (await response.json()) as HealthPayload;
 }
 
-async function fetchFromApi(path: string, init?: RequestInit): Promise<Response> {
+export async function fetchFromApi(path: string, init?: RequestInit): Promise<Response> {
   const runtime = await readRuntimeState();
   if (!runtime) {
     throw new Error('Runtime metadata unavailable');

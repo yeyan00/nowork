@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useI18n } from '../i18n';
-import type { ToolCall } from '../types';
+import type { ToolCall, PreviewingFile } from '../types';
+import { FileCard, isWriteFileToolCall } from './FileCard';
 
 function formatJson(obj: unknown): string {
   if (obj === null || obj === undefined) return '';
@@ -83,7 +84,12 @@ function formatToolSummary(toolName: string, args: Record<string, unknown>): str
   }
 }
 
-export function ToolCallPanel({ tool }: { tool: ToolCall }) {
+export function ToolCallPanel({ tool, workspacePath, onPreviewFile, messageId }: {
+  tool: ToolCall;
+  workspacePath?: string | null;
+  onPreviewFile?: (file: PreviewingFile) => void;
+  messageId?: string;
+}) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
 
@@ -92,6 +98,18 @@ export function ToolCallPanel({ tool }: { tool: ToolCall }) {
   const hasResult = tool.result !== null && tool.result !== undefined;
   const statusIcon = tool.error ? '❌' : hasResult ? '✅' : '⏳';
   const statusClass = tool.error ? 'error' : hasResult ? 'done' : 'running';
+
+  // If this is a write_file tool call and we have a preview handler, render FileCard instead
+  if (isWriteFileToolCall(tool) && onPreviewFile) {
+    return (
+      <FileCard
+        toolCall={tool}
+        workspacePath={workspacePath ?? null}
+        onPreview={onPreviewFile}
+        messageId={messageId}
+      />
+    );
+  }
 
   return (
     <div className={`tool-chip ${statusClass}`}>
@@ -127,12 +145,23 @@ export function ToolCallPanel({ tool }: { tool: ToolCall }) {
   );
 }
 
-export function ToolCallList({ tools }: { tools: ToolCall[] }) {
+export function ToolCallList({ tools, workspacePath, onPreviewFile, messageId }: {
+  tools: ToolCall[];
+  workspacePath?: string | null;
+  onPreviewFile?: (file: PreviewingFile) => void;
+  messageId?: string;
+}) {
   if (!tools || tools.length === 0) return null;
   return (
     <div className="tool-call-list">
       {tools.map((tool, index) => (
-        <ToolCallPanel key={tool.toolCallId || `${tool.toolName}-${index}`} tool={tool} />
+        <ToolCallPanel
+          key={tool.toolCallId || `${tool.toolName}-${index}`}
+          tool={tool}
+          workspacePath={workspacePath}
+          onPreviewFile={onPreviewFile}
+          messageId={messageId}
+        />
       ))}
     </div>
   );

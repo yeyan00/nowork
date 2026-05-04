@@ -95,7 +95,10 @@
     "toggleMemberActivities": "Toggle member activities",
     "showMemberActivities": "Show member activities",
     "hideMemberActivities": "Hide member activities",
-    "noMemberActivities": "No member activities yet"
+    "noMemberActivities": "No member activities yet",
+    "toggleFilePreview": "Files",
+    "showFilePreview": "Show Files",
+    "hideFilePreview": "Hide Files"
   },
   "workerList": {
     "title": "Workers",
@@ -380,5 +383,24 @@
     "verificationToken": "Verification Token",
     "setupGuide": "Setup Guide",
     "noGuideForPlatform": "No setup guide available for this platform"
+  },
+  "filePreview": {
+    "files": "Files",
+    "closeSidebar": "Close sidebar",
+    "selectWorkspace": "Select workspace",
+    "noWorkspaces": "No workspaces",
+    "searchFiles": "Search files...",
+    "refresh": "Refresh",
+    "loading": "Loading...",
+    "noResults": "No results",
+    "selectToPreview": "Select a file to preview",
+    "clickFileHint": "Click a file in the tree or a file card in chat",
+    "preview": "Preview",
+    "switchToEdit": "Edit",
+    "switchToPreview": "Preview",
+    "fromMessage": "From chat message",
+    "fileTree": "File Tree",
+    "collapseTree": "Collapse tree",
+    "expandTree": "Show file tree"
   }
 }

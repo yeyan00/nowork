@@ -101,6 +101,38 @@ export interface WorkspaceBinding {
   permission: 'read' | 'read-write';
 }
 
+// ── File Preview Types ──────────────────────────────────────────
+
+export interface FileNode {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  isFile: boolean;
+  size: number;
+  mtimeMs: number;
+  extension?: string;
+}
+
+export type FileCategory = 'image' | 'markdown' | 'json' | 'html' | 'style' | 'code';
+
+export interface PreviewingFile {
+  workspacePath: string;
+  path: string;
+  name: string;
+  extension?: string;
+  content: string;
+  category: FileCategory;
+  source: 'tree' | 'message';
+  toolCallId?: string;
+  messageId?: string;
+}
+
+export interface WorkspaceInfo {
+  path: string;
+  name: string;
+  permission: 'read' | 'read-write';
+}
+
 export interface ModelConfig {
   provider: string;
   model: string;

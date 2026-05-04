@@ -910,6 +910,9 @@ async def api_trigger_compaction(ws_id: str, request: Request) -> dict[str, obje
 from app.channels_api import router as channels_router
 app.include_router(channels_router)
 
+from app.fs_api import router as fs_router
+app.include_router(fs_router)
+
 
 class LogRequestsMiddleware:
     """Pure ASGI middleware for request logging and exception handling.
