@@ -157,7 +157,16 @@
     "noAgents": "没有可用的智能体。",
     "unsavedChanges": "有未保存的更改",
     "defaultReadable": "允许读取非系统目录",
-    "defaultReadableHint": "开启后，read_file/grep/find/ls 可访问任何非系统目录（推荐）"
+    "defaultReadableHint": "开启后，read_file/grep/find/ls 可访问任何非系统目录（推荐）",
+    "allowedCommands": "允许的命令",
+    "defaultCommands": "默认",
+    "default": "默认",
+    "custom": "自定义",
+    "resetToDefaults": "重置为默认",
+    "resetHint": "空列表 = 使用全部默认命令",
+    "customCommands": "自定义命令",
+    "addCommandPlaceholder": "npm, docker, ...",
+    "remove": "移除"
   },
   "schedules": {
     "title": "定时任务",

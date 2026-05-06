@@ -31,6 +31,7 @@ import {
 import type { AgentTypeInfo, AgentTypeConfigField, PrerequisiteStatus } from '../lib/backend';
 import type { KnowledgeBase, MCPServer, ProviderInfo, SkillSummary, ToolCatalogEntry } from '../lib/backend';
 import type { WorkerSummary } from '../types';
+import { AllowedCommandsEditor } from './AllowedCommandsEditor';
 
 export type ConfigSection = 'basic' | 'tools' | 'skills' | 'workspace' | 'model' | 'mcp' | 'knowledge' | 'learning' | 'members';
 
@@ -81,6 +82,7 @@ export function WorkerSettingsPanel({
   const [workspaces, setWorkspaces] = useState<WorkspaceEntry[]>([]);
   const [newWsPath, setNewWsPath] = useState('');
   const [defaultReadable, setDefaultReadable] = useState(true);
+  const [allowedCommands, setAllowedCommands] = useState<string[]>([]);
   const [modelRef, setModelRef] = useState('');
   const [toolSelections, setToolSelections] = useState<Record<string, ToolSelection>>({});
   const [members, setMembers] = useState<{ agent_id: string; role: string }[]>([]);
@@ -156,6 +158,7 @@ export function WorkerSettingsPanel({
     const codingCfg = _toolsRaw.find((t) => t.class === 'CodingTools');
     const toolsConfig = (codingCfg?.config ?? {}) as Record<string, unknown>;
     setDefaultReadable(toolsConfig['default_readable'] !== false);
+    setAllowedCommands((toolsConfig['allowed_commands'] as string[]) ?? []);
 
     const membersRaw = (cfg['members'] as Array<Record<string, unknown>>) ?? [];
     setMembers(membersRaw.map((m) => ({ agent_id: (m['agent_id'] as string) ?? '', role: (m['role'] as string) ?? '' })));
@@ -245,13 +248,17 @@ export function WorkerSettingsPanel({
       const isRequired = cat.id === 'coding-tools';
       if (!isRequired && (!sel || !sel.enabled)) continue;
       const baseDirs = workspaces.map((w) => w.path);
-      const config: Record<string, unknown> = { base_dirs: baseDirs.length > 0 ? baseDirs : undefined, default_readable: defaultReadable };
+      const config: Record<string, unknown> = { 
+        base_dirs: baseDirs.length > 0 ? baseDirs : undefined, 
+        default_readable: defaultReadable,
+        allowed_commands: allowedCommands.length > 0 ? allowedCommands : undefined,
+      };
       const allOn = cat.tools.every((t) => sel?.subTools[t.id] || t.required);
       if (allOn) { config['all'] = true; } else { for (const t of cat.tools) { config[`enable_${t.id}`] = !!sel?.subTools[t.id]; } }
       result.push({ module: cat.module, class: cat.name, config });
     }
     return result;
-  }, [toolsCatalog, toolSelections, workspaces, defaultReadable]);
+  }, [toolsCatalog, toolSelections, workspaces, defaultReadable, allowedCommands]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -492,7 +499,24 @@ export function WorkerSettingsPanel({
                     <input type="checkbox" checked={isRequired || enabled} onChange={() => { if (!isRequired) toggleTool(cat.id); }} disabled={isRequired} />
                     <div className="tool-card-info"><strong>{cat.name}</strong><span className="tool-card-desc">{cat.description}</span></div>
                   </label>
-                  {showTools && (<div className="tool-sub-list">{cat.tools.map((st) => (<label key={st.id} className={`tool-sub-item${st.required ? ' tool-required' : ''}`}><input type="checkbox" checked={sel?.subTools[st.id] ?? st.default} onChange={() => toggleTool(cat.id, st.id)} disabled={st.required} /><span>{st.name}{st.required ? ' *' : ''}</span></label>))}</div>)}
+                  {showTools && (
+                    <div className="tool-sub-list">
+                      {cat.tools.map((st) => (
+                        <label key={st.id} className={`tool-sub-item${st.required ? ' tool-required' : ''}`}>
+                          <input type="checkbox" checked={sel?.subTools[st.id] ?? st.default} onChange={() => toggleTool(cat.id, st.id)} disabled={st.required} />
+                          <span>{st.name}{st.required ? ' *' : ''}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {/* Allowed Commands editor for CodingTools */}
+                  {isRequired && showTools && (
+                    <AllowedCommandsEditor
+                      commands={allowedCommands}
+                      onChange={setAllowedCommands}
+                      onDirty={markDirty}
+                    />
+                  )}
                 </div>
               );
             })}

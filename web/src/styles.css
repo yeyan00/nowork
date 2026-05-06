@@ -1899,6 +1899,256 @@ button {
   color: #2a4a9a;
 }
 
+/* ── Allowed Commands Editor ─────────────────────────────────── */
+
+.allowed-commands-editor {
+  margin: 8px 0 12px;
+  border: 1px solid rgba(132, 146, 170, 0.2);
+  border-radius: 8px;
+  background: #fafbfd;
+}
+
+.allowed-commands-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  color: #3d4f6d;
+}
+
+.allowed-commands-header:hover {
+  background: rgba(132, 146, 170, 0.08);
+}
+
+.allowed-commands-icon {
+  font-size: 10px;
+  color: #62738f;
+}
+
+.allowed-commands-title {
+  font-weight: 500;
+}
+
+.allowed-commands-summary {
+  font-size: 11px;
+  color: #62738f;
+  margin-left: auto;
+}
+
+.allowed-commands-body {
+  padding: 12px 14px;
+  border-top: 1px solid rgba(132, 146, 170, 0.12);
+}
+
+.allowed-commands-reset-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.allowed-commands-reset-btn {
+  padding: 6px 12px;
+  border: 1px solid rgba(132, 146, 170, 0.2);
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  color: #3d4f6d;
+  cursor: pointer;
+}
+
+.allowed-commands-reset-btn:hover:not(:disabled) {
+  background: rgba(132, 146, 170, 0.1);
+}
+
+.allowed-commands-reset-btn:disabled {
+  color: #94a3b8;
+  cursor: default;
+}
+
+.allowed-commands-reset-hint {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.allowed-commands-category {
+  margin-bottom: 10px;
+}
+
+.allowed-commands-category-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.allowed-commands-category-toggle {
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(132, 146, 170, 0.25);
+  border-radius: 4px;
+  background: #fff;
+  font-size: 10px;
+  color: #62738f;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.allowed-commands-category-toggle:hover {
+  background: rgba(132, 146, 170, 0.1);
+}
+
+.allowed-commands-category-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #3d4f6d;
+}
+
+.allowed-commands-category-count {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.allowed-commands-category-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-left: 24px;
+}
+
+.allowed-commands-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border: 1px solid rgba(132, 146, 170, 0.2);
+  border-radius: 4px;
+  background: #fff;
+  font-size: 11px;
+  color: #3d4f6d;
+  cursor: pointer;
+}
+
+.allowed-commands-item.enabled {
+  border-color: rgba(74, 124, 255, 0.3);
+  background: rgba(74, 124, 255, 0.08);
+  color: #2a4a9a;
+}
+
+.allowed-commands-item:hover {
+  background: rgba(132, 146, 170, 0.12);
+}
+
+.allowed-commands-item-check {
+  width: 10px;
+  font-size: 9px;
+  color: #4c78ff;
+}
+
+.allowed-commands-item-name {
+  font-family: "Cascadia Code", "Fira Code", monospace;
+}
+
+.allowed-commands-custom {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(132, 146, 170, 0.2);
+}
+
+.allowed-commands-custom-header {
+  margin-bottom: 6px;
+}
+
+.allowed-commands-custom-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #3d4f6d;
+}
+
+.allowed-commands-custom-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.allowed-commands-custom-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(255, 158, 64, 0.12);
+  font-size: 11px;
+  font-family: "Cascadia Code", "Fira Code", monospace;
+  color: #b86a00;
+}
+
+.allowed-commands-custom-remove {
+  border: none;
+  background: transparent;
+  color: #b86a00;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.6;
+}
+
+.allowed-commands-custom-remove:hover {
+  opacity: 1;
+}
+
+.allowed-commands-add-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.allowed-commands-add-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid rgba(132, 146, 170, 0.2);
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: "Cascadia Code", "Fira Code", monospace;
+  background: #fff;
+  color: #1e293b;
+  outline: none;
+}
+
+.allowed-commands-add-input:focus {
+  border-color: #4c78ff;
+}
+
+.allowed-commands-add-input::placeholder {
+  color: #94a3b8;
+}
+
+.allowed-commands-add-btn {
+  padding: 6px 14px;
+  border: 1px solid rgba(74, 124, 255, 0.3);
+  border-radius: 6px;
+  background: #4c78ff;
+  font-size: 12px;
+  color: #fff;
+  cursor: pointer;
+}
+
+.allowed-commands-add-btn:hover:not(:disabled) {
+  background: #3a5fd9;
+}
+
+.allowed-commands-add-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .ws-card {
   display: flex;
   align-items: center;

@@ -157,7 +157,16 @@
     "noAgents": "No agents available.",
     "unsavedChanges": "Unsaved changes",
     "defaultReadable": "Allow reading non-system directories",
-    "defaultReadableHint": "When enabled, read_file/grep/find/ls can access any non-system directory (recommended)"
+    "defaultReadableHint": "When enabled, read_file/grep/find/ls can access any non-system directory (recommended)",
+    "allowedCommands": "Allowed Commands",
+    "defaultCommands": "default",
+    "default": "default",
+    "custom": "custom",
+    "resetToDefaults": "Reset to Defaults",
+    "resetHint": "Empty list = use all defaults",
+    "customCommands": "Custom Commands",
+    "addCommandPlaceholder": "npm, docker, ...",
+    "remove": "Remove"
   },
   "schedules": {
     "title": "Schedules",
