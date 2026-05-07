@@ -622,13 +622,10 @@ class CodingTools(Toolkit):
             "creating files, running tests, using git, installing packages, and searching codebases."
         )
 
-        # Inform the LLM about available workspace directories
-        if self.base_dirs:
-            dir_lines = []
-            for d in self.base_dirs:
-                perm = self.workspace_permissions.get(str(d), 'read-write')
-                dir_lines.append(f"  - {d} ({perm})")
-            dir_list = "\n".join(dir_lines)
+        # Inform the LLM about available workspace directories (dynamic, includes session workspaces)
+        current_dirs = self._get_current_base_dirs()
+        if current_dirs:
+            dir_list = "\n".join(f"  - {d}" for d in current_dirs)
             preamble += (
                 f"\n\n## Workspace Directories\n"
                 f"Your workspace directories (full read-write access):\n"
@@ -766,7 +763,9 @@ class CodingTools(Toolkit):
         Args:
             base_dirs: Single directory, list of directories, or None (uses cwd).
                       Can be strings or Path objects.
-            workspace_permissions: Deprecated. Kept for backward compatibility.
+            workspace_permissions: Dict of {path: permission} from yaml workspaces[].path.
+                                   Paths are merged into base_dirs for full access.
+                                   Permission values are ignored (all directories get read-write access).
             restrict_to_base_dirs: If True, write operations restricted to base_dirs.
                                    Read operations respect default_readable.
             default_readable: If True (default), read_file/grep/find/ls can access
@@ -817,20 +816,22 @@ class CodingTools(Toolkit):
             self.base_dirs = [Path(d).expanduser().resolve() for d in base_dirs]
         else:
             raise ValueError("base_dirs must be a string, Path, or list of strings/Paths")
-        
+
+        # Merge workspace_permissions paths into base_dirs (from yaml workspaces[].path)
+        # Note: workspace_permissions is deprecated for permission control, but still used
+        # to pass workspace paths from yaml config. We merge them into base_dirs for full access.
+        if workspace_permissions:
+            for raw_path in workspace_permissions.keys():
+                resolved = Path(raw_path).expanduser().resolve()
+                if resolved.exists() and resolved.is_dir() and resolved not in self.base_dirs:
+                    self.base_dirs.append(resolved)
+
         # Validate all directories exist
         for base_dir in self.base_dirs:
             if not base_dir.exists():
                 raise ValueError(f"Directory does not exist: {base_dir}")
             if not base_dir.is_dir():
                 raise ValueError(f"Not a directory: {base_dir}")
-        
-        # Store workspace permission mapping: resolved_path -> 'read-only' | 'read-write'
-        self.workspace_permissions: Dict[str, str] = {}
-        if workspace_permissions:
-            for raw_path, perm in workspace_permissions.items():
-                resolved = str(Path(raw_path).expanduser().resolve())
-                self.workspace_permissions[resolved] = perm
 
         self.restrict_to_base_dirs = restrict_to_base_dirs
         self.default_readable = default_readable
@@ -901,6 +902,8 @@ class CodingTools(Toolkit):
         Session-specific directories extend the toolkit's configured base_dirs rather
         than replacing them. This preserves access to the worker's primary workspace
         while allowing extra readable directories such as skill folders.
+        
+        After registration, the toolkit's instructions are updated to include the new directories.
         """
         paths: list[Path] = []
         raw_list = workspaces if isinstance(workspaces, list) else [workspaces]
@@ -914,6 +917,12 @@ class CodingTools(Toolkit):
                 if candidate not in merged:
                     merged.append(candidate)
             self._session_workspaces[session_id] = merged  # type: ignore[assignment]
+            
+            # Update instructions to include the new directories
+            # Get tool names from registered functions
+            tool_names = list(self.functions.keys()) if self.functions else []
+            if tool_names:
+                self.instructions = self._build_instructions(tool_names)
 
     def _get_current_base_dirs(self) -> List[Path]:
         session_id = self.get_current_session()
@@ -1089,7 +1098,13 @@ class CodingTools(Toolkit):
         return self._is_read_allowed(path)
 
     def _is_write_allowed(self, path: Path) -> bool:
-        """Check if path is writable (must be in base_dirs — Tier 1 only)."""
+        """Check if path is writable."""
+        if not self.restrict_to_base_dirs:
+            # When not restricted, allow write to any non-system, non-sensitive path
+            if self._is_system_path(path):
+                return False
+            return True
+        # When restricted, only allow write within base_dirs
         return self._is_in_base_dirs(path)
     
     def _resolve_path(self, file_path: str, *, write: bool = False) -> Tuple[bool, Optional[Path]]:
