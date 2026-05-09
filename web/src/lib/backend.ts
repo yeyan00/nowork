@@ -319,6 +319,84 @@ export async function cancelRun(runId: string): Promise<{ ok: boolean; run_id: s
   return (await response.json()) as { ok: boolean; run_id: string };
 }
 
+export interface ContinueRunParams {
+  runId: string;
+  sessionId: string;
+  workerId: string;
+  confirmed: boolean;
+  alwaysAllowDir?: string;
+  updatedTools: Array<{
+    toolCallId: string;
+    toolName: string;
+    toolArgs: Record<string, unknown>;
+    requiresConfirmation: boolean;
+  }>;
+}
+
+export async function continueRunStream(
+  params: ContinueRunParams,
+  onEvent: (event: AgentEvent) => void,
+): Promise<void> {
+  const runtime = await readRuntimeState();
+  if (!runtime) throw new Error('Runtime metadata unavailable');
+
+  const body = {
+    confirmed: params.confirmed,
+    session_id: params.sessionId,
+    worker_id: params.workerId,
+    always_allow_dir: params.alwaysAllowDir || null,
+    updated_tools: params.updatedTools,
+  };
+
+  const response = await fetch(`${runtime.baseUrl}/api/runs/${params.runId}/continue/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    // Fallback: try non-streaming endpoint
+    const fallbackResponse = await fetchFromApi(`/api/runs/${params.runId}/continue`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    if (!fallbackResponse.ok) throw new Error('Failed to continue run');
+    const result = await fallbackResponse.json() as { ok: boolean; run_id: string; status: string };
+    onEvent({ event: 'RunCompleted', content: 'Run continued' });
+    return;
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith(':')) continue;
+
+      if (trimmed.startsWith('data:')) {
+        const dataStr = trimmed.slice(5).trim();
+        if (dataStr) {
+          try {
+            onEvent(JSON.parse(dataStr) as AgentEvent);
+          } catch {
+          }
+        }
+      }
+    }
+  }
+}
+
 export type SchedulePayload = Omit<ScheduleSummary, 'id' | 'workerName' | 'lastRunAt' | 'nextRunAt' | 'lastStatus' | 'lastError' | 'createdAt' | 'updatedAt'>;
 
 export async function listSchedules(): Promise<ScheduleSummary[]> {

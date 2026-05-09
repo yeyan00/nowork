@@ -134,6 +134,20 @@ export interface WorkspaceInfo {
   permission: 'read' | 'read-write';
 }
 
+// ── Tool Approval Types ──────────────────────────────────────────
+
+export interface ToolApprovalRequest {
+  runId: string;
+  approvals: ToolApprovalItem[];
+}
+
+export interface ToolApprovalItem {
+  toolCallId: string;
+  toolName: string;
+  description: string;
+  toolArgs: Record<string, unknown>;
+}
+
 export interface ModelConfig {
   provider: string;
   model: string;

@@ -1,4 +1,4 @@
-import type { ChatMessage, MemberActivitiesByRun, MemberActivity, SessionSummary, TokenUsage } from '../types';
+import type { ChatMessage, MemberActivitiesByRun, MemberActivity, SessionSummary, TokenUsage, ToolApprovalRequest } from '../types';
 export type { MemberActivitiesByRun } from '../types';
 
 export interface LiveTokenUsage {
@@ -22,6 +22,7 @@ export interface CachedSessionState {
   lastActiveAt: number;
   memberActivitiesByRun: MemberActivitiesByRun[];
   compactedSegments: number;
+  pendingApproval: ToolApprovalRequest | null;
 }
 
 export interface CachedWorkerState {
@@ -60,6 +61,7 @@ export function ensureSessionState(workerState: CachedWorkerState, sessionId: st
       lastActiveAt: 0,
       memberActivitiesByRun: [],
       compactedSegments: 0,
+      pendingApproval: null,
     };
   }
 

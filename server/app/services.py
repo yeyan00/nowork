@@ -1284,6 +1284,111 @@ def _serialize_event(event: Any) -> dict[str, Any]:
     return result
 
 
+async def _handle_run_paused(
+    event: Any,
+    runtime: Any,
+    session_id: str,
+    is_team: bool,
+) -> AsyncIterator[str]:
+    """Handle a RunPaused event via the ApprovalProvider protocol.
+
+    This is an async generator that yields SSE lines ("data: ...\\n\\n").
+
+    Flow:
+    1. Collect paused tool executions from the event.
+    2. For each tool that requires confirmation, ask its ApprovalProvider
+       whether it can be auto-approved.
+    3. If all can be auto-approved → set confirmed=True, call
+       acontinue_run, and recursively process the continued events.
+    4. If any cannot → send a ToolApprovalRequest SSE event to the frontend.
+    """
+    from app.approval import find_approval_provider
+
+    paused_tools = getattr(event, 'tools', None) or []
+    paused_requirements = getattr(event, 'requirements', None) or []
+    run_id = getattr(event, 'run_id', None) or ''
+
+    # Collect all paused tool executions
+    all_paused = list(paused_tools)
+    if paused_requirements:
+        for req in paused_requirements:
+            te = getattr(req, 'tool_execution', None)
+            if te:
+                all_paused.append(te)
+
+    # Ask each tool's ApprovalProvider whether it can auto-approve
+    all_auto_approved = True
+    approval_requests = []
+    for t in all_paused:
+        requires_conf = getattr(t, 'requires_confirmation', False)
+        if not requires_conf:
+            continue
+
+        tool_name = getattr(t, 'tool_name', '')
+        tool_args = getattr(t, 'tool_args', None) or {}
+        tool_call_id = getattr(t, 'tool_call_id', '')
+
+        # Find the ApprovalProvider for this tool
+        provider = find_approval_provider(runtime, tool_name)
+        if provider and provider.can_auto_approve(tool_name, tool_args, session_id):
+            continue  # This tool can be auto-approved
+
+        # Cannot auto-approve — add to approval request list
+        all_auto_approved = False
+        description = ''
+        if provider:
+            description = provider.get_approval_description(tool_name, tool_args)
+        approval_requests.append({
+            'toolCallId': tool_call_id,
+            'toolName': tool_name,
+            'description': description,
+            'toolArgs': tool_args,
+        })
+
+    if all_auto_approved:
+        # All paused tools can be auto-approved
+        logger.info('RunPaused: auto-approving all tools for run %s', run_id)
+        try:
+            updated_tools = []
+            for t in all_paused:
+                if getattr(t, 'requires_confirmation', False):
+                    t.confirmed = True  # type: ignore
+                    updated_tools.append(t)
+            # Set confirmation context on tools so write_file/edit_file
+            # know to allow the write even if path is outside base_dirs
+            for _tool in (getattr(runtime, 'tools', None) or []):
+                if hasattr(_tool, 'set_confirmation_context'):
+                    _tool.set_confirmation_context(True)
+            try:
+                cont_iter = runtime.acontinue_run(
+                    run_id=run_id,
+                    session_id=getattr(event, 'session_id', None),
+                    updated_tools=updated_tools,
+                    stream=True, stream_events=True,
+                )
+                # Process continue_run events — recursively handle nested RunPaused
+                async for cont_event in cont_iter:
+                    cont_type = _get_event_type(cont_event)
+                    if cont_type in ('RunPaused', 'TeamRunPaused'):
+                        async for sse_line in _handle_run_paused(cont_event, runtime, session_id, is_team):
+                            yield sse_line
+                    else:
+                        cont_data = _serialize_event(cont_event)
+                        cont_data['event'] = _normalize_event_type(cont_type)
+                        yield f"data: {json.dumps(cont_data)}\n\n"
+            finally:
+                # Clear confirmation context
+                for _tool in (getattr(runtime, 'tools', None) or []):
+                    if hasattr(_tool, 'set_confirmation_context'):
+                        _tool.set_confirmation_context(False)
+        except Exception as e:
+            logger.warning('Auto-approve continue_run failed for run %s: %s', run_id, e)
+    else:
+        # Some tools require user approval → send ToolApprovalRequest to frontend
+        logger.info('RunPaused: requesting user approval for run %s (%d tools)', run_id, len(approval_requests))
+        yield f"data: {json.dumps({'event': 'ToolApprovalRequest', 'run_id': run_id, 'approvals': approval_requests})}\n\n"
+
+
 async def stream_message(session_id: str, content: str, attachments: list[dict[str, Any]] | None, agent_os: Any) -> AsyncIterator[str]:
     lock = _get_session_lock(session_id)
     await lock.acquire()
@@ -1545,6 +1650,14 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
 
                         continue  # Skip normal event processing
 
+                # ── RunPaused: HITL approval for write operations outside base_dirs ──
+                if raw_event_type == 'RunPaused' or raw_event_type == 'TeamRunPaused':
+                    async for sse_line in _handle_run_paused(
+                        event, runtime, session_id, is_team,
+                    ):
+                        yield sse_line
+                    continue  # Don't do normal event processing for RunPaused
+
                 # ── Normal (Team-level or Agent) event processing ──
                 event_data = _serialize_event(event)
                 event_type = _normalize_event_type(raw_event_type)
@@ -1642,6 +1755,59 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
 async def cancel_run(run_id: str) -> bool:
     from agno.run.cancel import acancel_run
     return await acancel_run(run_id)
+
+
+async def stream_continue_run(
+    run_id: str,
+    runtime: Any,
+    updated_tools: list[Any],
+    worker: dict[str, Any],
+    session_id: str | None = None,
+) -> AsyncIterator[str]:
+    """Stream the results of continuing a paused run after user approval.
+
+    This is called by the /api/runs/{run_id}/continue/stream endpoint.
+    It re-uses the same event serialization and approval logic as stream_message.
+    """
+    is_team = worker.get('type') == 'Team'
+
+    # Set confirmation context on tools (user confirmed via frontend)
+    for _tool in (getattr(runtime, 'tools', None) or []):
+        if hasattr(_tool, 'set_confirmation_context'):
+            _tool.set_confirmation_context(True)
+
+    try:
+        cont_iter = runtime.acontinue_run(
+            run_id=run_id,
+            session_id=session_id,
+            updated_tools=updated_tools,
+            stream=True,
+            stream_events=True,
+        )
+
+        async for event in cont_iter:
+            raw_event_type = _get_event_type(event)
+
+            # If another RunPaused occurs during continue, use _handle_run_paused
+            # which will auto-approve or send another ToolApprovalRequest
+            if raw_event_type in ('RunPaused', 'TeamRunPaused'):
+                async for sse_line in _handle_run_paused(event, runtime, session_id or '', is_team):
+                    yield sse_line
+                continue
+
+            event_data = _serialize_event(event)
+            event_type = _normalize_event_type(raw_event_type)
+            event_data['event'] = event_type
+            yield f"data: {json.dumps(event_data)}\n\n"
+
+    except Exception as exc:
+        logger.exception('stream_continue_run error: run %s %s', run_id, exc)
+        yield f"data: {json.dumps({'event': 'RunError', 'content': str(exc)})}\n\n"
+    finally:
+        # Clear confirmation context
+        for _tool in (getattr(runtime, 'tools', None) or []):
+            if hasattr(_tool, 'set_confirmation_context'):
+                _tool.set_confirmation_context(False)
 
 
 _skills_cache: list[dict[str, Any]] | None = None

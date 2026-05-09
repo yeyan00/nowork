@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
-import { cancelRun, createSession, listMessages, listModels, listSessions, sendMessageStream, updateSession } from '../lib/backend';
-import type { AgentEvent, ProviderInfo } from '../lib/backend';
-import type { ChatAttachment, ChatMessage, MemberActivity, PreviewingFile, ToolCall, WorkerSummary, WorkspaceBinding, WorkspaceInfo } from '../types';
+import { cancelRun, continueRunStream, createSession, listMessages, listModels, listSessions, sendMessageStream, updateSession } from '../lib/backend';
+import type { AgentEvent, ContinueRunParams, ProviderInfo } from '../lib/backend';
+import type { ChatAttachment, ChatMessage, MemberActivity, PreviewingFile, ToolApprovalItem, ToolCall, WorkerSummary, WorkspaceBinding, WorkspaceInfo } from '../types';
 import { FilePreviewSidebar } from './FilePreviewSidebar';
 import { notifyWorkerDone } from '../lib/notify';
 import type { CachedSessionState, CachedWorkerState } from './chatState';
@@ -58,6 +58,7 @@ function createSessionState(sessionId: string): CachedSessionState {
     lastActiveAt: 0,
     memberActivitiesByRun: [],
     compactedSegments: 0,
+    pendingApproval: null,
   };
 }
 
@@ -1109,6 +1110,20 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
             } : message),
           }));
         }
+
+        if (eventType === 'ToolApprovalRequest') {
+          // Agent paused — needs user approval for a write operation outside base_dirs
+          const approvals = (event.approvals || []) as ToolApprovalItem[];
+          const runId = event.run_id as string || '';
+          updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
+            ...sessionState,
+            pendingApproval: {
+              runId,
+              approvals,
+            },
+            // Keep isStreaming true — the run is paused, not completed
+          }));
+        }
       });
     } catch {
       updateSessionState(targetWorkerId, composerSessionId, (sessionState) => ({
@@ -1141,6 +1156,137 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
       }));
     }
   }, [activeSessionId, currentSessionState?.runId, updateSessionState, worker]);
+
+  const handleApproval = useCallback(async (approved: boolean, alwaysAllowDir?: string) => {
+    if (!worker || !activeSessionId) return;
+    const pending = currentSessionState?.pendingApproval;
+    if (!pending) return;
+
+    // Clear the pending approval first
+    updateSessionState(worker.id, activeSessionId, (sessionState) => ({
+      ...sessionState,
+      pendingApproval: null,
+    }));
+
+    if (!approved) {
+      // Reject — send continue_run with confirmed=false
+      try {
+        await continueRunStream({
+          runId: pending.runId,
+          sessionId: activeSessionId,
+          workerId: worker.id,
+          confirmed: false,
+          updatedTools: pending.approvals.map(a => ({
+            toolCallId: a.toolCallId,
+            toolName: a.toolName,
+            toolArgs: a.toolArgs,
+            requiresConfirmation: true,
+          })),
+        }, (event) => {
+          // Process events from the rejected continue
+          const eventType = event.event;
+          if (eventType === 'RunCompleted' || eventType === 'RunError' || eventType === 'RunCancelled') {
+            updateSessionState(worker.id, activeSessionId, (sessionState) => ({
+              ...sessionState,
+              isStreaming: false,
+              runId: null,
+            }));
+          }
+        });
+      } catch {
+        updateSessionState(worker.id, activeSessionId, (sessionState) => ({
+          ...sessionState,
+          isStreaming: false,
+          runId: null,
+        }));
+      }
+      return;
+    }
+
+    // Approved — send continue_run with confirmed=true
+    try {
+      let accumulatedContent = '';
+      let accumulatedTools: ToolCall[] = [];
+
+      await continueRunStream({
+        runId: pending.runId,
+        sessionId: activeSessionId,
+        workerId: worker.id,
+        confirmed: true,
+        alwaysAllowDir,
+        updatedTools: pending.approvals.map(a => ({
+          toolCallId: a.toolCallId,
+          toolName: a.toolName,
+          toolArgs: a.toolArgs,
+          requiresConfirmation: true,
+        })),
+      }, (event) => {
+        const eventType = event.event;
+
+        if (eventType === 'ToolApprovalRequest') {
+          // Another approval needed during continue
+          const approvals = (event.approvals || []) as ToolApprovalItem[];
+          const runId = event.run_id as string || '';
+          updateSessionState(worker.id, activeSessionId, (sessionState) => ({
+            ...sessionState,
+            pendingApproval: { runId, approvals },
+          }));
+          return;
+        }
+
+        if (eventType === 'ToolCallStarted' && event.toolCalls && event.toolCalls.length > 0) {
+          const newTool = event.toolCalls[event.toolCalls.length - 1];
+          accumulatedTools = [...accumulatedTools, newTool];
+        } else if (eventType === 'ToolCallCompleted' && event.toolCalls) {
+          accumulatedTools = accumulatedTools.map(tc => {
+            const updated = event.toolCalls!.find((t: ToolCall) => t.toolCallId === tc.toolCallId);
+            return updated ? { ...tc, result: updated.result } : tc;
+          });
+        }
+
+        if (eventType === 'RunContent') {
+          if (event.content) accumulatedContent += event.content;
+          updateSessionState(worker.id, activeSessionId, (sessionState) => {
+            const lastMsgIdx = sessionState.messages.length - 1;
+            return {
+              ...sessionState,
+              messages: sessionState.messages.map((msg, idx) => idx === lastMsgIdx ? {
+                ...msg,
+                content: accumulatedContent,
+                toolCalls: accumulatedTools.length > 0 ? accumulatedTools : msg.toolCalls,
+              } : msg),
+            };
+          });
+          return;
+        }
+
+        if (eventType === 'RunCompleted' || eventType === 'RunError' || eventType === 'RunCancelled') {
+          if (event.content) accumulatedContent = event.content;
+          updateSessionState(worker.id, activeSessionId, (sessionState) => {
+            const lastMsgIdx = sessionState.messages.length - 1;
+            return {
+              ...sessionState,
+              isStreaming: false,
+              runId: null,
+              messages: sessionState.messages.map((msg, idx) => idx === lastMsgIdx ? {
+                ...msg,
+                content: accumulatedContent || msg.content,
+                toolCalls: accumulatedTools.length > 0 ? accumulatedTools : msg.toolCalls,
+                streaming: false,
+              } : msg),
+            };
+          });
+          return;
+        }
+      });
+    } catch {
+      updateSessionState(worker.id, activeSessionId, (sessionState) => ({
+        ...sessionState,
+        isStreaming: false,
+        runId: null,
+      }));
+    }
+  }, [activeSessionId, currentSessionState?.pendingApproval, updateSessionState, worker]);
 
   if (!worker) {
     return <section className="chat-workspace">{t('chat.selectWorker')}</section>;
@@ -1521,6 +1667,14 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
         externalPreviewFile={!previewFileHandled ? pendingPreviewFile : null}
         onExternalPreviewHandled={handlePreviewFileHandled}
       />
+
+      {currentSessionState?.pendingApproval && (
+        <ToolApprovalDialog
+          approval={currentSessionState.pendingApproval}
+          onApprove={(alwaysAllowDir?: string) => void handleApproval(true, alwaysAllowDir)}
+          onReject={() => void handleApproval(false)}
+        />
+      )}
     </section>
   );
 }
@@ -1605,6 +1759,114 @@ function MemberActivitySidebar({ memberActivitiesByRun, onClose }: { memberActiv
           })}
         </div>
       </aside>
+    </div>
+  );
+}
+
+function ToolApprovalDialog({ approval, onApprove, onReject }: {
+  approval: { runId: string; approvals: ToolApprovalItem[] };
+  onApprove: (alwaysAllowDir?: string) => void;
+  onReject: () => void;
+}) {
+  const [alwaysAllow, setAlwaysAllow] = useState(false);
+
+  // Extract the directory from the first approval item's file_path
+  const firstFilePath = approval.approvals[0]?.toolArgs?.file_path as string || approval.approvals[0]?.toolArgs?.path as string || '';
+  const parentDir = firstFilePath ? firstFilePath.replace(/[/\\][^/\\]+$/, '') : '';
+
+  return (
+    <div className="member-overlay" style={{ zIndex: 100 }}>
+      <div className="approval-dialog" style={{
+        background: 'var(--bg-primary, #1a1a2e)',
+        border: '1px solid var(--border-color, #333)',
+        borderRadius: '12px',
+        padding: '24px',
+        maxWidth: '480px',
+        width: '90%',
+        margin: 'auto',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="var(--color-warning, #f59e0b)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Write Approval Required</h3>
+        </div>
+
+        <div style={{ marginBottom: '16px' }}>
+          {approval.approvals.map((item, i) => (
+            <div key={item.toolCallId || i} style={{
+              padding: '10px 12px',
+              background: 'var(--bg-secondary, #16213e)',
+              borderRadius: '8px',
+              marginBottom: i < approval.approvals.length - 1 ? '8px' : 0,
+              fontSize: '13px',
+            }}>
+              <div style={{ fontWeight: 500, marginBottom: '4px' }}>
+                {item.description || `${item.toolName}: ${item.toolArgs?.file_path || item.toolArgs?.path || 'unknown path'}`}
+              </div>
+              <div style={{ color: 'var(--text-secondary, #888)', fontSize: '12px', wordBreak: 'break-all' }}>
+                {String(item.toolArgs?.file_path || item.toolArgs?.path || '')}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {parentDir && (
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '16px',
+            fontSize: '13px',
+            color: 'var(--text-secondary, #aaa)',
+            cursor: 'pointer',
+          }}>
+            <input
+              type="checkbox"
+              checked={alwaysAllow}
+              onChange={(e) => setAlwaysAllow(e.target.checked)}
+            />
+            Always allow writes to <code style={{ fontSize: '12px', wordBreak: 'break-all' }}>{parentDir}</code>
+          </label>
+        )}
+
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={() => onReject()}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '8px',
+              border: '1px solid var(--border-color, #444)',
+              background: 'transparent',
+              color: 'var(--text-primary, #e0e0e0)',
+              cursor: 'pointer',
+              fontSize: '13px',
+            }}
+          >
+            Reject
+          </button>
+          <button
+            type="button"
+            onClick={() => onApprove(alwaysAllow ? parentDir : undefined)}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '8px',
+              border: 'none',
+              background: 'var(--color-primary, #4f46e5)',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 500,
+            }}
+          >
+            Approve
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

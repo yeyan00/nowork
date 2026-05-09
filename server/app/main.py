@@ -233,6 +233,126 @@ async def api_cancel_run(run_id: str):
     return {'ok': cancelled, 'run_id': run_id}
 
 
+@app.post('/api/runs/{run_id}/continue')
+async def api_continue_run(run_id: str, request: Request):
+    """Continue a paused run after user approval for a write operation outside base_dirs.
+
+    Body: {
+        "confirmed": true/false,
+        "always_allow_dir": "/path/to/dir" (optional — remember this dir for the session),
+        "session_id": "..." (required if always_allow_dir is set),
+        "worker_id": "..." (required),
+        "updated_tools": [{"toolCallId": "...", "toolName": "...", "toolArgs": {...}, "requiresConfirmation": true}]
+    }
+    Returns: the continue_run result (for non-streaming response).
+    For streaming, use the /api/runs/{run_id}/continue/stream endpoint.
+    """
+    body = await request.json()
+    confirmed = body.get('confirmed', False)
+    always_allow_dir = body.get('always_allow_dir')
+    session_id = body.get('session_id')
+
+    # If user chose "always allow", record the directory via ApprovalManager
+    if confirmed and always_allow_dir and session_id:
+        from app.approval import approval_manager
+        approval_manager.approve_dir(session_id, always_allow_dir)
+
+    agent_os = getattr(request.app.state, 'agent_os', None)
+    if agent_os is None:
+        raise HTTPException(status_code=503, detail='Agent OS not available')
+
+    from agno.models.response import ToolExecution
+    from app.services import _resolve_runtime_agent, repository
+
+    worker_id = body.get('worker_id')
+    if not worker_id:
+        raise HTTPException(status_code=400, detail='worker_id is required')
+
+    worker = repository.get_worker(worker_id)
+    if worker is None:
+        raise HTTPException(status_code=404, detail='Worker not found')
+
+    runtime = _resolve_runtime_agent(worker_id, agent_os)
+    if runtime is None:
+        raise HTTPException(status_code=404, detail='Runtime not found')
+
+    # Build updated_tools with confirmed flag
+    updated_tools_data = body.get('updated_tools', [])
+    updated_tools = []
+    for ut in updated_tools_data:
+        te = ToolExecution(
+            tool_call_id=ut.get('toolCallId'),
+            tool_name=ut.get('toolName'),
+            tool_args=ut.get('toolArgs'),
+            confirmed=confirmed if ut.get('requiresConfirmation') else None,
+            requires_confirmation=ut.get('requiresConfirmation', False),
+        )
+        updated_tools.append(te)
+
+    try:
+        result = await runtime.acontinue_run(
+            run_id=run_id,
+            updated_tools=updated_tools if updated_tools else None,
+        )
+        return {'ok': True, 'run_id': run_id, 'status': getattr(result, 'status', 'unknown')}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'continue_run failed: {str(e)}')
+
+
+@app.post('/api/runs/{run_id}/continue/stream')
+async def api_continue_run_stream(run_id: str, request: Request):
+    """Continue a paused run and stream the results via SSE.
+
+    Body: same as /api/runs/{run_id}/continue.
+    """
+    body = await request.json()
+    confirmed = body.get('confirmed', False)
+    always_allow_dir = body.get('always_allow_dir')
+    session_id = body.get('session_id')
+
+    if confirmed and always_allow_dir and session_id:
+        from app.approval import approval_manager
+        approval_manager.approve_dir(session_id, always_allow_dir)
+
+    agent_os = getattr(request.app.state, 'agent_os', None)
+    if agent_os is None:
+        raise HTTPException(status_code=503, detail='Agent OS not available')
+
+    from agno.models.response import ToolExecution
+    from app.services import _resolve_runtime_agent, repository
+
+    worker_id = body.get('worker_id')
+    if not worker_id:
+        raise HTTPException(status_code=400, detail='worker_id is required')
+
+    worker = repository.get_worker(worker_id)
+    if worker is None:
+        raise HTTPException(status_code=404, detail='Worker not found')
+
+    runtime = _resolve_runtime_agent(worker_id, agent_os)
+    if runtime is None:
+        raise HTTPException(status_code=404, detail='Runtime not found')
+
+    updated_tools_data = body.get('updated_tools', [])
+    updated_tools = []
+    for ut in updated_tools_data:
+        te = ToolExecution(
+            tool_call_id=ut.get('toolCallId'),
+            tool_name=ut.get('toolName'),
+            tool_args=ut.get('toolArgs'),
+            confirmed=confirmed if ut.get('requiresConfirmation') else None,
+            requires_confirmation=ut.get('requiresConfirmation', False),
+        )
+        updated_tools.append(te)
+
+    from app.services import stream_continue_run
+    return StreamingResponse(
+        stream_continue_run(run_id, runtime, updated_tools, worker, session_id),
+        media_type='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
+
+
 @app.get('/api/schedules')
 def api_list_schedules() -> list[dict[str, object]]:
     return list_schedules()

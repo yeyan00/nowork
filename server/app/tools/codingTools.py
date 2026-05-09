@@ -435,6 +435,9 @@ class CodingTools(Toolkit):
     """
     Optimized toolkit for coding agents with multi-directory support.
     
+    Implements the ApprovalProvider protocol so that services.py can ask
+    this toolkit whether a paused write operation can be auto-approved.
+    
     Provides four core tools (read, edit, write, shell) and three optional
     exploration tools (grep, find, ls). Inspired by pi-mono architecture.
     
@@ -637,7 +640,9 @@ class CodingTools(Toolkit):
             preamble += (
                 f"\n\n## Read Access\n"
                 f"Read tools (read_file, grep, find, ls) can access any non-system, non-sensitive directory.\n"
-                f"Write tools (edit_file, write_file) are restricted to workspace directories only.\n"
+                f"Write tools (edit_file, write_file) target workspace directories by default.\n"
+                f"If you need to write to a path outside the workspace, you may still call write_file or edit_file —\n"
+                f"the user will be asked to confirm before the operation proceeds.\n"
                 f"Only read files when the user explicitly asks or when searching for relevant information."
             )
         elif self.readable_extra:
@@ -885,11 +890,21 @@ class CodingTools(Toolkit):
         else:
             resolved_instructions = instructions
         
+        # Write tools require user confirmation when path is outside base_dirs.
+        # The confirmation is handled by agno's HITL mechanism (requires_confirmation),
+        # with auto-approve for in-base_dirs paths in stream_message.
+        _requires_confirmation = []
+        if all or enable_edit_file:
+            _requires_confirmation.append("edit_file")
+        if all or enable_write_file:
+            _requires_confirmation.append("write_file")
+
         super().__init__(
             name="coding_tools",
             tools=tools,
             instructions=resolved_instructions,
             add_instructions=add_instructions,
+            requires_confirmation_tools=_requires_confirmation,
             **kwargs,
         )
         
@@ -923,6 +938,77 @@ class CodingTools(Toolkit):
             tool_names = list(self.functions.keys()) if self.functions else []
             if tool_names:
                 self.instructions = self._build_instructions(tool_names)
+
+    # ------------------------------------------------------------------
+    # ApprovalProvider protocol implementation
+    # ------------------------------------------------------------------
+
+    def can_auto_approve(self, tool_name: str, tool_args: dict, session_id: str) -> bool:
+        """Decide whether a paused tool call can proceed without user confirmation.
+
+        Rules:
+        - Only write tools (edit_file, write_file) are subject to approval.
+        - If the target path is within base_dirs → auto-approve.
+        - If the target path is in ApprovalManager's approved dirs → auto-approve.
+        - Otherwise → require user approval.
+        """
+        # Non-write tools are never subject to approval
+        if tool_name not in ("edit_file", "write_file"):
+            return True
+
+        file_path = tool_args.get("file_path", "") or tool_args.get("path", "")
+        if not file_path:
+            # No path → can't determine safety → require approval
+            return False
+
+        # Check 1: path in base_dirs
+        if self.is_path_in_base_dirs(file_path):
+            return True
+
+        # Check 2: path in session-approved dirs
+        from app.approval import approval_manager
+        if approval_manager.is_dir_approved(session_id, file_path):
+            return True
+
+        return False
+
+    def get_approval_description(self, tool_name: str, tool_args: dict) -> str:
+        """Return a human-readable description for the approval dialog."""
+        file_path = tool_args.get("file_path", "") or tool_args.get("path", "")
+        op = "Edit" if tool_name == "edit_file" else "Write"
+        return f"{op} file: {file_path}"
+
+    def is_path_in_base_dirs(self, file_path: str) -> bool:
+        """Check if a file path is within current base_dirs (workspace directories).
+        
+        Used by stream_message to auto-approve write operations to workspace paths
+        when the tool has requires_confirmation enabled.
+        """
+        try:
+            path = Path(file_path)
+            if not path.is_absolute():
+                primary = self._get_primary_base_dir()
+                path = primary / path
+            path = path.resolve()
+            return self._is_in_base_dirs(path)
+        except Exception:
+            return False
+
+    # ------------------------------------------------------------------
+    # Confirmation context detection
+    # ------------------------------------------------------------------
+
+    # Thread-local flag set by _handle_run_paused before confirmed tool execution
+    _confirmation_context_flag: bool = False
+
+    def _is_confirmation_context(self) -> bool:
+        """Check if the current function call is in a confirmed context
+        (i.e. called by continue_run after user approved)."""
+        return self._confirmation_context_flag
+
+    def set_confirmation_context(self, value: bool) -> None:
+        """Set the confirmation context flag. Called by services._handle_run_paused."""
+        self._confirmation_context_flag = value
 
     def _get_current_base_dirs(self) -> List[Path]:
         session_id = self.get_current_session()
@@ -1130,6 +1216,16 @@ class CodingTools(Toolkit):
 
             if write:
                 if self._is_write_allowed(path):
+                    return True, path
+                # Path outside base_dirs — check if user approved via approval mechanism
+                from app.approval import approval_manager
+                session_id = self.get_current_session()
+                if session_id and approval_manager.is_dir_approved(session_id, str(path)):
+                    return True, path
+                # If the tool has requires_confirmation and the user confirmed,
+                # the function will be called — allow the write in that case too.
+                # We detect this by checking if requires_confirmation is set for this tool.
+                if self._is_confirmation_context():
                     return True, path
                 return False, None
             else:
