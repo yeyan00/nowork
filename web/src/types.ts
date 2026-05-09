@@ -75,6 +75,7 @@ export interface SessionSummary {
   learningEnabled?: boolean | null;
   createdAt: string;
   updatedAt?: string;
+  hasRunningRun?: boolean;
 }
 
 export interface TokenUsage {

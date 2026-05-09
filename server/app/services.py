@@ -656,6 +656,14 @@ def list_sessions(worker_id: str, agent_os: Any | None = None) -> list[dict[str,
         agno_sid = seg['agno_session_id'] if seg else None
         agno_s = agno_sessions.get(agno_sid) if agno_sid else None
 
+        # Check if last run is still running (for frontend to restore streaming state after refresh)
+        has_running = False
+        if agno_s:
+            runs = getattr(agno_s, 'runs', None) or []
+            if runs:
+                last_status = str(getattr(runs[-1], 'status', '')).upper()
+                has_running = last_status in ('RUNNING', 'PENDING')
+
         results.append({
             'id': ws['id'],
             'workerId': worker_id,
@@ -666,6 +674,7 @@ def list_sessions(worker_id: str, agent_os: Any | None = None) -> list[dict[str,
             'createdAt': ws.get('created_at', ''),
             'updatedAt': str(getattr(agno_s, 'updated_at', '')) if agno_s and getattr(agno_s, 'updated_at', None) else ws.get('updated_at', ''),
             'runCount': int((seg or {}).get('run_count') or len(getattr(agno_s, 'runs', None) or [])),
+            'hasRunningRun': has_running,
         })
 
     # 2. Legacy sessions in agno DB that have no WorkerSession — auto-migrate
@@ -685,6 +694,13 @@ def list_sessions(worker_id: str, agent_os: Any | None = None) -> list[dict[str,
                 title = sd.get('title', '')
             session_manager.migrate_legacy_session(agno_sid, title=title)
             seen_ws_ids.add(agno_sid)
+            # Check if last run is still running (for frontend streaming state restore)
+            has_running = False
+            if agno_s:
+                runs = getattr(agno_s, 'runs', None) or []
+                if runs:
+                    last_status = str(getattr(runs[-1], 'status', '')).upper()
+                    has_running = last_status in ('RUNNING', 'PENDING')
             results.append({
                 'id': agno_sid,
                 'workerId': worker_id,
@@ -695,6 +711,7 @@ def list_sessions(worker_id: str, agent_os: Any | None = None) -> list[dict[str,
                 'createdAt': str(getattr(agno_s, 'created_at', '')),
                 'updatedAt': str(getattr(agno_s, 'updated_at', '') or getattr(agno_s, 'created_at', '')),
                 'runCount': len(getattr(agno_s, 'runs', None) or []),
+                'hasRunningRun': has_running,
             })
         except Exception as e:
             logger.warning('Auto-migrate legacy session %s failed: %s', agno_sid, e)

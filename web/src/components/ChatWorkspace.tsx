@@ -285,6 +285,16 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           if (!workerState.activeSessionId) {
             workerState.activeSessionId = nextSessions[0]?.id ?? null;
           }
+          // Restore isStreaming state for sessions with a running run (e.g. after page refresh)
+          for (const s of nextSessions) {
+            if (s.hasRunningRun) {
+              workerState.sessionStates[s.id] = {
+                ...(workerState.sessionStates[s.id] ?? createSessionState(s.id)),
+                isStreaming: true,
+                lastActiveAt: Date.now(),
+              };
+            }
+          }
           return workerState;
         });
       })
@@ -300,6 +310,40 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
       cancelled = true;
     };
   }, [composerSessionId, currentWorkerState?.sessionsLoaded, updateSessionState, updateWorkerState, worker]);
+
+  // Poll for running-run completion: when any session has isStreaming=true (e.g. restored after
+  // page refresh while a background run is in progress), periodically check listSessions to
+  // detect when the run finishes so we can re-enable the input and refresh messages.
+  const hasAnyStreaming = Object.values(currentWorkerState?.sessionStates ?? {}).some((s) => s.isStreaming);
+
+  useEffect(() => {
+    if (!worker || !hasAnyStreaming) return;
+
+    const interval = setInterval(() => {
+      void listSessions(worker.id).then((sessions) => {
+        updateWorkerState(worker.id, (ws) => {
+          let changed = false;
+          for (const s of sessions) {
+            if (!s.hasRunningRun) {
+              const ss = ws.sessionStates[s.id];
+              if (ss?.isStreaming) {
+                ws.sessionStates[s.id] = { ...ss, isStreaming: false, runId: null, loaded: false };
+                changed = true;
+              }
+            }
+          }
+          if (changed) {
+            ws.sessions = sessions;
+          }
+          return ws;
+        });
+      }).catch(() => {
+        // Silently ignore polling errors
+      });
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [hasAnyStreaming, updateWorkerState, worker]);
 
   useEffect(() => {
     if (!worker || !requestedSessionId || !currentWorkerState?.sessionsLoaded) return;
