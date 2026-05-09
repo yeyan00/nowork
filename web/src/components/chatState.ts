@@ -21,6 +21,7 @@ export interface CachedSessionState {
   loaded: boolean;
   lastActiveAt: number;
   memberActivitiesByRun: MemberActivitiesByRun[];
+  compactedSegments: number;
 }
 
 export interface CachedWorkerState {
@@ -58,6 +59,7 @@ export function ensureSessionState(workerState: CachedWorkerState, sessionId: st
       loaded: false,
       lastActiveAt: 0,
       memberActivitiesByRun: [],
+      compactedSegments: 0,
     };
   }
 

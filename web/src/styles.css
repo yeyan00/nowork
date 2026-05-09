@@ -894,6 +894,23 @@ button {
   background: #fff5d6;
 }
 
+.message-card.system.compacted-banner {
+  background: #f0f4ff;
+  border-left: 3px solid #7c8fdb;
+  font-size: 0.85em;
+}
+
+.message-card.system.compacted-banner p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.compacted-icon {
+  flex-shrink: 0;
+}
+
 .message-card.continuation {
   margin-top: -8px;
   border-top-left-radius: 8px;

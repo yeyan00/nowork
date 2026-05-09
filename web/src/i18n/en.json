@@ -98,7 +98,8 @@
     "noMemberActivities": "No member activities yet",
     "toggleFilePreview": "Files",
     "showFilePreview": "Show Files",
-    "hideFilePreview": "Hide Files"
+    "hideFilePreview": "Hide Files",
+    "compactedHint": "{count} earlier conversation segment(s) have been compacted. Context is preserved for the assistant."
   },
   "workerList": {
     "title": "Workers",

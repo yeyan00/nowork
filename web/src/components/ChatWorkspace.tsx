@@ -57,6 +57,7 @@ function createSessionState(sessionId: string): CachedSessionState {
     loaded: false,
     lastActiveAt: 0,
     memberActivitiesByRun: [],
+    compactedSegments: 0,
   };
 }
 
@@ -349,6 +350,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           isLoading: false,
           hasMore: result.has_more,
           memberActivitiesByRun: result.memberActivitiesByRun || [],
+          compactedSegments: result.compactedSegments || 0,
         }));
       })
       .catch(() => {
@@ -1227,6 +1229,14 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
         {!isLoading && !error && currentSession && (
           <article className="message-card system">
             <p>{sessionTitle}</p>
+          </article>
+        )}
+        {!isLoading && (currentSessionState?.compactedSegments ?? 0) > 0 && (
+          <article className="message-card system compacted-banner">
+            <p>
+              <span className="compacted-icon">📋</span>
+              {t('chat.compactedHint', { count: currentSessionState!.compactedSegments! })}
+            </p>
           </article>
         )}
         {!isLoading && messages.length === 0 && !currentSession && (

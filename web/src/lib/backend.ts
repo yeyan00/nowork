@@ -216,6 +216,7 @@ export interface MessagesPage {
   messages: ChatMessage[];
   total: number;
   has_more: boolean;
+  compactedSegments?: number;
   memberActivitiesByRun?: MemberActivitiesByRun[];
 }
 

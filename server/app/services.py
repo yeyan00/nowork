@@ -326,7 +326,50 @@ def _normalize_single_message(msg: Any, idx: int, worker_name: str | None = None
 
 
 def _normalize_runtime_messages(runtime_messages: list[Any], worker_name: str | None = None) -> list[dict[str, Any]]:
-    return [_normalize_single_message(msg, idx, worker_name) for idx, msg in enumerate(runtime_messages)]
+    # Build a lookup from tool_call_id → {result, error} by scanning tool-role messages.
+    # agno stores tool results as separate role='tool' Message objects, but the frontend
+    # expects result/error to be embedded inside the assistant message's toolCalls list.
+    tool_result_map: dict[str, dict[str, Any]] = {}
+    for msg in runtime_messages:
+        role = str(getattr(msg, 'role', ''))
+        if role != 'tool':
+            continue
+        tc_id = getattr(msg, 'tool_call_id', None)
+        if not tc_id:
+            continue
+        content = getattr(msg, 'content', None)
+        error = getattr(msg, 'tool_call_error', None)
+        tool_result_map[tc_id] = {
+            'result': content if content is not None else None,
+            'error': str(error) if error else None,
+        }
+
+    result: list[dict[str, Any]] = []
+    idx = 0
+    for msg in runtime_messages:
+        role = str(getattr(msg, 'role', 'user'))
+        # Skip tool-role messages — their results are merged into the preceding
+        # assistant message's toolCalls via tool_result_map above.
+        if role == 'tool':
+            continue
+        normalized = _normalize_single_message(msg, idx, worker_name)
+
+        # Back-fill tool results from tool_result_map into this assistant message's toolCalls
+        if role == 'assistant' and normalized.get('toolCalls'):
+            for tc in normalized['toolCalls']:
+                tc_id = tc.get('toolCallId', '')
+                if tc_id and tc_id in tool_result_map:
+                    tr = tool_result_map[tc_id]
+                    # Only fill if not already present (streaming events may have set it)
+                    if tc.get('result') is None and tr.get('result') is not None:
+                        tc['result'] = tr['result']
+                    if not tc.get('error') and tr.get('error'):
+                        tc['error'] = tr['error']
+
+        result.append(normalized)
+        idx += 1
+
+    return result
 
 
 def _extract_final_run_summary(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -463,6 +506,19 @@ def _build_team_messages(runtime: Any, agno_session_id: str, worker_name: str | 
         else:
             team_runs.append(run)
 
+    # Build tool_call_id → result/error lookup from run.tools (ToolExecution list).
+    # run.tools contains the full execution results, unlike msg.tool_calls which
+    # only has the function call definition.
+    run_tool_result_map: dict[str, dict[str, Any]] = {}
+    for run in all_runs:
+        for t in (getattr(run, 'tools', None) or []):
+            tc_id = getattr(t, 'tool_call_id', None)
+            if tc_id:
+                run_tool_result_map[tc_id] = {
+                    'result': getattr(t, 'result', None),
+                    'error': getattr(t, 'tool_call_error', None),
+                }
+
     # Build flat message list (no inline member entries) + top-level memberActivitiesByRun
     messages: list[dict[str, Any]] = []
     member_activities_by_run: list[dict[str, Any]] = []
@@ -501,7 +557,20 @@ def _build_team_messages(runtime: Any, agno_session_id: str, worker_name: str | 
                 if msg.role in skip_roles:
                     continue
 
-                messages.append(_normalize_single_message(msg, idx, worker_name))
+                normalized_msg = _normalize_single_message(msg, idx, worker_name)
+
+                # Back-fill tool results from run_tool_result_map into assistant message's toolCalls
+                if normalized_msg.get('toolCalls'):
+                    for tc in normalized_msg['toolCalls']:
+                        tc_id = tc.get('toolCallId', '')
+                        if tc_id and tc_id in run_tool_result_map:
+                            tr = run_tool_result_map[tc_id]
+                            if tc.get('result') is None and tr.get('result') is not None:
+                                tc['result'] = tr['result']
+                            if not tc.get('error') and tr.get('error'):
+                                tc['error'] = tr['error']
+
+                messages.append(normalized_msg)
                 idx += 1
 
     return {
@@ -800,6 +869,14 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
     segment = session_manager.resolve_segment(session_id)
     agno_session_id = segment['agno_session_id'] if segment is not None else session_id
 
+    # Count compacted segments for this session (used by frontend to show a banner)
+    compacted_count = 0
+    try:
+        all_segments = session_manager.get_all_segments(session_id)
+        compacted_count = sum(1 for seg in all_segments if seg.get('status') == 'compacted')
+    except Exception:
+        pass
+
     if agent_os is not None:
         runtime = _resolve_runtime_agent(worker_id, agent_os)
         if runtime is not None:
@@ -809,7 +886,6 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                 #   already injected into it via summary prefix)
                 # - Active segment empty → return last compacted segment's final run
                 #   (user + last assistant message, skip intermediate tool calls)
-                all_segments = session_manager.get_all_segments(session_id)
 
                 # Collect per-segment data
                 active_result = None
@@ -843,6 +919,7 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                         'messages': msgs[start:end],
                         'total': total,
                         'has_more': start > 0,
+                        'compactedSegments': compacted_count,
                         'memberActivitiesByRun': active_result.get('memberActivitiesByRun', []),
                     }
 
@@ -856,15 +933,14 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                         'messages': msgs[start:end],
                         'total': total,
                         'has_more': start > 0,
+                        'compactedSegments': compacted_count,
                         'memberActivitiesByRun': last_compacted_result.get('memberActivitiesByRun', []),
                     }
 
-                return {'messages': [], 'total': 0, 'has_more': False, 'memberActivitiesByRun': []}
+                return {'messages': [], 'total': 0, 'has_more': False, 'compactedSegments': compacted_count, 'memberActivitiesByRun': []}
             else:
                 # Agent: load messages from segments
                 # Same logic as Team — active with content wins, else last compacted's final run
-                all_segments = session_manager.get_all_segments(session_id)
-
                 active_messages: list[dict[str, Any]] = []
                 last_compacted_messages: list[dict[str, Any]] = []
 
@@ -897,6 +973,7 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                         'messages': active_messages[start:end],
                         'total': total,
                         'has_more': start > 0,
+                        'compactedSegments': compacted_count,
                     }
 
                 # Active segment empty: show last compacted segment's final run only
@@ -909,11 +986,12 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                         'messages': msgs[start:end],
                         'total': total,
                         'has_more': start > 0,
+                        'compactedSegments': compacted_count,
                     }
 
-                return {'messages': [], 'total': 0, 'has_more': False}
+                return {'messages': [], 'total': 0, 'has_more': False, 'compactedSegments': compacted_count}
 
-    return {'messages': [], 'total': 0, 'has_more': False}
+    return {'messages': [], 'total': 0, 'has_more': False, 'compactedSegments': 0}
 
 
 def _get_worker_model_capabilities(worker: dict[str, Any]) -> dict[str, bool]:
