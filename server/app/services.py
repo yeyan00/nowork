@@ -956,13 +956,25 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                             last_compacted_messages = seg_msgs
                     else:
                         # Active segment: load normally
-                        if hasattr(runtime, 'get_chat_history'):
+                        # Use get_messages(skip_roles=["system"]) to include tool-role messages
+                        # which contain the tool call results we need to merge back
+                        history = None
+                        if hasattr(runtime, 'db') and hasattr(runtime.db, 'get_session'):
+                            try:
+                                from agno.db.base import SessionType
+                                session_obj = runtime.db.get_session(session_id=seg_agno_id, session_type=SessionType.AGENT)
+                                if session_obj and hasattr(session_obj, 'get_messages'):
+                                    # Get all messages including tool-role (skip only system)
+                                    history = session_obj.get_messages(skip_roles=['system'])
+                            except Exception:
+                                pass
+                        elif hasattr(runtime, 'get_chat_history'):
                             try:
                                 history = runtime.get_chat_history(session_id=seg_agno_id)
                             except Exception:
-                                history = None
-                            if history is not None:
-                                active_messages = _normalize_runtime_messages(history, worker_name=worker.get('name'))
+                                pass
+                        if history is not None:
+                            active_messages = _normalize_runtime_messages(history, worker_name=worker.get('name'))
 
                 # Prefer active segment if it has content
                 if active_messages:
