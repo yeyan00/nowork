@@ -1508,8 +1508,8 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
         )}
         {messages.map((message, index) => {
           const previousMessage = index > 0 ? messages[index - 1] : null;
-          const showRole = message.role !== 'worker' || !previousMessage || previousMessage.role !== 'worker';
-          const roleLabel = message.role === 'worker' ? (message.senderName || t('chat.roleWorker')) : message.role === 'user' ? t('chat.roleUser') : t('chat.roleSystem');
+          const showRole = message.role === 'worker' && (!previousMessage || previousMessage.role !== 'worker');
+          const roleLabel = message.senderName || t('chat.roleWorker');
 
           return (
             <article key={message.id} className={`message-card ${message.role}${!showRole ? ' continuation' : ''}`}>
