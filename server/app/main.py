@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 from app.schemas import MessageCreatePayload, SchedulePayload, SessionCreatePayload, SessionUpdatePayload, WorkerCreatePayload, WorkerUpdatePayload
 from app.schedules import create_schedule, delete_schedule, get_schedule, list_schedule_runs, list_schedules, schedule_manager, update_schedule
@@ -57,6 +57,7 @@ from app.services import (
     create_compaction_session,
     get_compaction_session,
     get_session_segments,
+    export_session_context,
     get_session_config_info,
     update_session_config_info,
     trigger_manual_compaction,
@@ -215,6 +216,19 @@ def api_clone_session(session_id: str, request: Request, clone_from_run: int | N
 @app.get('/api/sessions/{session_id}/messages')
 def api_list_messages(session_id: str, limit: int = 20, offset: int = 0, request: Request = None) -> dict[str, object]:
     return list_messages(session_id, limit=limit, offset=offset, agent_os=_get_agent_os(request))
+
+
+@app.get('/api/debug/session-db')
+def api_debug_session_db():
+    """Debug: check session_manager engine and DB state."""
+    from app.session_manager import _engine, _SessionLocal, get_db_session, WorkerSessionRow, _get_db_path
+    
+    return {
+        'engine': str(_engine),
+        'session_factory': str(_SessionLocal),
+        'db_path': str(_get_db_path()),
+        'can_create': True,
+    }
 
 
 @app.get('/api/sessions/{session_id}/export-context')

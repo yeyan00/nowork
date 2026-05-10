@@ -2907,18 +2907,36 @@ def export_session_context(session_id: str, agent_os: Any | None = None) -> str:
     """
     from datetime import datetime, timezone
 
+    # Try WorkerSession first
     ws = session_manager.get_worker_session(session_id)
-    if ws is None:
-        raise HTTPException(status_code=404, detail='WorkerSession not found')
+    worker_id = ''
+    model_override = None
 
-    worker_id = ws.get('worker_id', '')
+    if ws is not None:
+        worker_id = ws.get('worker_id', '')
+        model_override = ws.get('model_override')
+        segment = session_manager.resolve_segment(session_id)
+        agno_session_id = segment['agno_session_id'] if segment else session_id
+    else:
+        # Legacy session: session_id is the agno_session_id directly
+        # Try to resolve segment (might be a legacy segment)
+        segment = session_manager.resolve_segment(session_id)
+        if segment:
+            worker_id = segment.get('worker_id', '')
+            agno_session_id = segment.get('agno_session_id', session_id)
+        else:
+            # Extract worker_id from session_id pattern (worker:xxx)
+            if ':' in session_id:
+                worker_id = session_id.split(':')[0]
+            else:
+                worker_id = ''
+            agno_session_id = session_id
+
+    if not worker_id:
+        raise HTTPException(status_code=404, detail='Session not found')
+
     worker = repository.get_worker(worker_id) or {}
     worker_name = worker.get('name', worker_id)
-    model_override = ws.get('model_override')
-
-    # Resolve active segment
-    segment = session_manager.resolve_segment(session_id)
-    agno_session_id = segment['agno_session_id'] if segment else session_id
 
     # Get runtime and system prompt
     system_prompt = ''
@@ -2952,6 +2970,13 @@ def export_session_context(session_id: str, agent_os: Any | None = None) -> str:
         if model:
             model_id = getattr(model, 'id', str(model))
 
+    # Fallback: get system prompt from worker config (instructions)
+    if not system_prompt:
+        worker_config = worker.get('config', {})
+        instructions = worker_config.get('instructions', '')
+        if instructions:
+            system_prompt = instructions
+
     # Load messages from DB
     messages: list[dict[str, Any]] = []
     if runtime is not None:
@@ -2963,6 +2988,13 @@ def export_session_context(session_id: str, agent_os: Any | None = None) -> str:
                     messages = _get_messages_with_run_index(session_obj, worker_name)
             except Exception as e:
                 logger.warning('Failed to load messages: %s', e)
+    else:
+        # Fallback: use list_messages when runtime is not available
+        try:
+            msg_result = list_messages(session_id, limit=100, offset=0, agent_os=agent_os)
+            messages = msg_result.get('messages', [])
+        except Exception as e:
+            logger.warning('Failed to load messages via list_messages: %s', e)
 
     # Build Markdown
     lines: list[str] = []
@@ -3001,6 +3033,7 @@ def export_session_context(session_id: str, agent_os: Any | None = None) -> str:
         for i, msg in enumerate(messages, 1):
             role = msg.get('role', 'unknown')
             content = msg.get('content', '')
+            reasoning = msg.get('reasoning', '')
             run_idx = msg.get('runIndex')
 
             # Role header
@@ -3009,6 +3042,16 @@ def export_session_context(session_id: str, agent_os: Any | None = None) -> str:
                 role_header += f' (Turn {run_idx})'
             lines.append(role_header)
             lines.append('')
+
+            # Reasoning (for worker messages)
+            if role == 'worker' and reasoning:
+                if len(reasoning) > 2000:
+                    reasoning = reasoning[:2000] + '\n... (truncated)'
+                lines.append('**Reasoning**:')
+                lines.append('```')
+                lines.append(reasoning)
+                lines.append('```')
+                lines.append('')
 
             # Content
             if isinstance(content, str):
