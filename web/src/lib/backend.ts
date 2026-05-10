@@ -225,6 +225,16 @@ export async function cloneSession(sessionId: string, cloneFromRun?: number): Pr
   return (await response.json()) as SessionSummary;
 }
 
+export async function compactSession(sessionId: string): Promise<{ ok: boolean; segment_id: string }> {
+  const response = await fetchFromApi(`/api/compaction-sessions/${sessionId}/compact`, { method: 'POST' });
+
+  if (!response.ok) {
+    throw new Error('Failed to compact session');
+  }
+
+  return (await response.json()) as { ok: boolean; segment_id: string };
+}
+
 export interface MessagesPage {
   messages: ChatMessage[];
   total: number;
