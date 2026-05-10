@@ -376,12 +376,14 @@ def _get_messages_with_run_index(session_obj: Any, worker_name: str | None = Non
     """Get messages from a session, iterating through runs to track run_index.
 
     This is used for Agent sessions where we need run_index for clone-from-message.
-    Each message gets a 'runIndex' field indicating which run it belongs to.
+    Each message gets a 'runIndex' field indicating which conversation turn it belongs to.
+    runIndex is a continuous sequence (0, 1, 2...) representing the user-visible turn order.
     """
     runs = getattr(session_obj, 'runs', None) or []
     result: list[dict[str, Any]] = []
+    filtered_idx = 0  # User-visible turn index (continuous, skipping PAUSED/CANCELLED/ERROR)
 
-    for run_idx, run in enumerate(runs):
+    for run in runs:
         run_messages = getattr(run, 'messages', None) or []
         # Skip paused/cancelled/error runs
         run_status = str(getattr(run, 'status', '')).upper()
@@ -401,8 +403,10 @@ def _get_messages_with_run_index(session_obj: Any, worker_name: str | None = Non
                 continue
 
             normalized = _normalize_single_message(msg, len(result), worker_name)
-            normalized['runIndex'] = run_idx
+            normalized['runIndex'] = filtered_idx
             result.append(normalized)
+
+        filtered_idx += 1  # Increment only for valid runs
 
     return result
 
@@ -445,6 +449,7 @@ def _extract_final_run_summary(messages: list[dict[str, Any]]) -> list[dict[str,
 def _load_compacted_agent_messages(runtime: Any, seg_agno_id: str, worker_name: str | None = None) -> list[dict[str, Any]]:
     """Load all messages from a compacted Agent segment via agno DB.
     Returns normalized message dicts with runIndex for clone-from-message.
+    runIndex is a continuous sequence (0, 1, 2...) representing user-visible turn order.
     """
     try:
         from agno.db.base import SessionType
@@ -455,7 +460,8 @@ def _load_compacted_agent_messages(runtime: Any, seg_agno_id: str, worker_name: 
         if not session_obj or not hasattr(session_obj, 'runs'):
             return []
         normalized: list[dict[str, Any]] = []
-        for run_idx, run in enumerate(session_obj.runs or []):
+        filtered_idx = 0  # User-visible turn index (continuous)
+        for run in session_obj.runs or []:
             # Skip paused/cancelled/error runs
             run_status = str(getattr(run, 'status', '')).upper()
             if run_status in ('PAUSED', 'CANCELLED', 'ERROR'):
@@ -473,8 +479,9 @@ def _load_compacted_agent_messages(runtime: Any, seg_agno_id: str, worker_name: 
                     'content': raw_content,
                     'senderName': worker_name if role in ('assistant', 'worker') else None,
                     'toolCalls': [],
-                    'runIndex': run_idx,
+                    'runIndex': filtered_idx,
                 })
+            filtered_idx += 1  # Increment only for valid runs
         return normalized
     except Exception:
         return []
@@ -865,11 +872,23 @@ def clone_session(source_session_id: str, clone_from_run: int | None = None, age
 
                     src_session = db.get_session(session_id=src_agno_id)
                     if src_session is not None:
-                        # Truncate runs if requested
+                        # Truncate runs if requested (based on filtered index)
                         if clone_from_run is not None:
                             runs = getattr(src_session, 'runs', None) or []
-                            if clone_from_run < len(runs):
-                                src_session.runs = runs[:clone_from_run + 1]
+                            # Build truncated runs list based on user-visible turn index
+                            # clone_from_run is the filtered_idx the user sees (continuous 0, 1, 2...)
+                            truncated_runs: list[Any] = []
+                            filtered_idx = 0
+                            for run in runs:
+                                run_status = str(getattr(run, 'status', '')).upper()
+                                # Skip PAUSED/CANCELLED/ERROR runs (not user-visible)
+                                if run_status in ('PAUSED', 'CANCELLED', 'ERROR'):
+                                    continue
+                                truncated_runs.append(run)
+                                if filtered_idx >= clone_from_run:
+                                    break
+                                filtered_idx += 1
+                            src_session.runs = truncated_runs
 
                         # Create new session with copied data
                         session_data = dict(getattr(src_session, 'session_data', None) or {})
