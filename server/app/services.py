@@ -1253,6 +1253,7 @@ _SKIP_FIELDS = frozenset({
     'images',                 # not supported yet
     'videos',                 # not supported yet
     'audio',                  # not supported yet
+    'metrics',                # RunMetrics/SessionMetrics — complex dataclass, handled separately
 })
 
 
@@ -1261,11 +1262,17 @@ def _to_json_safe(value: Any) -> Any:
     if value is None or isinstance(value, str | int | float | bool):
         return value
     if isinstance(value, dict):
-        return value
+        return {k: _to_json_safe(v) for k, v in value.items()}
     if dataclasses.is_dataclass(value):
-        return _serialize_event(value)
+        try:
+            return _serialize_event(value)
+        except Exception:
+            return str(value)
     if isinstance(value, BaseModel):
-        return value.model_dump(mode='json')
+        try:
+            return value.model_dump(mode='json')
+        except Exception:
+            return str(value)
     if isinstance(value, list):
         return [_to_json_safe(item) for item in value]
     return str(value)
@@ -1798,6 +1805,18 @@ async def stream_continue_run(
             event_data = _serialize_event(event)
             event_type = _normalize_event_type(raw_event_type)
             event_data['event'] = event_type
+
+            # Manually extract metrics for RunCompleted (same as main stream_message)
+            if event_type == 'RunCompleted' and 'metrics' not in event_data:
+                metrics = getattr(event, 'metrics', None)
+                if metrics:
+                    event_data['metrics'] = {
+                        'input_tokens': getattr(metrics, 'input_tokens', 0),
+                        'output_tokens': getattr(metrics, 'output_tokens', 0),
+                        'total_tokens': getattr(metrics, 'total_tokens', 0),
+                        'duration': getattr(metrics, 'duration', 0),
+                    }
+
             yield f"data: {json.dumps(event_data)}\n\n"
 
     except Exception as exc:
