@@ -99,7 +99,10 @@
     "toggleFilePreview": "文件",
     "showFilePreview": "显示文件",
     "hideFilePreview": "隐藏文件",
-    "compactedHint": "更早的 {count} 段对话已压缩摘要，上下文仍保留在助手中。"
+    "compactedHint": "更早的 {count} 段对话已压缩摘要，上下文仍保留在助手中。",
+    "cloneSession": "克隆会话",
+    "compactSession": "压缩会话",
+    "cloneFromHere": "从此处克隆"
   },
   "workerList": {
     "title": "工作助手",

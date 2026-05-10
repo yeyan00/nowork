@@ -99,7 +99,10 @@
     "toggleFilePreview": "Files",
     "showFilePreview": "Show Files",
     "hideFilePreview": "Hide Files",
-    "compactedHint": "{count} earlier conversation segment(s) have been compacted. Context is preserved for the assistant."
+    "compactedHint": "{count} earlier conversation segment(s) have been compacted. Context is preserved for the assistant.",
+    "cloneSession": "Clone Session",
+    "compactSession": "Compact Session",
+    "cloneFromHere": "Clone from here"
   },
   "workerList": {
     "title": "Workers",
