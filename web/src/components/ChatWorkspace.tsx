@@ -527,8 +527,15 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
 
     await compactSession(activeSessionId);
     // Refresh messages to show compacted state
-    loadMessages(true);
-  }, [activeSessionId, isStreaming, loadMessages, worker]);
+    const result = await listMessages(activeSessionId, PAGE_SIZE, 0);
+    updateSessionState(worker.id, activeSessionId, (sessionState) => ({
+      ...sessionState,
+      messages: result.messages,
+      hasMore: result.has_more,
+      compactedSegments: result.compactedSegments || 0,
+      memberActivitiesByRun: result.memberActivitiesByRun || [],
+    }));
+  }, [activeSessionId, isStreaming, updateSessionState, worker]);
 
   const handleWorkspaceToggle = useCallback((path: string, checked: boolean) => {
     if (!worker) return;
