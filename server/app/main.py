@@ -217,6 +217,16 @@ def api_list_messages(session_id: str, limit: int = 20, offset: int = 0, request
     return list_messages(session_id, limit=limit, offset=offset, agent_os=_get_agent_os(request))
 
 
+@app.get('/api/sessions/{session_id}/export-context')
+def api_export_context(session_id: str, request: Request):
+    """Export session's full LLM context as Markdown for debugging."""
+    return Response(
+        content=export_session_context(session_id, agent_os=_get_agent_os(request)),
+        media_type='text/markdown',
+        headers={'Content-Disposition': f'attachment; filename="session-{session_id}-context.md"'},
+    )
+
+
 @app.post('/api/sessions/{session_id}/messages', status_code=201)
 async def api_create_message(session_id: str, payload: MessageCreatePayload, request: Request):
     agent_os = _get_agent_os(request)

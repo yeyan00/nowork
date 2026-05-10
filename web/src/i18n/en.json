@@ -104,7 +104,8 @@
     "compactSession": "Compact Session",
     "compactConfirm": "Compact this session? This will summarize old messages and may take a few seconds.",
     "renameSession": "Rename",
-    "cloneFromHere": "Clone from here"
+    "cloneFromHere": "Clone from here",
+    "exportContext": "Export Context"
   },
   "workerList": {
     "title": "Workers",

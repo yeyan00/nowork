@@ -253,6 +253,16 @@ export async function listMessages(sessionId: string, limit = 20, offset = 0): P
   return (await response.json()) as MessagesPage;
 }
 
+export async function exportSessionContext(sessionId: string): Promise<string> {
+  const response = await fetchFromApi(`/api/sessions/${sessionId}/export-context`);
+
+  if (!response.ok) {
+    throw new Error('Failed to export session context');
+  }
+
+  return await response.text();
+}
+
 export async function sendMessage(sessionId: string, content: string, attachments?: ChatAttachment[]): Promise<SendMessageResult> {
   const response = await fetchFromApi(`/api/sessions/${sessionId}/messages`, {
     method: 'POST',

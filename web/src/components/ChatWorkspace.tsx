@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
-import { cancelRun, cloneSession, compactSession, continueRunStream, createSession, listMessages, listModels, listSessions, sendMessageStream, updateSession } from '../lib/backend';
+import { cancelRun, cloneSession, compactSession, continueRunStream, createSession, exportSessionContext, listMessages, listModels, listSessions, sendMessageStream, updateSession } from '../lib/backend';
 import type { AgentEvent, ContinueRunParams, ProviderInfo } from '../lib/backend';
 import type { ChatAttachment, ChatMessage, MemberActivity, PreviewingFile, ToolApprovalItem, ToolCall, WorkerSummary, WorkspaceBinding, WorkspaceInfo } from '../types';
 import { FilePreviewSidebar } from './FilePreviewSidebar';
@@ -1492,6 +1492,28 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
               }}
             >
               {t('chat.compactSession') || 'Compact'}
+            </button>
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => {
+                const sessionId = contextMenu.sessionId;
+                exportSessionContext(sessionId).then((markdown) => {
+                  // Download as file
+                  const blob = new Blob([markdown], { type: 'text/markdown' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `session-${sessionId.split(':').pop()}-context.md`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }).catch((err) => {
+                  console.error('Failed to export context:', err);
+                });
+                setContextMenu(null);
+              }}
+            >
+              {t('chat.exportContext') || 'Export Context'}
             </button>
           </div>
         )}

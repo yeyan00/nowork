@@ -2898,3 +2898,200 @@ async def trigger_manual_compaction(ws_id: str, agent_os: Any | None) -> dict[st
         'new_segment': new_segment,
     }
 
+
+def export_session_context(session_id: str, agent_os: Any | None = None) -> str:
+    """Export session's full LLM context as Markdown for debugging.
+
+    Returns:
+        Markdown-formatted string with system prompt, messages, and metadata.
+    """
+    from datetime import datetime, timezone
+
+    ws = session_manager.get_worker_session(session_id)
+    if ws is None:
+        raise HTTPException(status_code=404, detail='WorkerSession not found')
+
+    worker_id = ws.get('worker_id', '')
+    worker = repository.get_worker(worker_id) or {}
+    worker_name = worker.get('name', worker_id)
+    model_override = ws.get('model_override')
+
+    # Resolve active segment
+    segment = session_manager.resolve_segment(session_id)
+    agno_session_id = segment['agno_session_id'] if segment else session_id
+
+    # Get runtime and system prompt
+    system_prompt = ''
+    model_id = ''
+    runtime = None
+    if agent_os is not None:
+        runtime = _resolve_runtime_agent(worker_id, agent_os)
+
+    if runtime is not None:
+        try:
+            sys_msg = runtime.get_system_message(session_id=agno_session_id)
+            if sys_msg:
+                # sys_msg is a Message object with content
+                content = getattr(sys_msg, 'content', None)
+                if isinstance(content, str):
+                    system_prompt = content
+                elif isinstance(content, list):
+                    # Content blocks
+                    parts = []
+                    for block in content:
+                        if isinstance(block, dict):
+                            if block.get('type') == 'text':
+                                parts.append(block.get('text', ''))
+                        elif hasattr(block, 'text'):
+                            parts.append(block.text)
+                    system_prompt = '\n'.join(parts)
+        except Exception as e:
+            logger.warning('Failed to get system message: %s', e)
+
+        model = getattr(runtime, 'model', None)
+        if model:
+            model_id = getattr(model, 'id', str(model))
+
+    # Load messages from DB
+    messages: list[dict[str, Any]] = []
+    if runtime is not None:
+        db = getattr(runtime, 'db', None)
+        if db and hasattr(db, 'get_session'):
+            try:
+                session_obj = db.get_session(session_id=agno_session_id)
+                if session_obj:
+                    messages = _get_messages_with_run_index(session_obj, worker_name)
+            except Exception as e:
+                logger.warning('Failed to load messages: %s', e)
+
+    # Build Markdown
+    lines: list[str] = []
+
+    # Header
+    lines.append('# Session Debug Context')
+    lines.append('')
+    lines.append(f'**Session ID**: `{session_id}`')
+    lines.append(f'**Worker**: {worker_name} (`{worker_id}`)')
+    lines.append(f'**Model**: {model_id or model_override or "default"}')
+    lines.append(f'**Time**: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")}')
+    lines.append('')
+    lines.append('---')
+    lines.append('')
+
+    # System Prompt
+    lines.append('## System Prompt')
+    lines.append('')
+    if system_prompt:
+        lines.append('```')
+        lines.append(system_prompt)
+        lines.append('```')
+    else:
+        lines.append('*(Unable to retrieve system prompt)*')
+    lines.append('')
+    lines.append('---')
+    lines.append('')
+
+    # Messages
+    lines.append('## Messages')
+    lines.append('')
+
+    if not messages:
+        lines.append('*(No messages)*')
+    else:
+        for i, msg in enumerate(messages, 1):
+            role = msg.get('role', 'unknown')
+            content = msg.get('content', '')
+            run_idx = msg.get('runIndex')
+
+            # Role header
+            role_header = f'### [{i}] {role.capitalize()}'
+            if run_idx is not None:
+                role_header += f' (Turn {run_idx})'
+            lines.append(role_header)
+            lines.append('')
+
+            # Content
+            if isinstance(content, str):
+                # Truncate very long content
+                if len(content) > 5000:
+                    content = content[:5000] + '\n... (truncated)'
+                lines.append('```')
+                lines.append(content)
+                lines.append('```')
+            elif isinstance(content, list):
+                # Content blocks
+                for block in content:
+                    block_type = block.get('type', 'unknown') if isinstance(block, dict) else 'unknown'
+                    if block_type == 'text':
+                        text = block.get('text', '')
+                        if len(text) > 5000:
+                            text = text[:5000] + '\n... (truncated)'
+                        lines.append('```text')
+                        lines.append(text)
+                        lines.append('```')
+                    elif block_type == 'image':
+                        lines.append(f'*[Image: {block.get("mimeType", "unknown")}]*')
+                    elif block_type == 'thinking':
+                        thinking = block.get('thinking', '')
+                        if len(thinking) > 2000:
+                            thinking = thinking[:2000] + '\n... (truncated)'
+                        lines.append('**Thinking**:')
+                        lines.append('```')
+                        lines.append(thinking)
+                        lines.append('```')
+                    elif block_type == 'toolCall':
+                        tool_name = block.get('name', 'unknown')
+                        tool_args = block.get('arguments', {})
+                        lines.append(f'**Tool Call**: `{tool_name}`')
+                        lines.append('```json')
+                        lines.append(str(tool_args))
+                        lines.append('```')
+                    else:
+                        lines.append(f'*[Block: {block_type}]*')
+
+            # Tool calls (from message's toolCalls field)
+            tool_calls = msg.get('toolCalls')
+            if tool_calls:
+                lines.append('')
+                lines.append('**Tool Calls**:')
+                for tc in tool_calls:
+                    tc_name = tc.get('name', 'unknown')
+                    tc_args = tc.get('arguments', {})
+                    lines.append(f'- `{tc_name}`: {str(tc_args)[:200]}')
+
+            # Sender name (for team member messages)
+            sender_name = msg.get('senderName')
+            if sender_name:
+                lines.append('')
+                lines.append(f'*Sender: {sender_name}*')
+
+            lines.append('')
+
+    # Compaction info
+    lines.append('---')
+    lines.append('')
+    lines.append('## Compaction Info')
+    lines.append('')
+    try:
+        all_segments = session_manager.get_all_segments(session_id)
+        compacted = [s for s in all_segments if s.get('status') == 'compacted']
+        active = [s for s in all_segments if s.get('status') == 'active']
+        lines.append(f'- Compacted segments: {len(compacted)}')
+        lines.append(f'- Active segments: {len(active)}')
+        if compacted:
+            lines.append('')
+            lines.append('**Compacted Segment Summaries**:')
+            for seg in compacted:
+                summary = seg.get('summary', '(no summary)')
+                if summary:
+                    lines.append(f'- Segment `{seg.get("id", "unknown")}`: {summary[:200]}...')
+    except Exception:
+        lines.append('*(Unable to retrieve compaction info)*')
+
+    lines.append('')
+    lines.append('---')
+    lines.append('')
+    lines.append('*Generated by nowork LLM context exporter*')
+
+    return '\n'.join(lines)
+
