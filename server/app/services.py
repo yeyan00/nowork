@@ -1253,7 +1253,6 @@ _SKIP_FIELDS = frozenset({
     'images',                 # not supported yet
     'videos',                 # not supported yet
     'audio',                  # not supported yet
-    'metrics',                # RunMetrics/SessionMetrics — complex dataclass, handled separately
 })
 
 
@@ -1289,6 +1288,62 @@ def _serialize_event(event: Any) -> dict[str, Any]:
             continue
         result[name] = _to_json_safe(value)
     return result
+
+
+def _normalize_event_data(event_data: dict[str, Any], raw_event_type: str) -> dict[str, Any]:
+    """Normalize event data for frontend consumption.
+
+    Handles format differences between agno's event structure and what the
+    frontend expects:
+    - ModelRequestCompleted/TeamModelRequestCompleted: agno puts token counts
+      as top-level fields (input_tokens, output_tokens); frontend expects
+      them nested under event_data['metrics'].
+    - RunCompleted/TeamRunCompleted: agno's RunMetrics is verbose (includes
+      timer, details with per-model breakdown); simplify to just the fields
+      the frontend uses.
+    """
+    event_type = _normalize_event_type(raw_event_type)
+
+    # ModelRequestCompleted: wrap top-level token fields into metrics dict
+    if event_type in ('ModelRequestCompleted', 'TeamModelRequestCompleted'):
+        inp = event_data.pop('input_tokens', None)
+        out = event_data.pop('output_tokens', None)
+        total = event_data.pop('total_tokens', None)
+        ttft = event_data.pop('time_to_first_token', None)
+        r_tokens = event_data.pop('reasoning_tokens', None)
+        cache_r = event_data.pop('cache_read_tokens', None)
+        cache_w = event_data.pop('cache_write_tokens', None)
+        metrics: dict[str, Any] = {}
+        if inp is not None:
+            metrics['input_tokens'] = inp
+        if out is not None:
+            metrics['output_tokens'] = out
+        if total is not None:
+            metrics['total_tokens'] = total
+        if ttft is not None:
+            metrics['time_to_first_token'] = ttft
+        if r_tokens is not None:
+            metrics['reasoning_tokens'] = r_tokens
+        if cache_r is not None:
+            metrics['cache_read_tokens'] = cache_r
+        if cache_w is not None:
+            metrics['cache_write_tokens'] = cache_w
+        if metrics:
+            event_data['metrics'] = metrics
+
+    # RunCompleted: simplify RunMetrics to only the fields the frontend uses
+    if event_type in ('RunCompleted', 'TeamRunCompleted'):
+        metrics_obj = event_data.get('metrics')
+        if isinstance(metrics_obj, dict):
+            # _serialize_event produced a full dict — simplify it
+            event_data['metrics'] = {
+                'input_tokens': metrics_obj.get('input_tokens', 0),
+                'output_tokens': metrics_obj.get('output_tokens', 0),
+                'total_tokens': metrics_obj.get('total_tokens', 0),
+                'duration': metrics_obj.get('duration', 0),
+            }
+
+    return event_data
 
 
 async def _handle_run_paused(
@@ -1381,6 +1436,7 @@ async def _handle_run_paused(
                             yield sse_line
                     else:
                         cont_data = _serialize_event(cont_event)
+                        cont_data = _normalize_event_data(cont_data, cont_type)
                         cont_data['event'] = _normalize_event_type(cont_type)
                         yield f"data: {json.dumps(cont_data)}\n\n"
             finally:
@@ -1803,20 +1859,9 @@ async def stream_continue_run(
                 continue
 
             event_data = _serialize_event(event)
+            event_data = _normalize_event_data(event_data, raw_event_type)
             event_type = _normalize_event_type(raw_event_type)
             event_data['event'] = event_type
-
-            # Manually extract metrics for RunCompleted (same as main stream_message)
-            if event_type == 'RunCompleted' and 'metrics' not in event_data:
-                metrics = getattr(event, 'metrics', None)
-                if metrics:
-                    event_data['metrics'] = {
-                        'input_tokens': getattr(metrics, 'input_tokens', 0),
-                        'output_tokens': getattr(metrics, 'output_tokens', 0),
-                        'total_tokens': getattr(metrics, 'total_tokens', 0),
-                        'duration': getattr(metrics, 'duration', 0),
-                    }
-
             yield f"data: {json.dumps(event_data)}\n\n"
 
     except Exception as exc:
