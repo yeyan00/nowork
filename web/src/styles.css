@@ -774,13 +774,16 @@ button {
 .message-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 4px;
-  opacity: 0.4;
-  transition: opacity 0.15s;
+  max-height: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: max-height 0.15s, opacity 0.15s, visibility 0.15s;
 }
 
 .message-card:hover .message-actions {
+  max-height: 24px;
   opacity: 1;
+  visibility: visible;
 }
 
 .message-action-btn {
