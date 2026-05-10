@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
-import { cancelRun, continueRunStream, createSession, listMessages, listModels, listSessions, sendMessageStream, updateSession } from '../lib/backend';
+import { cancelRun, cloneSession, continueRunStream, createSession, listMessages, listModels, listSessions, sendMessageStream, updateSession } from '../lib/backend';
 import type { AgentEvent, ContinueRunParams, ProviderInfo } from '../lib/backend';
 import type { ChatAttachment, ChatMessage, MemberActivity, PreviewingFile, ToolApprovalItem, ToolCall, WorkerSummary, WorkspaceBinding, WorkspaceInfo } from '../types';
 import { FilePreviewSidebar } from './FilePreviewSidebar';
@@ -150,6 +150,8 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
   const [showMemberSidebar, setShowMemberSidebar] = useState(false);
   const [showWsDropdown, setShowWsDropdown] = useState(false);
   const [showFilePreviewSidebar, setShowFilePreviewSidebar] = useState(false);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingSessionTitle, setEditingSessionTitle] = useState('');
   const [pendingPreviewFile, setPendingPreviewFile] = useState<PreviewingFile | null>(null);
   const [previewFileHandled, setPreviewFileHandled] = useState(true);
   const [pendingSessionWorkspaces, setPendingSessionWorkspaces] = useState<Record<string, string>>({});
@@ -500,6 +502,25 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
       return next;
     });
   }, [allWorkspacePaths.length, effectiveWorkspaces, updateWorkerState, worker]);
+
+  const handleCloneSession = useCallback(async (cloneFromRun?: number) => {
+    if (!worker || !activeSessionId) return;
+
+    const cloned = await cloneSession(activeSessionId, cloneFromRun);
+    updateWorkerState(worker.id, (ws) => {
+      ws.sessions = [cloned, ...ws.sessions];
+      ws.activeSessionId = cloned.id;
+      ws.sessionStates = {
+        ...ws.sessionStates,
+        [cloned.id]: {
+          ...createSessionState(cloned.id),
+          loaded: true,
+          lastActiveAt: Date.now(),
+        },
+      };
+      return ws;
+    });
+  }, [activeSessionId, updateWorkerState, worker]);
 
   const handleWorkspaceToggle = useCallback((path: string, checked: boolean) => {
     if (!worker) return;
@@ -1343,6 +1364,9 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           <button type="button" className="icon-button tooltip" aria-label={t('chat.newSession')} title={t('chat.newSession')} onClick={() => void handleCreateSession()}>
             <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/></svg>
           </button>
+          <button type="button" className="icon-button tooltip" aria-label={t('chat.cloneSession') || 'Clone Session'} title={t('chat.cloneSession') || 'Clone Session'} onClick={() => void handleCloneSession()}>
+            <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="10" y="10" width="7" height="7" rx="1"/><path d="M7 10V7h3"/></svg>
+          </button>
           <button type="button" className="gear-button tooltip" aria-label={t('chat.workerSettings')} title={t('chat.workerSettings')} onClick={() => setShowWorkerSettings((value) => !value)}>
             ⚙
           </button>
@@ -1360,8 +1384,34 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
               aria-selected={session.id === activeSessionId}
               className={session.id === activeSessionId ? 'chat-session-tab active' : 'chat-session-tab'}
               onClick={() => activateSession(worker.id, session.id)}
+              onDoubleClick={() => { setEditingSessionTitle(session.title && session.title !== 'Untitled' ? session.title : ''); setEditingSessionId(session.id); }}
             >
-              <span>{formatSessionTime(session.updatedAt || session.createdAt, t('chat.newSessionTitle'))}</span>
+              {editingSessionId === session.id ? (
+                <input
+                  type="text"
+                  className="session-tab-rename-input"
+                  value={editingSessionTitle}
+                  onChange={(e) => setEditingSessionTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.stopPropagation();
+                      updateSession(session.id, { title: editingSessionTitle }).then((updated) => {
+                        updateWorkerState(worker.id, (ws) => ({
+                          ...ws,
+                          sessions: ws.sessions.map((s) => s.id === session.id ? { ...s, title: updated.title } : s),
+                        }));
+                      }).catch(() => {}).finally(() => setEditingSessionId(null));
+                    } else if (e.key === 'Escape') {
+                      setEditingSessionId(null);
+                    }
+                  }}
+                  onBlur={() => setEditingSessionId(null)}
+                  autoFocus
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+              <span>{session.title && session.title !== 'Untitled' ? session.title : formatSessionTime(session.updatedAt || session.createdAt, t('chat.newSessionTitle'))}</span>
+              )}
               {sessionState?.isStreaming && <span className="chat-session-running-dot" aria-hidden="true" />}
             </button>
           );
@@ -1390,7 +1440,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                         setShowSessionList(false);
                       }}
                     >
-                      <span>{formatSessionTime(session.updatedAt || session.createdAt, t('chat.newSessionTitle'))}</span>
+                      <span>{session.title && session.title !== 'Untitled' ? session.title : formatSessionTime(session.updatedAt || session.createdAt, t('chat.newSessionTitle'))}</span>
                       {sessionState?.isStreaming && <span className="chat-session-running-dot" aria-hidden="true" />}
                     </button>
                   );
@@ -1448,6 +1498,18 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
               {message.role === 'worker'
                 ? <div className="message-body"><MarkdownContent content={message.content} /></div>
                 : <div className="message-body">{message.content}</div>}
+              {message.role === 'user' && message.runIndex !== undefined && (
+                <div className="message-actions">
+                  <button
+                    type="button"
+                    className="message-action-btn"
+                    title={t('chat.cloneFromHere') || 'Clone session from here'}
+                    onClick={() => void handleCloneSession(message.runIndex)}
+                  >
+                    <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="2" width="5" height="5" rx="0.5"/><rect x="9" y="9" width="5" height="5" rx="0.5"/><path d="M5 9V6h3"/></svg>
+                  </button>
+                </div>
+              )}
               {message.role === 'worker' && message.toolCalls && message.toolCalls.length > 0 && (
                 <ToolCallList
                   tools={message.toolCalls}

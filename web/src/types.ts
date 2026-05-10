@@ -64,6 +64,7 @@ export interface ChatMessage {
   reasoning?: string;
   streaming?: boolean;
   senderName?: string;
+  runIndex?: number;        // which run this message belongs to (for clone-from-message)
 }
 
 export interface SessionSummary {

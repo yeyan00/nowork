@@ -5,7 +5,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -16,6 +16,7 @@ from app.services import (
     _resolve_worker_id,
     cancel_run,
     check_mcp_status,
+    clone_session,
     create_message,
     create_provider,
     create_session,
@@ -199,6 +200,16 @@ def api_update_session(session_id: str, payload: SessionUpdatePayload, request: 
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail='Session not found')
     return result
+
+
+@app.post('/api/sessions/{session_id}/clone', status_code=201)
+def api_clone_session(session_id: str, request: Request, clone_from_run: int | None = Query(default=None)) -> dict[str, object]:
+    """Clone a session. Optionally truncate to a specific run index.
+
+    Query params:
+        clone_from_run: Run index to truncate to (inclusive). If not set, clone all runs.
+    """
+    return clone_session(session_id, clone_from_run=clone_from_run, agent_os=_get_agent_os(request))
 
 
 @app.get('/api/sessions/{session_id}/messages')

@@ -480,6 +480,21 @@ def increment_segment_run_count(seg_id: str) -> int:
         db.close()
 
 
+def update_segment_run_count(seg_id: str, count: int) -> None:
+    """Set the run_count of a segment to a specific value (used by clone)."""
+    db = get_db_session()
+    try:
+        seg = db.query(SessionSegmentRow).filter(SessionSegmentRow.id == seg_id).first()
+        if seg is not None:
+            seg.run_count = count
+            db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def _serialize_segment(seg: SessionSegmentRow) -> dict[str, Any]:
     meta = None
     if seg.compaction_meta:

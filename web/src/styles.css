@@ -760,6 +760,43 @@ button {
   background: rgba(76, 120, 255, 0.08);
 }
 
+.session-tab-rename-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  width: 80px;
+  min-width: 40px;
+  padding: 0;
+}
+
+.message-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+
+.message-card:hover .message-actions {
+  opacity: 1;
+}
+
+.message-action-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 4px;
+  color: #6b7280;
+  border-radius: 4px;
+}
+
+.message-action-btn:hover {
+  background: rgba(107, 114, 128, 0.12);
+  color: #374151;
+}
+
 .chat-session-running-dot {
   width: 6px;
   height: 6px;

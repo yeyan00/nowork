@@ -372,6 +372,41 @@ def _normalize_runtime_messages(runtime_messages: list[Any], worker_name: str | 
     return result
 
 
+def _get_messages_with_run_index(session_obj: Any, worker_name: str | None = None) -> list[dict[str, Any]]:
+    """Get messages from a session, iterating through runs to track run_index.
+
+    This is used for Agent sessions where we need run_index for clone-from-message.
+    Each message gets a 'runIndex' field indicating which run it belongs to.
+    """
+    runs = getattr(session_obj, 'runs', None) or []
+    result: list[dict[str, Any]] = []
+
+    for run_idx, run in enumerate(runs):
+        run_messages = getattr(run, 'messages', None) or []
+        # Skip paused/cancelled/error runs
+        run_status = str(getattr(run, 'status', '')).upper()
+        if run_status in ('PAUSED', 'CANCELLED', 'ERROR'):
+            continue
+        # Skip runs with parent_run_id (team member runs)
+        if getattr(run, 'parent_run_id', None):
+            continue
+
+        for msg in run_messages:
+            role = str(getattr(msg, 'role', ''))
+            # Skip system and tool roles (tool results merged into assistant)
+            if role in ('system', 'tool'):
+                continue
+            # Skip history-tagged messages
+            if getattr(msg, 'from_history', False):
+                continue
+
+            normalized = _normalize_single_message(msg, len(result), worker_name)
+            normalized['runIndex'] = run_idx
+            result.append(normalized)
+
+    return result
+
+
 def _extract_final_run_summary(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """From a compacted segment's full message list, extract only the last run's
     user message and final assistant message (skip intermediate tool calls).
@@ -409,7 +444,7 @@ def _extract_final_run_summary(messages: list[dict[str, Any]]) -> list[dict[str,
 
 def _load_compacted_agent_messages(runtime: Any, seg_agno_id: str, worker_name: str | None = None) -> list[dict[str, Any]]:
     """Load all messages from a compacted Agent segment via agno DB.
-    Returns normalized message dicts. Used when active segment is empty.
+    Returns normalized message dicts with runIndex for clone-from-message.
     """
     try:
         from agno.db.base import SessionType
@@ -420,7 +455,11 @@ def _load_compacted_agent_messages(runtime: Any, seg_agno_id: str, worker_name: 
         if not session_obj or not hasattr(session_obj, 'runs'):
             return []
         normalized: list[dict[str, Any]] = []
-        for run in (session_obj.runs or []):
+        for run_idx, run in enumerate(session_obj.runs or []):
+            # Skip paused/cancelled/error runs
+            run_status = str(getattr(run, 'status', '')).upper()
+            if run_status in ('PAUSED', 'CANCELLED', 'ERROR'):
+                continue
             for msg in (getattr(run, 'messages', []) or []):
                 role = getattr(msg, 'role', '')
                 if role in ('system', 'tool'):
@@ -434,6 +473,7 @@ def _load_compacted_agent_messages(runtime: Any, seg_agno_id: str, worker_name: 
                     'content': raw_content,
                     'senderName': worker_name if role in ('assistant', 'worker') else None,
                     'toolCalls': [],
+                    'runIndex': run_idx,
                 })
         return normalized
     except Exception:
@@ -771,6 +811,114 @@ def create_session(worker_id: str, title: str, workspaces: list[str] | None = No
     }
 
 
+def clone_session(source_session_id: str, clone_from_run: int | None = None, agent_os: Any | None = None) -> dict[str, Any]:
+    """Clone a session, optionally truncating to a specific run index.
+
+    Args:
+        source_session_id: The session to clone from.
+        clone_from_run: If set, only copy runs up to this index (inclusive).
+            This enables "branch from message X" — clone the session
+            up to a certain point and continue the conversation differently.
+        agent_os: AgentOS instance for agno DB access.
+    """
+    ws = session_manager.get_worker_session(source_session_id)
+    if ws is None:
+        raise HTTPException(status_code=404, detail='Source session not found')
+    worker_id = ws['worker_id']
+    worker = repository.get_worker(worker_id)
+    if worker is None:
+        raise HTTPException(status_code=404, detail='Worker not found')
+
+    src_title = ws.get('title', 'Untitled') or 'Untitled'
+    clone_title = f'{src_title} (clone)'
+
+    # Create new WorkerSession + Segment
+    new_ws = session_manager.create_worker_session(worker_id, title=clone_title)
+    new_session_id = new_ws['id']
+    new_agno_session_id = new_ws['agno_session_id']
+
+    # Copy agno session data (with optional run truncation)
+    if agent_os is not None:
+        runtime = _resolve_runtime_agent(worker_id, agent_os)
+        if runtime is not None:
+            db = getattr(runtime, 'db', None)
+            if db is not None and hasattr(db, 'get_session') and hasattr(db, 'upsert_session'):
+                try:
+                    # Get source agno session - prefer segment with runs
+                    all_segments = session_manager.get_all_segments(source_session_id)
+                    src_agno_id = None
+                    # First try active segment
+                    for seg in all_segments:
+                        if seg.get('status') == 'active' and seg.get('run_count', 0) > 0:
+                            src_agno_id = seg.get('agno_session_id')
+                            break
+                    # If active segment empty, use last compacted segment with runs
+                    if src_agno_id is None:
+                        for seg in reversed(all_segments):
+                            if seg.get('run_count', 0) > 0:
+                                src_agno_id = seg.get('agno_session_id')
+                                break
+                    # Fallback to resolved active segment
+                    if src_agno_id is None:
+                        src_seg = session_manager.resolve_segment(source_session_id)
+                        src_agno_id = src_seg['agno_session_id'] if src_seg else source_session_id
+
+                    src_session = db.get_session(session_id=src_agno_id)
+                    if src_session is not None:
+                        # Truncate runs if requested
+                        if clone_from_run is not None:
+                            runs = getattr(src_session, 'runs', None) or []
+                            if clone_from_run < len(runs):
+                                src_session.runs = runs[:clone_from_run + 1]
+
+                        # Create new session with copied data
+                        session_data = dict(getattr(src_session, 'session_data', None) or {})
+                        session_data['title'] = clone_title
+
+                        now_ts = int(datetime.now(timezone.utc).timestamp())
+
+                        if worker['type'] == 'Team':
+                            from agno.session import TeamSession
+                            new_session = TeamSession(
+                                session_id=new_agno_session_id,
+                                team_id=worker_id,
+                                session_data=session_data,
+                                runs=getattr(src_session, 'runs', None),
+                                metadata=getattr(src_session, 'metadata', None),
+                                created_at=now_ts,
+                                updated_at=now_ts,
+                            )
+                        else:
+                            from agno.session import AgentSession
+                            new_session = AgentSession(
+                                session_id=new_agno_session_id,
+                                agent_id=worker_id,
+                                session_data=session_data,
+                                runs=getattr(src_session, 'runs', None),
+                                metadata=getattr(src_session, 'metadata', None),
+                                created_at=now_ts,
+                                updated_at=now_ts,
+                            )
+                        db.upsert_session(new_session)
+
+                        # Update segment run_count
+                        copied_runs = getattr(src_session, 'runs', None) or []
+                        session_manager.update_segment_run_count(new_ws['segment_id'], len(copied_runs))
+
+                except Exception as e:
+                    logger.warning('Failed to clone agno session data: %s', e)
+
+    return {
+        'id': new_session_id,
+        'workerId': worker_id,
+        'title': clone_title,
+        'workspaces': None,
+        'modelOverride': None,
+        'learningEnabled': None,
+        'createdAt': datetime.now(timezone.utc).isoformat(),
+    }
+
+
 def get_session(session_id: str, agent_os: Any | None = None) -> dict[str, Any] | None:
     ws = session_manager.get_worker_session(session_id)
     worker_id = ws['worker_id'] if ws is not None else repository.extract_worker_id(session_id)
@@ -972,26 +1120,23 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                         if seg_msgs:
                             last_compacted_messages = seg_msgs
                     else:
-                        # Active segment: load normally
-                        # Use get_messages(skip_roles=["system"]) to include tool-role messages
-                        # which contain the tool call results we need to merge back
-                        history = None
+                        # Active segment: load messages with run_index for clone-from-message
                         if hasattr(runtime, 'db') and hasattr(runtime.db, 'get_session'):
                             try:
                                 from agno.db.base import SessionType
                                 session_obj = runtime.db.get_session(session_id=seg_agno_id, session_type=SessionType.AGENT)
-                                if session_obj and hasattr(session_obj, 'get_messages'):
-                                    # Get all messages including tool-role (skip only system)
-                                    history = session_obj.get_messages(skip_roles=['system'])
+                                if session_obj:
+                                    # Use run-based iteration to get messages with runIndex
+                                    active_messages = _get_messages_with_run_index(session_obj, worker_name=worker.get('name'))
                             except Exception:
                                 pass
-                        elif hasattr(runtime, 'get_chat_history'):
+                        if not active_messages and hasattr(runtime, 'get_chat_history'):
                             try:
                                 history = runtime.get_chat_history(session_id=seg_agno_id)
+                                if history:
+                                    active_messages = _normalize_runtime_messages(history, worker_name=worker.get('name'))
                             except Exception:
                                 pass
-                        if history is not None:
-                            active_messages = _normalize_runtime_messages(history, worker_name=worker.get('name'))
 
                 # Prefer active segment if it has content
                 if active_messages:

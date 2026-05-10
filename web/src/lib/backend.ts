@@ -212,6 +212,19 @@ export async function updateSession(sessionId: string, payload: { title?: string
   return (await response.json()) as SessionSummary;
 }
 
+export async function cloneSession(sessionId: string, cloneFromRun?: number): Promise<SessionSummary> {
+  const url = cloneFromRun !== undefined
+    ? `/api/sessions/${sessionId}/clone?clone_from_run=${cloneFromRun}`
+    : `/api/sessions/${sessionId}/clone`;
+  const response = await fetchFromApi(url, { method: 'POST' });
+
+  if (!response.ok) {
+    throw new Error('Failed to clone session');
+  }
+
+  return (await response.json()) as SessionSummary;
+}
+
 export interface MessagesPage {
   messages: ChatMessage[];
   total: number;
