@@ -863,6 +863,10 @@ class CodingTools(Toolkit):
         if readable_extra:
             self.readable_extra = [Path(d).expanduser().resolve() for d in readable_extra]
         self.allow_shell_operators = allow_shell_operators
+        # Per-instance confirmation context flag — set by services._handle_run_paused
+        # before executing a tool that the user approved.  Must be instance-level
+        # (not class-level) so concurrent workers don't interfere with each other.
+        self._confirmation_context_flag: bool = False
         # Tool configuration (must be resolved before allowed_commands)
         self.tool_config = self._normalize_tool_config(tool_config)
         self.allowed_commands: Optional[List[str]] = (
@@ -962,6 +966,13 @@ class CodingTools(Toolkit):
     # ApprovalProvider protocol implementation
     # ------------------------------------------------------------------
 
+    # Tools that this provider handles approval for
+    _APPROVED_TOOL_NAMES = frozenset({"edit_file", "write_file"})
+
+    def handles_tools(self, tool_name: str) -> bool:
+        """Return True if this provider handles approval for the given tool."""
+        return tool_name in self._APPROVED_TOOL_NAMES
+
     def can_auto_approve(self, tool_name: str, tool_args: dict, session_id: str) -> bool:
         """Decide whether a paused tool call can proceed without user confirmation.
 
@@ -1017,8 +1028,7 @@ class CodingTools(Toolkit):
     # Confirmation context detection
     # ------------------------------------------------------------------
 
-    # Thread-local flag set by _handle_run_paused before confirmed tool execution
-    _confirmation_context_flag: bool = False
+    # Confirmation context flag is initialized in __init__ as an instance variable.
 
     def _is_confirmation_context(self) -> bool:
         """Check if the current function call is in a confirmed context

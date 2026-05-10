@@ -1834,10 +1834,16 @@ async def stream_continue_run(
     """
     is_team = worker.get('type') == 'Team'
 
-    # Set confirmation context on tools (user confirmed via frontend)
-    for _tool in (getattr(runtime, 'tools', None) or []):
-        if hasattr(_tool, 'set_confirmation_context'):
-            _tool.set_confirmation_context(True)
+    # Only set confirmation context if at least one tool is actually confirmed.
+    # When user rejects (confirmed=False), agno calls reject_tool_call() which
+    # does NOT execute the tool function — so no need to bypass path checks.
+    has_confirmed_tool = any(
+        getattr(t, 'confirmed', False) is True for t in updated_tools
+    )
+    if has_confirmed_tool:
+        for _tool in (getattr(runtime, 'tools', None) or []):
+            if hasattr(_tool, 'set_confirmation_context'):
+                _tool.set_confirmation_context(True)
 
     try:
         cont_iter = runtime.acontinue_run(
@@ -1868,10 +1874,11 @@ async def stream_continue_run(
         logger.exception('stream_continue_run error: run %s %s', run_id, exc)
         yield f"data: {json.dumps({'event': 'RunError', 'content': str(exc)})}\n\n"
     finally:
-        # Clear confirmation context
-        for _tool in (getattr(runtime, 'tools', None) or []):
-            if hasattr(_tool, 'set_confirmation_context'):
-                _tool.set_confirmation_context(False)
+        # Clear confirmation context (only if we set it)
+        if has_confirmed_tool:
+            for _tool in (getattr(runtime, 'tools', None) or []):
+                if hasattr(_tool, 'set_confirmation_context'):
+                    _tool.set_confirmation_context(False)
 
 
 _skills_cache: list[dict[str, Any]] | None = None

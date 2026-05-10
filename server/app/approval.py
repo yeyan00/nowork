@@ -124,11 +124,20 @@ approval_manager = ApprovalManager()
 def find_approval_provider(runtime: Any, tool_name: str) -> Optional[ApprovalProvider]:
     """Search runtime.tools for an ApprovalProvider that handles *tool_name*.
 
+    A provider "handles" a tool if:
+    - It has a ``handles_tools`` method that returns True for *tool_name*, OR
+    - It does not have ``handles_tools`` (assumed to handle all tools — backward compat).
+
     Returns the first matching provider, or None.
     """
     tools = getattr(runtime, 'tools', None) or []
     for _tool in tools:
         if isinstance(_tool, ApprovalProvider):
-            # The provider itself decides if it handles the tool_name
-            return _tool
+            # If the provider declares which tools it handles, check it.
+            if hasattr(_tool, 'handles_tools'):
+                if _tool.handles_tools(tool_name):
+                    return _tool
+            else:
+                # No declaration — assume it handles everything (backward compat)
+                return _tool
     return None

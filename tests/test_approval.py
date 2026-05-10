@@ -136,13 +136,43 @@ class TestCodingToolsApprovalProvider:
         assert "read_file" not in self.ct.requires_confirmation_tools
         assert "run_shell" not in self.ct.requires_confirmation_tools
 
+    def test_handles_tools(self):
+        """CodingTools handles approval for edit_file and write_file only."""
+        assert self.ct.handles_tools("write_file")
+        assert self.ct.handles_tools("edit_file")
+        assert not self.ct.handles_tools("read_file")
+        assert not self.ct.handles_tools("run_shell")
+        assert not self.ct.handles_tools("grep")
+
+    def test_confirmation_context_is_per_instance(self):
+        """set_confirmation_context on one instance should not affect another."""
+        import tempfile
+        tmpdir2 = tempfile.mkdtemp(prefix="nowork_test2_")
+        try:
+            ct2 = CodingTools(base_dirs=[tmpdir2])
+            self.ct.set_confirmation_context(True)
+            assert self.ct._is_confirmation_context() is True
+            assert ct2._is_confirmation_context() is False
+            # Cleanup
+            self.ct.set_confirmation_context(False)
+        finally:
+            import shutil
+            shutil.rmtree(tmpdir2, ignore_errors=True)
+
+    def test_confirmation_context_cleared(self):
+        """set_confirmation_context(False) should reset the flag."""
+        self.ct.set_confirmation_context(True)
+        assert self.ct._is_confirmation_context() is True
+        self.ct.set_confirmation_context(False)
+        assert self.ct._is_confirmation_context() is False
+
 
 # ============================================================================
 # find_approval_provider tests
 # ============================================================================
 
 class TestFindApprovalProvider:
-    def test_finds_provider(self):
+    def test_finds_provider_for_handled_tool(self):
         import tempfile
         tmpdir = tempfile.mkdtemp(prefix="nowork_test_")
         try:
@@ -151,6 +181,20 @@ class TestFindApprovalProvider:
             runtime.tools = [ct]
             provider = find_approval_provider(runtime, "write_file")
             assert provider is ct
+        finally:
+            import shutil
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def test_no_provider_for_unhandled_tool(self):
+        """CodingTools only handles edit_file/write_file, not read_file."""
+        import tempfile
+        tmpdir = tempfile.mkdtemp(prefix="nowork_test_")
+        try:
+            ct = CodingTools(base_dirs=[tmpdir])
+            runtime = MagicMock()
+            runtime.tools = [ct]
+            provider = find_approval_provider(runtime, "read_file")
+            assert provider is None  # read_file not in _APPROVED_TOOL_NAMES
         finally:
             import shutil
             shutil.rmtree(tmpdir, ignore_errors=True)
