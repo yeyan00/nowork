@@ -102,6 +102,7 @@
     "compactedHint": "{count} earlier conversation segment(s) have been compacted. Context is preserved for the assistant.",
     "cloneSession": "Clone Session",
     "compactSession": "Compact Session",
+    "compactConfirm": "Compact this session? This will summarize old messages and may take a few seconds.",
     "cloneFromHere": "Clone from here"
   },
   "workerList": {

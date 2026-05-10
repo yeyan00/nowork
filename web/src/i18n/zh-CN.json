@@ -102,6 +102,7 @@
     "compactedHint": "更早的 {count} 段对话已压缩摘要，上下文仍保留在助手中。",
     "cloneSession": "克隆会话",
     "compactSession": "压缩会话",
+    "compactConfirm": "确认压缩此会话？将摘要旧消息，可能需要几秒钟。",
     "cloneFromHere": "从此处克隆"
   },
   "workerList": {

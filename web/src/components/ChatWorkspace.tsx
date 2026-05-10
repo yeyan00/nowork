@@ -525,6 +525,10 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
   const handleCompactSession = useCallback(async () => {
     if (!worker || !activeSessionId || isStreaming) return;
 
+    // Confirm before compacting (consumes time and tokens)
+    const confirmed = window.confirm(t('chat.compactConfirm') || 'Compact this session? This will summarize old messages and may take a few seconds.');
+    if (!confirmed) return;
+
     await compactSession(activeSessionId);
     // Refresh messages to show compacted state
     const result = await listMessages(activeSessionId, PAGE_SIZE, 0);
@@ -1383,7 +1387,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
             <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="10" y="10" width="7" height="7" rx="1"/><path d="M7 10V7h3"/></svg>
           </button>
           <button type="button" className="icon-button tooltip" aria-label={t('chat.compactSession') || 'Compact Session'} title={t('chat.compactSession') || 'Compact Session'} disabled={isStreaming} onClick={() => void handleCompactSession()}>
-            <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 5h14M3 10h14M3 15h14"/><path d="M7 3v14M13 3v14" opacity="0.3"/></svg>
+            <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="12" height="7" rx="1"/><line x1="7" y1="5" x2="13" y2="5"/><path d="M10 9v2"/><path d="M7 11l3 2 3-2"/><rect x="5" y="14" width="10" height="4" rx="1"/></svg>
           </button>
           <button type="button" className="gear-button tooltip" aria-label={t('chat.workerSettings')} title={t('chat.workerSettings')} onClick={() => setShowWorkerSettings((value) => !value)}>
             ⚙
