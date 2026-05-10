@@ -152,6 +152,24 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
   const [showFilePreviewSidebar, setShowFilePreviewSidebar] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingSessionTitle, setEditingSessionTitle] = useState('');
+  const [contextMenu, setContextMenu] = useState<{ sessionId: string; x: number; y: number } | null>(null);
+
+  // Close context menu on click outside or ESC
+  useEffect(() => {
+    if (!contextMenu) return;
+
+    const handleClick = () => setContextMenu(null);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null);
+    };
+
+    document.addEventListener('click', handleClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('click', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [contextMenu]);
   const [pendingPreviewFile, setPendingPreviewFile] = useState<PreviewingFile | null>(null);
   const [previewFileHandled, setPreviewFileHandled] = useState(true);
   const [pendingSessionWorkspaces, setPendingSessionWorkspaces] = useState<Record<string, string>>({});
@@ -1383,12 +1401,6 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           <button type="button" className="icon-button tooltip" aria-label={t('chat.newSession')} title={t('chat.newSession')} onClick={() => void handleCreateSession()}>
             <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/></svg>
           </button>
-          <button type="button" className="icon-button tooltip" aria-label={t('chat.cloneSession') || 'Clone Session'} title={t('chat.cloneSession') || 'Clone Session'} onClick={() => void handleCloneSession()}>
-            <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="10" y="10" width="7" height="7" rx="1"/><path d="M7 10V7h3"/></svg>
-          </button>
-          <button type="button" className="icon-button tooltip" aria-label={t('chat.compactSession') || 'Compact Session'} title={t('chat.compactSession') || 'Compact Session'} disabled={isStreaming} onClick={() => void handleCompactSession()}>
-            <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="12" height="7" rx="1"/><line x1="7" y1="5" x2="13" y2="5"/><path d="M10 9v2"/><path d="M7 11l3 2 3-2"/><rect x="5" y="14" width="10" height="4" rx="1"/></svg>
-          </button>
           <button type="button" className="gear-button tooltip" aria-label={t('chat.workerSettings')} title={t('chat.workerSettings')} onClick={() => setShowWorkerSettings((value) => !value)}>
             ⚙
           </button>
@@ -1407,6 +1419,10 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
               className={session.id === activeSessionId ? 'chat-session-tab active' : 'chat-session-tab'}
               onClick={() => activateSession(worker.id, session.id)}
               onDoubleClick={() => { setEditingSessionTitle(session.title && session.title !== 'Untitled' ? session.title : ''); setEditingSessionId(session.id); }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenu({ sessionId: session.id, x: e.clientX, y: e.clientY });
+              }}
             >
               {editingSessionId === session.id ? (
                 <input
@@ -1432,12 +1448,53 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                   onClick={(e) => e.stopPropagation()}
                 />
               ) : (
-              <span>{session.title && session.title !== 'Untitled' ? session.title : formatSessionTime(session.updatedAt || session.createdAt, t('chat.newSessionTitle'))}</span>
+                <span>{session.title && session.title !== 'Untitled' ? session.title : formatSessionTime(session.updatedAt || session.createdAt, t('chat.newSessionTitle'))}</span>
               )}
               {sessionState?.isStreaming && <span className="chat-session-running-dot" aria-hidden="true" />}
             </button>
           );
         })}
+        {contextMenu && (
+          <div
+            className="context-menu"
+            style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 1000 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => {
+                const session = visibleSessions.find(s => s.id === contextMenu.sessionId) || overflowSessions.find(s => s.id === contextMenu.sessionId);
+                setEditingSessionTitle(session?.title && session.title !== 'Untitled' ? session.title : '');
+                setEditingSessionId(contextMenu.sessionId);
+                setContextMenu(null);
+              }}
+            >
+              {t('chat.renameSession') || 'Rename'}
+            </button>
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => {
+                void handleCloneSession();
+                setContextMenu(null);
+              }}
+            >
+              {t('chat.cloneSession') || 'Clone'}
+            </button>
+            <button
+              type="button"
+              className="context-menu-item"
+              disabled={isStreaming}
+              onClick={() => {
+                void handleCompactSession();
+                setContextMenu(null);
+              }}
+            >
+              {t('chat.compactSession') || 'Compact'}
+            </button>
+          </div>
+        )}
         {overflowSessions.length > 0 && (
           <div className="chat-session-overflow">
             <button

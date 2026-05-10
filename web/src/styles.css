@@ -771,6 +771,41 @@ button {
   padding: 0;
 }
 
+.context-menu {
+  min-width: 120px;
+  background: white;
+  border: 1px solid rgba(132, 146, 170, 0.2);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: #31415d;
+  cursor: pointer;
+}
+
+.context-menu-item:hover {
+  background: rgba(76, 120, 255, 0.08);
+}
+
+.context-menu-item:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.context-menu-item:first-child {
+  border-radius: 6px 6px 0 0;
+}
+
+.context-menu-item:last-child {
+  border-radius: 0 0 6px 6px;
+}
+
 .message-actions {
   display: flex;
   justify-content: flex-end;

@@ -103,6 +103,7 @@
     "cloneSession": "克隆会话",
     "compactSession": "压缩会话",
     "compactConfirm": "确认压缩此会话？将摘要旧消息，可能需要几秒钟。",
+    "renameSession": "重命名",
     "cloneFromHere": "从此处克隆"
   },
   "workerList": {
