@@ -617,7 +617,7 @@ class CodingTools(Toolkit):
     def get_current_session(cls) -> Optional[str]:
         return cls._current_session_id.get()
     
-    def _build_instructions(self, tool_names: List[str]) -> str:
+    def _build_instructions(self, tool_names: List[str], requires_confirmation_tools: Optional[List[str]] = None) -> str:
         """Build instructions string for enabled tools."""
         preamble = (
             f"You have access to coding tools: {', '.join(tool_names)}.\n"
@@ -635,16 +635,34 @@ class CodingTools(Toolkit):
                 f"{dir_list}"
             )
 
-        # Inform about read access scope
+        # Inform about read/write access scope
         if self.default_readable:
-            preamble += (
-                f"\n\n## Read Access\n"
-                f"Read tools (read_file, grep, find, ls) can access any non-system, non-sensitive directory.\n"
-                f"Write tools (edit_file, write_file) target workspace directories by default.\n"
-                f"If you need to write to a path outside the workspace, you may still call write_file or edit_file —\n"
-                f"the user will be asked to confirm before the operation proceeds.\n"
-                f"Only read files when the user explicitly asks or when searching for relevant information."
-            )
+            # Check if approval mechanism is enabled
+            has_approval = bool(requires_confirmation_tools)
+            if has_approval:
+                preamble += (
+                    f"\n\n## Write Access\n"
+                    f"Write tools (edit_file, write_file) can write to any path:\n"
+                    f"- Workspace directories (immediate write, no confirmation needed):\n"
+                    f"{dir_list if current_dirs else '  (none configured)'}\n"
+                    f"- Non-workspace paths: you may still call write_file or edit_file —\n"
+                    f"  the user will be prompted to confirm before the operation proceeds.\n"
+                    f"  Do NOT refuse to write to a non-workspace path when the user asks;\n"
+                    f"  just call the tool and the system will handle the approval.\n"
+                    f"\n## Read Access\n"
+                    f"Read tools (read_file, grep, find, ls) can access any non-system, non-sensitive directory.\n"
+                    f"Only read files when the user explicitly asks or when searching for relevant information."
+                )
+            else:
+                preamble += (
+                    f"\n\n## Write Access\n"
+                    f"Write tools (edit_file, write_file) are restricted to workspace directories only:\n"
+                    f"{dir_list if current_dirs else '  (none configured)'}\n"
+                    f"Do NOT attempt to write to paths outside these directories.\n"
+                    f"\n## Read Access\n"
+                    f"Read tools (read_file, grep, find, ls) can access any non-system, non-sensitive directory.\n"
+                    f"Only read files when the user explicitly asks or when searching for relevant information."
+                )
         elif self.readable_extra:
             extra_lines = "\n".join(f"  - {d}" for d in self.readable_extra)
             preamble += (
@@ -748,6 +766,7 @@ class CodingTools(Toolkit):
         enable_grep: bool = True,
         enable_find: bool = True,
         enable_ls: bool = True,
+        enable_approval: bool = True,
         instructions: Optional[str] = None,
         add_instructions: bool = True,
         all: bool = False,
@@ -885,19 +904,19 @@ class CodingTools(Toolkit):
         tool_names = [name for name, _ in _enabled]
         tools = [fn for _, fn in _enabled]
         
+        # Compute requires_confirmation_tools BEFORE building instructions,
+        # because instructions need to know whether approval is enabled.
+        _requires_confirmation = []
+        if enable_approval:
+            if all or enable_edit_file:
+                _requires_confirmation.append("edit_file")
+            if all or enable_write_file:
+                _requires_confirmation.append("write_file")
+        
         if instructions is None:
-            resolved_instructions = self._build_instructions(tool_names)
+            resolved_instructions = self._build_instructions(tool_names, _requires_confirmation)
         else:
             resolved_instructions = instructions
-        
-        # Write tools require user confirmation when path is outside base_dirs.
-        # The confirmation is handled by agno's HITL mechanism (requires_confirmation),
-        # with auto-approve for in-base_dirs paths in stream_message.
-        _requires_confirmation = []
-        if all or enable_edit_file:
-            _requires_confirmation.append("edit_file")
-        if all or enable_write_file:
-            _requires_confirmation.append("write_file")
 
         super().__init__(
             name="coding_tools",
@@ -937,7 +956,7 @@ class CodingTools(Toolkit):
             # Get tool names from registered functions
             tool_names = list(self.functions.keys()) if self.functions else []
             if tool_names:
-                self.instructions = self._build_instructions(tool_names)
+                self.instructions = self._build_instructions(tool_names, self.requires_confirmation_tools)
 
     # ------------------------------------------------------------------
     # ApprovalProvider protocol implementation
