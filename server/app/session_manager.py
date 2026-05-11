@@ -958,11 +958,11 @@ def build_compaction_text(summaries: list[dict[str, Any]]) -> str:
         lines = [f"## Segment {seg.get('segment_order', 0) + 1}"]
         summary = seg.get('compaction_summary', '')
         if summary:
-            lines.append(f"Summary: {summary[:300]}")
+            lines.append(f"Summary: {summary}")
         for key, label in [('key_decisions', 'Decisions'), ('pending_tasks', 'Pending'), ('context_points', 'Key Info')]:
             items = meta.get(key, [])
             if items:
-                lines.append(f"{label}: {'; '.join(str(i)[:100] for i in items[:5])}")
+                lines.append(f"{label}: {'; '.join(str(i) for i in items[:5])}")
         parts.append('\n'.join(lines))
     return '\n\n'.join(parts)
 

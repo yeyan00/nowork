@@ -1593,56 +1593,45 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
             <p>{sessionTitle}</p>
           </article>
         )}
-        {!isLoading && (currentSessionState?.compactedSegments ?? 0) > 0 && (
-          <article className="message-card system compacted-banner">
-            <button
-              type="button"
-              className="compacted-banner-btn"
-              onClick={async () => {
-                if (showCompactionHistory) {
-                  setShowCompactionHistory(false);
-                  return;
-                }
-                try {
-                  const segs = await getSessionSegments(activeSessionId!);
-                  setCompactionSegments(segs.filter(s => s.status === 'compacted'));
-                  setShowCompactionHistory(true);
-                } catch { /* ignore */ }
-              }}
-            >
-              <span className="compacted-icon">📋</span>
-              {t('chat.compactedHint', { count: currentSessionState!.compactedSegments! })}
-              <span className="compacted-toggle">{showCompactionHistory ? '▾' : '▸'}</span>
-            </button>
-            {showCompactionHistory && compactionSegments.length > 0 && (
-              <div className="compaction-history">
-                {compactionSegments.map((seg, i) => (
-                  <div key={seg.id} className="compaction-segment">
-                    <div className="compaction-segment-header">
-                      {t('chat.compactedSegment', { order: i + 1, runs: seg.run_count }) || `Compacted segment ${i + 1} (${seg.run_count} runs)`}
-                    </div>
-                    {seg.compaction_summary && (
-                      <div className="compaction-segment-summary">
-                        <MarkdownContent content={seg.compaction_summary} />
-                      </div>
-                    )}
-                    {seg.compaction_meta && (
-                      <div className="compaction-segment-meta">
-                        {seg.compaction_meta.key_decisions && seg.compaction_meta.key_decisions.length > 0 && (
-                          <div><strong>{t('chat.keyDecisions') || 'Key Decisions'}:</strong> {seg.compaction_meta.key_decisions.join(', ')}</div>
-                        )}
-                        {seg.compaction_meta.user_preferences && seg.compaction_meta.user_preferences.length > 0 && (
-                          <div><strong>{t('chat.userPreferences') || 'User Preferences'}:</strong> {seg.compaction_meta.user_preferences.join(', ')}</div>
-                        )}
-                        {seg.compaction_meta.pending_tasks && seg.compaction_meta.pending_tasks.length > 0 && (
-                          <div><strong>{t('chat.pendingTasks') || 'Pending Tasks'}:</strong> {seg.compaction_meta.pending_tasks.join(', ')}</div>
-                        )}
-                      </div>
-                    )}
+        {showCompactionHistory && compactionSegments.length > 0 && (
+          <article className="message-card system compaction-history-panel">
+            <div className="compaction-history-header">
+              <span>{t('chat.compactedHint', { count: compactionSegments.length })}</span>
+              <button
+                type="button"
+                className="compaction-close-btn"
+                onClick={() => setShowCompactionHistory(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="compaction-history">
+              {compactionSegments.map((seg, i) => (
+                <div key={seg.id} className="compaction-segment">
+                  <div className="compaction-segment-header">
+                    {t('chat.compactedSegment', { order: i + 1, runs: seg.run_count }) || `Compacted segment ${i + 1} (${seg.run_count} runs)`}
                   </div>
-                ))}
-              </div>
-            )}
+                  {seg.compaction_summary && (
+                    <div className="compaction-segment-summary">
+                      <MarkdownContent content={seg.compaction_summary} />
+                    </div>
+                  )}
+                  {seg.compaction_meta && (
+                    <div className="compaction-segment-meta">
+                      {seg.compaction_meta.key_decisions && seg.compaction_meta.key_decisions.length > 0 && (
+                        <div><strong>{t('chat.keyDecisions') || 'Key Decisions'}:</strong> {seg.compaction_meta.key_decisions.join(', ')}</div>
+                      )}
+                      {seg.compaction_meta.user_preferences && seg.compaction_meta.user_preferences.length > 0 && (
+                        <div><strong>{t('chat.userPreferences') || 'User Preferences'}:</strong> {seg.compaction_meta.user_preferences.join(', ')}</div>
+                      )}
+                      {seg.compaction_meta.pending_tasks && seg.compaction_meta.pending_tasks.length > 0 && (
+                        <div><strong>{t('chat.pendingTasks') || 'Pending Tasks'}:</strong> {seg.compaction_meta.pending_tasks.join(', ')}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </article>
         )}
         {!isLoading && messages.length === 0 && !currentSession && (
@@ -1707,11 +1696,33 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                 // agno's input_tokens is cumulative — the last message has the largest value
                 const lastContext = message.contextSize || 0;
                 const lastOutput = message.outputTokens || 0;
-                if (lastContext > 0 || lastOutput > 0) {
+                const hasCompaction = (currentSessionState?.compactedSegments ?? 0) > 0;
+                if (lastContext > 0 || lastOutput > 0 || hasCompaction) {
                   return (
                     <div className="message-metrics">
                       <svg className="message-metrics-icon" viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M3 12h2v-4H3v4zm4 0h2V6H7v6zm4 0h2V3h-2v9zM2 14h12V2H2v12z"/></svg>
                       <span>{t('chat.tokenMetrics', { context: lastContext.toLocaleString(), output: lastOutput.toLocaleString() })}</span>
+                      {hasCompaction && (
+                        <button
+                          type="button"
+                          className="compaction-toggle-btn"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (showCompactionHistory) {
+                              setShowCompactionHistory(false);
+                              return;
+                            }
+                            try {
+                              const segs = await getSessionSegments(activeSessionId!);
+                              setCompactionSegments(segs.filter(s => s.status === 'compacted'));
+                              setShowCompactionHistory(true);
+                            } catch { /* ignore */ }
+                          }}
+                          title={t('chat.compactedHint', { count: currentSessionState?.compactedSegments ?? 0 })}
+                        >
+                          📋
+                        </button>
+                      )}
                     </div>
                   );
                 }
