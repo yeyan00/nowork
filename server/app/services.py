@@ -729,7 +729,9 @@ def list_sessions(worker_id: str, agent_os: Any | None = None) -> list[dict[str,
         if agno_sid in agno_to_ws:
             continue  # already covered above
         # Check if this agno session is a segment of an existing WorkerSession
-        seg = session_manager.resolve_segment(agno_sid)
+        # (include_compacted=True: a compacted agno session is still a segment,
+        #  not an independent session — skip it to avoid creating a duplicate)
+        seg = session_manager.resolve_segment(agno_sid, include_compacted=True)
         if seg and seg['worker_session_id'] in seen_ws_ids:
             continue
 

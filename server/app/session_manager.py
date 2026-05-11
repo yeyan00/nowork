@@ -275,12 +275,19 @@ def get_worker_session(ws_id: str) -> dict[str, Any] | None:
         db.close()
 
 
-def resolve_segment(session_id: str) -> dict[str, Any] | None:
-    """Find the active segment for a session_id.
+def resolve_segment(session_id: str, include_compacted: bool = False) -> dict[str, Any] | None:
+    """Find a segment for a session_id.
 
     Tries two lookups:
-    1. session_id as WorkerSession.id (new sessions)
-    2. session_id as Segment.agno_session_id (legacy sessions)
+    1. session_id as WorkerSession.id → find its active segment
+    2. session_id as Segment.agno_session_id → find matching segment
+
+    Args:
+        session_id: The session ID to look up.
+        include_compacted: If True, also match compacted segments.
+            This is used by the auto-migrate logic to avoid creating duplicate
+            worker_sessions for agno sessions that are already segments
+            (even if compacted).
     """
     # Try as WorkerSession ID first
     seg = get_active_segment(session_id)
@@ -290,11 +297,12 @@ def resolve_segment(session_id: str) -> dict[str, Any] | None:
     # Fallback: look for a segment whose agno_session_id matches
     db = get_db_session()
     try:
-        seg_row = (db.query(SessionSegmentRow)
-                   .filter(SessionSegmentRow.agno_session_id == session_id,
-                           SessionSegmentRow.status == 'active')
-                   .order_by(SessionSegmentRow.segment_order.desc())
-                   .first())
+        query = db.query(SessionSegmentRow).filter(
+            SessionSegmentRow.agno_session_id == session_id,
+        )
+        if not include_compacted:
+            query = query.filter(SessionSegmentRow.status == 'active')
+        seg_row = query.order_by(SessionSegmentRow.segment_order.desc()).first()
         if seg_row is not None:
             return _serialize_segment(seg_row)
         return None

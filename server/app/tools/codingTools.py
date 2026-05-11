@@ -625,14 +625,16 @@ class CodingTools(Toolkit):
             "creating files, running tests, using git, installing packages, and searching codebases."
         )
 
-        # Inform the LLM about available workspace directories (dynamic, includes session workspaces)
+        # Inform the LLM about the working directory and access scope
         current_dirs = self._get_current_base_dirs()
         if current_dirs:
             dir_list = "\n".join(f"  - {d}" for d in current_dirs)
             preamble += (
-                f"\n\n## Workspace Directories\n"
-                f"Your workspace directories (full read-write access):\n"
-                f"{dir_list}"
+                f"\n\n## Working Directory\n"
+                f"Your default working directories (shell commands execute here, relative paths resolve from here):\n"
+                f"{dir_list}\n"
+                f"You can read and write files at ANY path — do NOT limit your search to these directories.\n"
+                f"When the user mentions a specific path, use it directly without assuming it is under the working directory."
             )
 
         # Inform about read/write access scope
@@ -643,25 +645,25 @@ class CodingTools(Toolkit):
                 preamble += (
                     f"\n\n## Write Access\n"
                     f"Write tools (edit_file, write_file) can write to any path:\n"
-                    f"- Workspace directories (immediate write, no confirmation needed):\n"
+                    f"- The following directories can be written to immediately (no confirmation needed):\n"
                     f"{dir_list if current_dirs else '  (none configured)'}\n"
-                    f"- Non-workspace paths: you may still call write_file or edit_file —\n"
+                    f"- Other paths: you may still call write_file or edit_file —\n"
                     f"  the user will be prompted to confirm before the operation proceeds.\n"
                     f"  Do NOT refuse to write to a non-workspace path when the user asks;\n"
                     f"  just call the tool and the system will handle the approval.\n"
                     f"\n## Read Access\n"
                     f"Read tools (read_file, grep, find, ls) can access any non-system, non-sensitive directory.\n"
-                    f"Only read files when the user explicitly asks or when searching for relevant information."
+                    f"Follow the user's specified paths directly. Do not default to the working directory when searching."
                 )
             else:
                 preamble += (
                     f"\n\n## Write Access\n"
-                    f"Write tools (edit_file, write_file) are restricted to workspace directories only:\n"
+                    f"Write tools (edit_file, write_file) are restricted to the working directory only:\n"
                     f"{dir_list if current_dirs else '  (none configured)'}\n"
                     f"Do NOT attempt to write to paths outside these directories.\n"
                     f"\n## Read Access\n"
                     f"Read tools (read_file, grep, find, ls) can access any non-system, non-sensitive directory.\n"
-                    f"Only read files when the user explicitly asks or when searching for relevant information."
+                    f"Follow the user's specified paths directly. Do not default to the working directory when searching."
                 )
         elif self.readable_extra:
             extra_lines = "\n".join(f"  - {d}" for d in self.readable_extra)
