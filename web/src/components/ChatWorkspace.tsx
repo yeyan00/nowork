@@ -1699,43 +1699,45 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
       </div>
 
       {showCompactionHistory && compactionSegments.length > 0 && (
-        <div className="compaction-history-panel">
-          <div className="compaction-history-header">
-            <span>{t('chat.compactedHint', { count: compactionSegments.length })}</span>
-            <button
-              type="button"
-              className="compaction-close-btn"
-              onClick={() => setShowCompactionHistory(false)}
-            >
-              ✕
-            </button>
-          </div>
-          <div className="compaction-history">
-            {compactionSegments.map((seg, i) => (
-              <div key={seg.id} className="compaction-segment">
-                <div className="compaction-segment-header">
-                  {t('chat.compactedSegment', { order: i + 1, runs: seg.run_count }) || `Compacted segment ${i + 1} (${seg.run_count} runs)`}
+        <div className="member-overlay" style={{ zIndex: 100 }}>
+          <div className="compaction-history-modal">
+            <div className="compaction-history-header">
+              <span>📋 {t('chat.compactedHint', { count: compactionSegments.length })}</span>
+              <button
+                type="button"
+                className="compaction-close-btn"
+                onClick={() => setShowCompactionHistory(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="compaction-history-content">
+              {compactionSegments.map((seg, i) => (
+                <div key={seg.id} className="compaction-segment">
+                  <div className="compaction-segment-header">
+                    {t('chat.compactedSegment', { order: i + 1, runs: seg.run_count }) || `Compacted segment ${i + 1} (${seg.run_count} runs)`}
+                  </div>
+                  {seg.compaction_summary && (
+                    <div className="compaction-segment-summary">
+                      <MarkdownContent content={seg.compaction_summary} />
+                    </div>
+                  )}
+                  {seg.compaction_meta && (
+                    <div className="compaction-segment-meta">
+                      {seg.compaction_meta.key_decisions && seg.compaction_meta.key_decisions.length > 0 && (
+                        <div><strong>{t('chat.keyDecisions') || 'Key Decisions'}:</strong> {seg.compaction_meta.key_decisions.join(', ')}</div>
+                      )}
+                      {seg.compaction_meta.user_preferences && seg.compaction_meta.user_preferences.length > 0 && (
+                        <div><strong>{t('chat.userPreferences') || 'User Preferences'}:</strong> {seg.compaction_meta.user_preferences.join(', ')}</div>
+                      )}
+                      {seg.compaction_meta.pending_tasks && seg.compaction_meta.pending_tasks.length > 0 && (
+                        <div><strong>{t('chat.pendingTasks') || 'Pending Tasks'}:</strong> {seg.compaction_meta.pending_tasks.join(', ')}</div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                {seg.compaction_summary && (
-                  <div className="compaction-segment-summary">
-                    <MarkdownContent content={seg.compaction_summary} />
-                  </div>
-                )}
-                {seg.compaction_meta && (
-                  <div className="compaction-segment-meta">
-                    {seg.compaction_meta.key_decisions && seg.compaction_meta.key_decisions.length > 0 && (
-                      <div><strong>{t('chat.keyDecisions') || 'Key Decisions'}:</strong> {seg.compaction_meta.key_decisions.join(', ')}</div>
-                    )}
-                    {seg.compaction_meta.user_preferences && seg.compaction_meta.user_preferences.length > 0 && (
-                      <div><strong>{t('chat.userPreferences') || 'User Preferences'}:</strong> {seg.compaction_meta.user_preferences.join(', ')}</div>
-                    )}
-                    {seg.compaction_meta.pending_tasks && seg.compaction_meta.pending_tasks.length > 0 && (
-                      <div><strong>{t('chat.pendingTasks') || 'Pending Tasks'}:</strong> {seg.compaction_meta.pending_tasks.join(', ')}</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       )}

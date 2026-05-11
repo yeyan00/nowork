@@ -983,69 +983,76 @@ button {
   opacity: 1;
 }
 
-.compaction-history-panel {
-  background: rgba(124, 143, 219, 0.06);
-  border: 1px solid rgba(124, 143, 219, 0.15);
-  border-radius: 8px;
-  margin: 8px 16px;
-  max-height: 300px;
-  overflow-y: auto;
+.compaction-history-modal {
+  background: #fff;
+  border: 1px solid rgba(132, 146, 170, 0.25);
+  border-radius: 12px;
+  padding: 0;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  margin: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  display: flex;
+  flex-direction: column;
 }
 
 .compaction-history-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #5b6abf;
-  border-bottom: 1px solid rgba(124, 143, 219, 0.1);
+  padding: 16px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  border-bottom: 1px solid rgba(132, 146, 170, 0.15);
+}
+
+.compaction-history-content {
+  padding: 16px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .compaction-close-btn {
   background: none;
   border: none;
-  padding: 2px 6px;
+  padding: 4px 8px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 16px;
   color: #64748b;
   opacity: 0.6;
+  transition: opacity 0.15s;
 }
 
 .compaction-close-btn:hover {
   opacity: 1;
 }
 
-.compaction-history {
-  padding: 8px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
 .compaction-segment {
-  background: rgba(124, 143, 219, 0.06);
-  border: 1px solid rgba(124, 143, 219, 0.15);
+  background: #f8fafc;
+  border: 1px solid rgba(132, 146, 170, 0.12);
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 12px 16px;
 }
 
 .compaction-segment-header {
   font-weight: 600;
-  font-size: 12px;
-  color: #5b6abf;
-  margin-bottom: 6px;
+  font-size: 13px;
+  color: #31415d;
+  margin-bottom: 8px;
 }
 
 .compaction-segment-summary {
-  font-size: 12px;
-  line-height: 1.5;
-  color: #31415d;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #334155;
 }
 
 .compaction-segment-summary p {
-  margin: 0 0 4px;
+  margin: 0 0 6px;
 }
 
 .compaction-segment-summary p:last-child {
@@ -1053,12 +1060,12 @@ button {
 }
 
 .compaction-segment-meta {
-  margin-top: 6px;
-  font-size: 11px;
+  margin-top: 8px;
+  font-size: 12px;
   color: #64748b;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .message-card.continuation {
