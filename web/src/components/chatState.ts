@@ -53,6 +53,8 @@ export function ensureSessionState(workerState: CachedWorkerState, sessionId: st
       draft: '',
       tokenUsage: { input: 0, output: 0, total: 0, duration: 0 },
       liveTokenUsage: null,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
       isLoading: false,
       isLoadingMore: false,
       hasMore: false,

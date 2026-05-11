@@ -77,6 +77,8 @@ export interface SessionSummary {
   createdAt: string;
   updatedAt?: string;
   hasRunningRun?: boolean;
+  totalInputTokens?: number;   // cumulative input tokens from DB
+  totalOutputTokens?: number;  // cumulative output tokens from DB
 }
 
 export interface TokenUsage {

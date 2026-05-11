@@ -1949,6 +1949,15 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
                         last_input_tokens = input_tokens
                         _check_compaction_threshold(input_tokens)
 
+                    # Persist cumulative tokens to database for billing
+                    # For Team workers, accumulate ALL events (orchestrator + members) for accurate billing
+                    # For Agent workers, accumulate ModelRequestCompleted
+                    if input_tokens > 0 or output_tokens > 0:
+                        try:
+                            session_manager.add_session_tokens(session_id, input_tokens, output_tokens)
+                        except Exception as e:
+                            logger.warning('Failed to persist session tokens: %s', e)
+
                     event_data['metrics'] = {
                         'input_tokens': input_tokens,
                         'output_tokens': output_tokens,
@@ -2050,6 +2059,19 @@ async def stream_continue_run(
             event_data = _normalize_event_data(event_data, raw_event_type)
             event_type = _normalize_event_type(raw_event_type)
             event_data['event'] = event_type
+
+            # Persist tokens to database on ModelRequestCompleted
+            # For Team workers, accumulate ALL events (orchestrator + members) for accurate billing
+            if event_type in ('ModelRequestCompleted', 'TeamModelRequestCompleted'):
+                metrics = event_data.get('metrics', {})
+                inp = metrics.get('input_tokens', 0) or 0
+                out = metrics.get('output_tokens', 0) or 0
+                if session_id and (inp > 0 or out > 0):
+                    try:
+                        session_manager.add_session_tokens(session_id, inp, out)
+                    except Exception as e:
+                        logger.warning('Failed to persist session tokens: %s', e)
+
             yield f"data: {json.dumps(event_data)}\n\n"
 
     except Exception as exc:

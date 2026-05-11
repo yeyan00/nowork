@@ -328,6 +328,20 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                 lastActiveAt: Date.now(),
               };
             }
+            // Initialize cumulative tokens from DB (if available)
+            if (s.totalInputTokens !== undefined || s.totalOutputTokens !== undefined) {
+              const existing = workerState.sessionStates[s.id];
+              if (existing) {
+                existing.totalInputTokens = s.totalInputTokens ?? existing.totalInputTokens;
+                existing.totalOutputTokens = s.totalOutputTokens ?? existing.totalOutputTokens;
+              } else {
+                workerState.sessionStates[s.id] = {
+                  ...createSessionState(s.id),
+                  totalInputTokens: s.totalInputTokens ?? 0,
+                  totalOutputTokens: s.totalOutputTokens ?? 0,
+                };
+              }
+            }
           }
           return workerState;
         });
@@ -511,7 +525,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
   const handleCreateSession = useCallback(async () => {
     if (!worker) return;
 
-    const nextSession = await createSession(worker.id, '', ws);
+    const nextSession = await createSession(worker.id, '', effectiveWorkspaces);
     updateWorkerState(worker.id, (workerState) => {
       workerState.sessions = [nextSession, ...workerState.sessions];
       workerState.activeSessionId = nextSession.id;
@@ -887,25 +901,29 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
         }
 
         // Live token tracking: show latest context size & output tokens
-        // For Team workers, only listen to TeamModelRequestCompleted (orchestrator),
-        // ignoring member-agent ModelRequestCompleted events.
-        if (eventType === contextEventName) {
+        // For Team workers, TeamModelRequestCompleted reflects orchestrator context size
+        // For billing: accumulate ALL ModelRequestCompleted events (orchestrator + members)
+        if (eventType === 'ModelRequestCompleted' || eventType === 'TeamModelRequestCompleted') {
           const m = event.metrics;
           if (m) {
-            liveInput = m.input_tokens ?? 0;
-            liveOutput = m.output_tokens ?? 0;
+            // Billing accumulation: sum of each API call's input/output tokens
+            const inp = m.input_tokens ?? 0;
+            const out = m.output_tokens ?? 0;
             updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
               ...sessionState,
-              liveTokenUsage: { context: liveInput, output: liveOutput },
-              // Billing accumulation: sum of each API call's input/output tokens
-              totalInputTokens: sessionState.totalInputTokens + (m.input_tokens ?? 0),
-              totalOutputTokens: sessionState.totalOutputTokens + (m.output_tokens ?? 0),
+              totalInputTokens: sessionState.totalInputTokens + inp,
+              totalOutputTokens: sessionState.totalOutputTokens + out,
             }));
+            // Live display: only use orchestrator event for Team workers
+            if (eventType === contextEventName) {
+              liveInput = inp;
+              liveOutput = out;
+              updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
+                ...sessionState,
+                liveTokenUsage: { context: liveInput, output: liveOutput },
+              }));
+            }
           }
-          return;
-        }
-        // Ignore member-agent ModelRequestCompleted when inside a Team worker
-        if (isTeamWorker && eventType === 'ModelRequestCompleted') {
           return;
         }
 

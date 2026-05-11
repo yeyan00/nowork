@@ -34,7 +34,7 @@ def _utc_isoformat(dt: datetime | None) -> str:
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine, Index, text, func
+from sqlalchemy import Column, DateTime, Integer, String, Text, BigInteger, create_engine, Index, text, func
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.config import get_compaction_config, get_session_config, resolve_server_root, load_config
@@ -57,6 +57,8 @@ class WorkerSessionRow(Base):
     status = Column(String, default='active')  # active / archived
     model_override = Column(String, nullable=True)
     learning_enabled = Column(String, nullable=True)  # 'true'/'false'/NULL = follow worker default
+    total_input_tokens = Column(BigInteger, default=0)  # cumulative input tokens for billing
+    total_output_tokens = Column(BigInteger, default=0)  # cumulative output tokens for billing
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
@@ -108,6 +110,10 @@ def _migrate_schema(engine) -> None:
                 conn.execute(text('ALTER TABLE worker_sessions ADD COLUMN model_override VARCHAR'))
             if 'learning_enabled' not in cols:
                 conn.execute(text('ALTER TABLE worker_sessions ADD COLUMN learning_enabled VARCHAR'))
+            if 'total_input_tokens' not in cols:
+                conn.execute(text('ALTER TABLE worker_sessions ADD COLUMN total_input_tokens BIGINT DEFAULT 0'))
+            if 'total_output_tokens' not in cols:
+                conn.execute(text('ALTER TABLE worker_sessions ADD COLUMN total_output_tokens BIGINT DEFAULT 0'))
     except Exception as e:
         logger.warning('Session DB schema migration skipped/failed: %s', e)
 
@@ -351,6 +357,8 @@ def _serialize_worker_session(ws: WorkerSessionRow) -> dict[str, Any]:
         'status': ws.status,
         'model_override': ws.model_override,
         'learning_enabled': ws.learning_enabled,
+        'total_input_tokens': ws.total_input_tokens or 0,
+        'total_output_tokens': ws.total_output_tokens or 0,
         'created_at': _utc_isoformat(ws.created_at),
         'updated_at': _utc_isoformat(ws.updated_at),
     }
@@ -499,6 +507,22 @@ def update_segment_run_count(seg_id: str, count: int) -> None:
     except Exception:
         db.rollback()
         raise
+    finally:
+        db.close()
+
+
+def add_session_tokens(ws_id: str, input_tokens: int, output_tokens: int) -> None:
+    """Add tokens to a WorkerSession's cumulative totals (for billing tracking)."""
+    db = get_db_session()
+    try:
+        ws = db.query(WorkerSessionRow).filter(WorkerSessionRow.id == ws_id).first()
+        if ws is not None:
+            ws.total_input_tokens = (ws.total_input_tokens or 0) + input_tokens
+            ws.total_output_tokens = (ws.total_output_tokens or 0) + output_tokens
+            db.commit()
+    except Exception:
+        db.rollback()
+        logger.warning('Failed to update session tokens: %s', ws_id)
     finally:
         db.close()
 
