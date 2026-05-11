@@ -71,6 +71,13 @@ foreach ($pattern in $allowlist) {
       New-Item -ItemType Directory -Force -Path $targetParent | Out-Null
     }
     Copy-Item $sourceItem (Join-Path $targetSP $pattern) -Recurse -Force
+    
+    # Immediately clean __pycache__ and .pyc from copied directory
+    $copiedDir = Join-Path $targetSP $pattern
+    if (Test-Path $copiedDir -PathType Container) {
+      Get-ChildItem $copiedDir -Directory -Recurse -Filter '__pycache__' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+      Get-ChildItem $copiedDir -File -Recurse -Filter '*.pyc' -ErrorAction SilentlyContinue | Remove-Item -Force
+    }
     $copiedItems++
   } else {
     $missingItems++
@@ -89,6 +96,10 @@ foreach ($tool in $pkgTools) {
   $srcTool = Join-Path $sourceSP $tool
   if (Test-Path $srcTool) {
     Copy-Item $srcTool (Join-Path $targetSP $tool) -Recurse -Force
+    # Clean __pycache__ and .pyc immediately after copy
+    $copiedTool = Join-Path $targetSP $tool
+    Get-ChildItem $copiedTool -Directory -Recurse -Filter '__pycache__' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+    Get-ChildItem $copiedTool -File -Recurse -Filter '*.pyc' -ErrorAction SilentlyContinue | Remove-Item -Force
     Write-Host "    Copied: $tool"
   } else {
     Write-Host "    SKIP (not found): $tool" -ForegroundColor Yellow

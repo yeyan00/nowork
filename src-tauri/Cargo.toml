@@ -1,6 +1,6 @@
 [package]
 name = "nowork"
-version = "0.0.7"
+version = "0.0.8"
 description = "nowork desktop shell"
 edition = "2021"
 
@@ -17,3 +17,5 @@ sys-locale = "0.3.2"
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+
+
