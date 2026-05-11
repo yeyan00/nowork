@@ -1174,6 +1174,13 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           }));
         }
 
+        if (eventType === 'ContextCompacted') {
+          updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
+            ...sessionState,
+            compactedSegments: (sessionState.compactedSegments ?? 0) + 1,
+          }));
+        }
+
         if (eventType === 'ToolApprovalRequest') {
           // Agent paused — needs user approval for a write operation outside base_dirs
           const approvals = (event.approvals || []) as ToolApprovalItem[];
@@ -1285,6 +1292,14 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
         })),
       }, (event) => {
         const eventType = event.event;
+
+        if (eventType === 'ContextCompacted') {
+          updateSessionState(worker.id, activeSessionId, (sessionState) => ({
+            ...sessionState,
+            compactedSegments: (sessionState.compactedSegments ?? 0) + 1,
+          }));
+          return;
+        }
 
         if (eventType === 'ToolApprovalRequest') {
           // Another approval needed during continue

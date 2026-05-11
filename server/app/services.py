@@ -1764,9 +1764,12 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
             logger.warning('Compaction threshold check failed: %s', e)
 
     async def _execute_compaction():
-        """Execute compaction if flagged. Called in finally block after stream ends."""
+        """Execute compaction if flagged. Called in finally block after stream ends.
+
+        Returns True if compaction was performed, False otherwise.
+        """
         if not need_compact or segment is None:
-            return
+            return False
         try:
             updated_segment = session_manager.resolve_segment(session_id)
             if updated_segment:
@@ -1784,8 +1787,10 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
                 model = getattr(runtime, 'model', None)
                 await session_manager.compact_segment(session_id, updated_segment, runs=runs, model=model, is_team=is_team)
                 logger.info('Auto-compacted session %s: input_tokens=%d', session_id, last_input_tokens)
+                return True
         except Exception as e:
             logger.warning('Auto-compaction execution failed for session %s: %s', session_id, e)
+        return False
 
     # Pre-run compaction check: if the last run's input_tokens already exceeds
     # threshold, compact BEFORE starting the new run.
@@ -1976,7 +1981,9 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
                 session_manager.update_worker_session(session_id, status='active')
             except Exception:
                 pass
-            await _execute_compaction()
+            compacted = await _execute_compaction()
+            if compacted:
+                yield f"data: {json.dumps({'event': 'ContextCompacted', 'message': 'Context limit reached. Earlier conversation has been compacted. If the response was incomplete, please send another message to continue.'})}\n\n"
         if lock.locked():
             lock.release()
 
