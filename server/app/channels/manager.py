@@ -16,6 +16,17 @@ from .schema import ChannelConfig, ChannelMessage, ChannelStatus
 logger = logging.getLogger('nowork.channels')
 
 
+class PendingApprovalInfo:
+    """Info about a pending tool approval request."""
+
+    def __init__(self, run_id: str, approvals: list[dict], session_id: str, worker_id: str, msg: ChannelMessage):
+        self.run_id = run_id
+        self.approvals = approvals
+        self.session_id = session_id
+        self.worker_id = worker_id
+        self.msg = msg  # Original channel message (has on_reply_chunk)
+
+
 class ChannelManager:
     """Manages channel instances: create, start, stop, route messages."""
 
@@ -24,6 +35,7 @@ class ChannelManager:
         self._agent_os: Any = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._session_map: dict[str, str] = {}  # channel_session_id -> nowork_session_id
+        self._pending_approvals: dict[str, PendingApprovalInfo] = {}  # channel_session_id -> PendingApprovalInfo
 
     def set_agent_os(self, agent_os: Any) -> None:
         self._agent_os = agent_os
@@ -125,6 +137,19 @@ class ChannelManager:
             logger.error('AgentOS not available for channel message')
             return 'Error: server not ready'
 
+        # ── Check for approval response (y/n) ──
+        map_key = msg.session_id
+        pending = self._pending_approvals.get(map_key)
+        if pending:
+            text_lower = msg.text.strip().lower()
+            if text_lower in ('y', 'yes', '批准', '同意', 'approve'):
+                return await self._handle_approval_response(pending, approved=True)
+            elif text_lower in ('n', 'no', '拒绝', '不同意', 'reject'):
+                return await self._handle_approval_response(pending, approved=False)
+            # Not an approval response, clear pending and treat as new message
+            logger.info('Clearing pending approval for %s (user sent: %s)', map_key, msg.text[:20])
+            self._pending_approvals.pop(map_key, None)
+
         # Find the worker bound to this channel
         worker_id = None
         for cfg in self.load_configs():
@@ -137,7 +162,6 @@ class ChannelManager:
             return 'Error: no worker configured'
 
         # Map channel session (e.g. "dingtalk:sender123") → nowork session ID
-        map_key = msg.session_id
         nowork_session_id = self._session_map.get(map_key)
 
         if not nowork_session_id:
@@ -167,7 +191,7 @@ class ChannelManager:
         # ── Platform-specific streaming logic ──
         # Both Feishu and DingTalk: accumulate and send once at completion
         # (Feishu edit API has validation issues, use single message for stability)
-        return await self._stream_accumulate(msg, nowork_session_id)
+        return await self._stream_accumulate(msg, nowork_session_id, worker_id)
 
     async def _stream_feishu(self, msg: ChannelMessage, nowork_session_id: str) -> str:
         """Feishu streaming: send first chunk, then edit with accumulated content.
@@ -227,9 +251,11 @@ class ChannelManager:
 
         return full_reply or 'Sorry, I could not generate a response.'
 
-    async def _stream_accumulate(self, msg: ChannelMessage, nowork_session_id: str) -> str:
+    async def _stream_accumulate(self, msg: ChannelMessage, nowork_session_id: str, worker_id: str) -> str:
         """DingTalk / others: accumulate all content and send once at completion.
         Clean single message, but user waits longer for any response.
+
+        Also handles ToolApprovalRequest events by prompting the user for y/n response.
         """
         from app.services import stream_message
         import json
@@ -266,6 +292,17 @@ class ChannelManager:
                     if msg.on_reply_chunk:
                         await msg.on_reply_chunk(full_reply)
 
+                elif event_type == 'ToolApprovalRequest':
+                    # Agent needs user approval for write operation
+                    run_id = event_data.get('run_id', '')
+                    approvals = event_data.get('approvals', [])
+                    await self._handle_tool_approval_request(
+                        msg, nowork_session_id, run_id, approvals, worker_id
+                    )
+                    # The run is paused waiting for approval response
+                    # User will send y/n message later, which triggers _handle_approval_response
+                    return ''
+
         except Exception as e:
             logger.exception('Error streaming message for channel %s: %s', msg.channel_id, e)
             full_reply = f'Error: {e}'
@@ -273,3 +310,132 @@ class ChannelManager:
                 await msg.on_reply_chunk(full_reply)
 
         return full_reply or 'Sorry, I could not generate a response.'
+
+    async def _handle_tool_approval_request(
+        self, msg: ChannelMessage, session_id: str, run_id: str, approvals: list[dict], worker_id: str
+    ) -> None:
+        """Send approval prompt to user and store pending approval info."""
+        # Build prompt message
+        paths = []
+        for a in approvals:
+            desc = a.get('description', '')
+            path = a.get('toolArgs', {}).get('file_path', '') or a.get('toolArgs', {}).get('path', '')
+            if desc:
+                paths.append(desc)
+            elif path:
+                paths.append(path)
+        
+        if not paths:
+            paths = ['unknown path']
+        
+        prompt = (
+            f'⚠️ 需批准写入操作\n'
+            f'路径: {", ".join(paths)}\n'
+            f'回复 "y" 批准，"n" 拒绝'
+        )
+
+        # Send prompt to user
+        if msg.on_reply_chunk:
+            await msg.on_reply_chunk(prompt)
+
+        # Store pending approval info
+        map_key = msg.session_id
+        self._pending_approvals[map_key] = PendingApprovalInfo(
+            run_id=run_id,
+            approvals=approvals,
+            session_id=session_id,
+            worker_id=worker_id,
+            msg=msg,
+        )
+        logger.info('Tool approval request sent to %s, run_id=%s', map_key, run_id)
+
+    async def _handle_approval_response(self, pending: PendingApprovalInfo, approved: bool) -> str:
+        """Handle user's y/n response to a pending approval request."""
+        from app.services import stream_continue_run, _resolve_runtime_agent
+        from app import repository
+        from agno.models.response import ToolExecution
+        import json
+
+        # Clear pending approval
+        map_key = pending.msg.session_id
+        self._pending_approvals.pop(map_key, None)
+
+        # Get runtime and worker
+        if self._agent_os is None:
+            return 'Error: agent_os not available'
+        
+        runtime = _resolve_runtime_agent(pending.worker_id, self._agent_os)
+        if runtime is None:
+            return 'Error: runtime not found'
+        
+        worker = repository.get_worker(pending.worker_id)
+        if worker is None:
+            return 'Error: worker not found'
+
+        # Build updated_tools for continue_run
+        updated_tools = []
+        for a in pending.approvals:
+            te = ToolExecution(
+                tool_call_id=a.get('toolCallId', ''),
+                tool_name=a.get('toolName', ''),
+                tool_args=a.get('toolArgs', {}),
+                confirmed=approved,
+                requires_confirmation=True,
+            )
+            updated_tools.append(te)
+
+        # Send confirmation message
+        status_text = '已批准' if approved else '已拒绝'
+        if pending.msg.on_reply_chunk:
+            await pending.msg.on_reply_chunk(f'✅ {status_text}，继续执行...')
+
+        # Continue the paused run
+        full_reply = ''
+        try:
+            async for sse_line in stream_continue_run(
+                pending.run_id,
+                runtime,
+                updated_tools,
+                worker,
+                pending.session_id,
+            ):
+                if not sse_line.startswith('data: '):
+                    continue
+                try:
+                    event_data = json.loads(sse_line[6:])
+                except (json.JSONDecodeError, IndexError):
+                    continue
+
+                event_type = event_data.get('event', '')
+
+                if event_type == 'RunContent':
+                    content = event_data.get('content', '')
+                    if content:
+                        full_reply += content
+
+                elif event_type == 'RunCompleted':
+                    full_reply = event_data.get('content', '') or full_reply
+                    if pending.msg.on_reply_chunk and full_reply:
+                        await pending.msg.on_reply_chunk(full_reply)
+
+                elif event_type == 'RunError':
+                    full_reply = f'Error: {event_data.get("content", "unknown error")}'
+                    if pending.msg.on_reply_chunk:
+                        await pending.msg.on_reply_chunk(full_reply)
+
+                elif event_type == 'ToolApprovalRequest':
+                    # Nested approval request - handle recursively
+                    run_id = event_data.get('run_id', '')
+                    approvals = event_data.get('approvals', [])
+                    await self._handle_tool_approval_request(
+                        pending.msg, pending.session_id, run_id, approvals, pending.worker_id
+                    )
+                    return ''
+
+        except Exception as e:
+            logger.exception('Error continuing run after approval: %s', e)
+            full_reply = f'Error: {e}'
+            if pending.msg.on_reply_chunk:
+                await pending.msg.on_reply_chunk(full_reply)
+
+        return full_reply or 'Done.'
