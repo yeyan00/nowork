@@ -445,6 +445,9 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           hasMore: result.has_more,
           memberActivitiesByRun: result.memberActivitiesByRun || [],
           compactedSegments: result.compactedSegments || 0,
+          // Initialize cumulative tokens from DB (if not already set by streaming)
+          totalInputTokens: sessionState.totalInputTokens || result.totalInputTokens || 0,
+          totalOutputTokens: sessionState.totalOutputTokens || result.totalOutputTokens || 0,
         }));
       })
       .catch(() => {

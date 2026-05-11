@@ -1057,9 +1057,16 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
 
     # Count compacted segments for this session (used by frontend to show a banner)
     compacted_count = 0
+    total_input_tokens = 0
+    total_output_tokens = 0
     try:
         all_segments = session_manager.get_all_segments(session_id)
         compacted_count = sum(1 for seg in all_segments if seg.get('status') == 'compacted')
+        # Get cumulative tokens from WorkerSessionRow
+        ws = session_manager.get_worker_session(session_id)
+        if ws:
+            total_input_tokens = ws.get('total_input_tokens', 0) or 0
+            total_output_tokens = ws.get('total_output_tokens', 0) or 0
     except Exception:
         pass
 
@@ -1107,6 +1114,8 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                         'has_more': start > 0,
                         'compactedSegments': compacted_count,
                         'memberActivitiesByRun': active_result.get('memberActivitiesByRun', []),
+                        'totalInputTokens': total_input_tokens,
+                        'totalOutputTokens': total_output_tokens,
                     }
 
                 # Active segment empty: show last compacted segment's final run only
@@ -1121,9 +1130,11 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                         'has_more': start > 0,
                         'compactedSegments': compacted_count,
                         'memberActivitiesByRun': last_compacted_result.get('memberActivitiesByRun', []),
+                        'totalInputTokens': total_input_tokens,
+                        'totalOutputTokens': total_output_tokens,
                     }
 
-                return {'messages': [], 'total': 0, 'has_more': False, 'compactedSegments': compacted_count, 'memberActivitiesByRun': []}
+                return {'messages': [], 'total': 0, 'has_more': False, 'compactedSegments': compacted_count, 'memberActivitiesByRun': [], 'totalInputTokens': total_input_tokens, 'totalOutputTokens': total_output_tokens}
             else:
                 # Agent: load messages from segments
                 # Same logic as Team — active with content wins, else last compacted's final run
@@ -1169,6 +1180,8 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                         'total': total,
                         'has_more': start > 0,
                         'compactedSegments': compacted_count,
+                        'totalInputTokens': total_input_tokens,
+                        'totalOutputTokens': total_output_tokens,
                     }
 
                 # Active segment empty: show last compacted segment's final run only
@@ -1182,11 +1195,13 @@ def list_messages(session_id: str, limit: int = 20, offset: int = 0, agent_os: A
                         'total': total,
                         'has_more': start > 0,
                         'compactedSegments': compacted_count,
+                        'totalInputTokens': total_input_tokens,
+                        'totalOutputTokens': total_output_tokens,
                     }
 
-                return {'messages': [], 'total': 0, 'has_more': False, 'compactedSegments': compacted_count}
+                return {'messages': [], 'total': 0, 'has_more': False, 'compactedSegments': compacted_count, 'totalInputTokens': total_input_tokens, 'totalOutputTokens': total_output_tokens}
 
-    return {'messages': [], 'total': 0, 'has_more': False, 'compactedSegments': 0}
+    return {'messages': [], 'total': 0, 'has_more': False, 'compactedSegments': 0, 'totalInputTokens': 0, 'totalOutputTokens': 0}
 
 
 def _get_worker_model_capabilities(worker: dict[str, Any]) -> dict[str, bool]:

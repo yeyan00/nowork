@@ -260,6 +260,8 @@ export interface MessagesPage {
   has_more: boolean;
   compactedSegments?: number;
   memberActivitiesByRun?: MemberActivitiesByRun[];
+  totalInputTokens?: number;   // cumulative input tokens from DB
+  totalOutputTokens?: number;  // cumulative output tokens from DB
 }
 
 export async function listMessages(sessionId: string, limit = 20, offset = 0): Promise<MessagesPage> {
