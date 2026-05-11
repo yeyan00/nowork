@@ -4695,11 +4695,16 @@ button {
 .member-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(15, 22, 38, 0.2);
+  background: rgba(0, 0, 0, 0.08);
   z-index: 200;
   display: flex;
   justify-content: flex-end;
   animation: help-fade-in 0.15s ease;
+}
+.member-overlay.approval-overlay {
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.2);
 }
 .member-sidebar {
   width: min(520px, 85%);

@@ -325,8 +325,17 @@ async def api_continue_run(run_id: str, request: Request):
         updated_tools.append(te)
 
     try:
+        # Resolve worker_session_id → agno_session_id (same as stream_continue_run)
+        agno_session_id = session_id
+        if session_id is not None:
+            from app.session_manager import resolve_segment
+            segment = resolve_segment(session_id)
+            if segment is not None:
+                agno_session_id = segment['agno_session_id']
+
         result = await runtime.acontinue_run(
             run_id=run_id,
+            session_id=agno_session_id,
             updated_tools=updated_tools if updated_tools else None,
         )
         return {'ok': True, 'run_id': run_id, 'status': getattr(result, 'status', 'unknown')}

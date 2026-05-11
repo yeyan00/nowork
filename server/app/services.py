@@ -1998,6 +1998,15 @@ async def stream_continue_run(
     """
     is_team = worker.get('type') == 'Team'
 
+    # Resolve worker_session_id → agno_session_id (same as stream_message does).
+    # Without this, acontinue_run would create a new empty session and fail
+    # to find the run_id.
+    agno_session_id = session_id
+    if session_id is not None:
+        segment = session_manager.resolve_segment(session_id)
+        if segment is not None:
+            agno_session_id = segment['agno_session_id']
+
     # Only set confirmation context if at least one tool is actually confirmed.
     # When user rejects (confirmed=False), agno calls reject_tool_call() which
     # does NOT execute the tool function — so no need to bypass path checks.
@@ -2012,7 +2021,7 @@ async def stream_continue_run(
     try:
         cont_iter = runtime.acontinue_run(
             run_id=run_id,
-            session_id=session_id,
+            session_id=agno_session_id,
             updated_tools=updated_tools,
             stream=True,
             stream_events=True,

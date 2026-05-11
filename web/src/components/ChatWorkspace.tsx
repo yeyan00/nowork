@@ -1940,39 +1940,39 @@ function ToolApprovalDialog({ approval, onApprove, onReject }: {
   const parentDir = firstFilePath ? firstFilePath.replace(/[/\\][^/\\]+$/, '') : '';
 
   return (
-    <div className="member-overlay" style={{ zIndex: 100 }}>
+    <div className="member-overlay approval-overlay" style={{ zIndex: 100 }}>
       <div className="approval-dialog" style={{
-        background: 'var(--bg-primary, #1a1a2e)',
-        border: '1px solid var(--border-color, #333)',
+        background: '#fff',
+        border: '1px solid rgba(132, 146, 170, 0.25)',
         borderRadius: '12px',
         padding: '24px',
         maxWidth: '480px',
         width: '90%',
         margin: 'auto',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="var(--color-warning, #f59e0b)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
             <line x1="12" y1="9" x2="12" y2="13" />
             <line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
-          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Write Approval Required</h3>
+          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#1e293b' }}>Write Approval Required</h3>
         </div>
 
         <div style={{ marginBottom: '16px' }}>
           {approval.approvals.map((item, i) => (
             <div key={item.toolCallId || i} style={{
               padding: '10px 12px',
-              background: 'var(--bg-secondary, #16213e)',
+              background: '#f0f3f9',
               borderRadius: '8px',
               marginBottom: i < approval.approvals.length - 1 ? '8px' : 0,
               fontSize: '13px',
             }}>
-              <div style={{ fontWeight: 500, marginBottom: '4px' }}>
+              <div style={{ fontWeight: 500, marginBottom: '4px', color: '#1e293b' }}>
                 {item.description || `${item.toolName}: ${item.toolArgs?.file_path || item.toolArgs?.path || 'unknown path'}`}
               </div>
-              <div style={{ color: 'var(--text-secondary, #888)', fontSize: '12px', wordBreak: 'break-all' }}>
+              <div style={{ color: '#64748b', fontSize: '12px', wordBreak: 'break-all' }}>
                 {String(item.toolArgs?.file_path || item.toolArgs?.path || '')}
               </div>
             </div>
@@ -1986,7 +1986,7 @@ function ToolApprovalDialog({ approval, onApprove, onReject }: {
             gap: '8px',
             marginBottom: '16px',
             fontSize: '13px',
-            color: 'var(--text-secondary, #aaa)',
+            color: '#64748b',
             cursor: 'pointer',
           }}>
             <input
@@ -1994,7 +1994,7 @@ function ToolApprovalDialog({ approval, onApprove, onReject }: {
               checked={alwaysAllow}
               onChange={(e) => setAlwaysAllow(e.target.checked)}
             />
-            Always allow writes to <code style={{ fontSize: '12px', wordBreak: 'break-all' }}>{parentDir}</code>
+            Always allow writes to <code style={{ fontSize: '12px', wordBreak: 'break-all', color: '#31415d' }}>{parentDir}</code>
           </label>
         )}
 
@@ -2005,9 +2005,9 @@ function ToolApprovalDialog({ approval, onApprove, onReject }: {
             style={{
               padding: '8px 16px',
               borderRadius: '8px',
-              border: '1px solid var(--border-color, #444)',
+              border: '1px solid rgba(132, 146, 170, 0.25)',
               background: 'transparent',
-              color: 'var(--text-primary, #e0e0e0)',
+              color: '#31415d',
               cursor: 'pointer',
               fontSize: '13px',
             }}
@@ -2021,7 +2021,7 @@ function ToolApprovalDialog({ approval, onApprove, onReject }: {
               padding: '8px 16px',
               borderRadius: '8px',
               border: 'none',
-              background: 'var(--color-primary, #4f46e5)',
+              background: '#4f46e5',
               color: 'white',
               cursor: 'pointer',
               fontSize: '13px',
