@@ -498,7 +498,7 @@ class CodingTools(Toolkit):
         # System info
         "pwd", "which", "whoami", "hostname", "uname", "date",
         "env", "printenv", "echo", "printf",
-        "ps", "df", "du", "timeout", "kill",
+        "ps", "df", "du", "timeout", "kill", "cd",
         # Database clients
         "sqlite3", "psql", "mysql", "redis-cli",
         # Docker
@@ -522,7 +522,7 @@ class CodingTools(Toolkit):
         "Test-Path", "Copy-Item", "Move-Item", "Remove-Item",
         "New-Item", "Get-Process", "Get-Service",
         # PowerShell aliases (commonly used by models)
-        "ls", "cat", "pwd", "echo", "rm", "cp", "mv", "mkdir",
+        "ls", "cat", "pwd", "echo", "rm", "cp", "mv", "mkdir", "cd",
         "dir", "type", "cls", "clear", "sort", "tee", "curl",
     ]
 
@@ -536,7 +536,7 @@ class CodingTools(Toolkit):
         "rg", "fd", "sqlite3",
         "make", "cmake", "gcc", "clang",
         # CMD builtins
-        "dir", "type", "echo", "del", "copy", "move", "mkdir", "rmdir",
+        "dir", "type", "echo", "del", "copy", "move", "mkdir", "rmdir", "cd", "chdir",
         "cls", "set", "findstr", "where", "path",
         "tasklist", "taskkill", "systeminfo", "hostname", "date", "time",
     ]
