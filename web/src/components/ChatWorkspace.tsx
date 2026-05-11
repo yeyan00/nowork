@@ -1593,47 +1593,6 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
             <p>{sessionTitle}</p>
           </article>
         )}
-        {showCompactionHistory && compactionSegments.length > 0 && (
-          <article className="message-card system compaction-history-panel">
-            <div className="compaction-history-header">
-              <span>{t('chat.compactedHint', { count: compactionSegments.length })}</span>
-              <button
-                type="button"
-                className="compaction-close-btn"
-                onClick={() => setShowCompactionHistory(false)}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="compaction-history">
-              {compactionSegments.map((seg, i) => (
-                <div key={seg.id} className="compaction-segment">
-                  <div className="compaction-segment-header">
-                    {t('chat.compactedSegment', { order: i + 1, runs: seg.run_count }) || `Compacted segment ${i + 1} (${seg.run_count} runs)`}
-                  </div>
-                  {seg.compaction_summary && (
-                    <div className="compaction-segment-summary">
-                      <MarkdownContent content={seg.compaction_summary} />
-                    </div>
-                  )}
-                  {seg.compaction_meta && (
-                    <div className="compaction-segment-meta">
-                      {seg.compaction_meta.key_decisions && seg.compaction_meta.key_decisions.length > 0 && (
-                        <div><strong>{t('chat.keyDecisions') || 'Key Decisions'}:</strong> {seg.compaction_meta.key_decisions.join(', ')}</div>
-                      )}
-                      {seg.compaction_meta.user_preferences && seg.compaction_meta.user_preferences.length > 0 && (
-                        <div><strong>{t('chat.userPreferences') || 'User Preferences'}:</strong> {seg.compaction_meta.user_preferences.join(', ')}</div>
-                      )}
-                      {seg.compaction_meta.pending_tasks && seg.compaction_meta.pending_tasks.length > 0 && (
-                        <div><strong>{t('chat.pendingTasks') || 'Pending Tasks'}:</strong> {seg.compaction_meta.pending_tasks.join(', ')}</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </article>
-        )}
         {!isLoading && messages.length === 0 && !currentSession && (
           <article className="message-card system">
             <p>{t('chat.noMessages')}</p>
@@ -1713,10 +1672,16 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                               return;
                             }
                             try {
+                              console.log('Fetching segments for session:', activeSessionId);
                               const segs = await getSessionSegments(activeSessionId!);
-                              setCompactionSegments(segs.filter(s => s.status === 'compacted'));
+                              console.log('Segments received:', segs);
+                              const compacted = segs.filter(s => s.status === 'compacted');
+                              console.log('Compacted segments:', compacted);
+                              setCompactionSegments(compacted);
                               setShowCompactionHistory(true);
-                            } catch { /* ignore */ }
+                            } catch (err) {
+                              console.error('Failed to fetch segments:', err);
+                            }
                           }}
                           title={t('chat.compactedHint', { count: currentSessionState?.compactedSegments ?? 0 })}
                         >
@@ -1732,6 +1697,48 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           );
         })}
       </div>
+
+      {showCompactionHistory && compactionSegments.length > 0 && (
+        <div className="compaction-history-panel">
+          <div className="compaction-history-header">
+            <span>{t('chat.compactedHint', { count: compactionSegments.length })}</span>
+            <button
+              type="button"
+              className="compaction-close-btn"
+              onClick={() => setShowCompactionHistory(false)}
+            >
+              ✕
+            </button>
+          </div>
+          <div className="compaction-history">
+            {compactionSegments.map((seg, i) => (
+              <div key={seg.id} className="compaction-segment">
+                <div className="compaction-segment-header">
+                  {t('chat.compactedSegment', { order: i + 1, runs: seg.run_count }) || `Compacted segment ${i + 1} (${seg.run_count} runs)`}
+                </div>
+                {seg.compaction_summary && (
+                  <div className="compaction-segment-summary">
+                    <MarkdownContent content={seg.compaction_summary} />
+                  </div>
+                )}
+                {seg.compaction_meta && (
+                  <div className="compaction-segment-meta">
+                    {seg.compaction_meta.key_decisions && seg.compaction_meta.key_decisions.length > 0 && (
+                      <div><strong>{t('chat.keyDecisions') || 'Key Decisions'}:</strong> {seg.compaction_meta.key_decisions.join(', ')}</div>
+                    )}
+                    {seg.compaction_meta.user_preferences && seg.compaction_meta.user_preferences.length > 0 && (
+                      <div><strong>{t('chat.userPreferences') || 'User Preferences'}:</strong> {seg.compaction_meta.user_preferences.join(', ')}</div>
+                    )}
+                    {seg.compaction_meta.pending_tasks && seg.compaction_meta.pending_tasks.length > 0 && (
+                      <div><strong>{t('chat.pendingTasks') || 'Pending Tasks'}:</strong> {seg.compaction_meta.pending_tasks.join(', ')}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <footer className="composer">
         <textarea

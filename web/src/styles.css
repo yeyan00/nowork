@@ -986,7 +986,10 @@ button {
 .compaction-history-panel {
   background: rgba(124, 143, 219, 0.06);
   border: 1px solid rgba(124, 143, 219, 0.15);
-  margin-top: 8px;
+  border-radius: 8px;
+  margin: 8px 16px;
+  max-height: 300px;
+  overflow-y: auto;
 }
 
 .compaction-history-header {
