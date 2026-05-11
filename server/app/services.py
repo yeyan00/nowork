@@ -486,26 +486,55 @@ def _load_compacted_agent_messages(runtime: Any, seg_agno_id: str, worker_name: 
         if not db or not hasattr(db, 'get_session'):
             return []
         session_obj = db.get_session(session_id=seg_agno_id, session_type=SessionType.AGENT)
-        if not session_obj or not hasattr(session_obj, 'runs'):
+        if not session_obj:
             return []
+        
+        # Support both object (getattr) and dict (get) access patterns
+        def _get(obj: Any, key: str, default: Any = None) -> Any:
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+        
+        runs = _get(session_obj, 'runs', None) or []
         normalized: list[dict[str, Any]] = []
         filtered_idx = 0  # User-visible turn index (continuous)
-        for run in session_obj.runs or []:
+        
+        for run in runs:
             # Skip paused/cancelled/error runs
-            run_status = str(getattr(run, 'status', '')).upper()
+            run_status = str(_get(run, 'status', '') or '').upper()
             if run_status in ('PAUSED', 'CANCELLED', 'ERROR'):
                 continue
-            for msg in (getattr(run, 'messages', []) or []):
-                role = getattr(msg, 'role', '')
+            for msg in (_get(run, 'messages', None) or []):
+                role = str(_get(msg, 'role', '') or '')
                 if role in ('system', 'tool'):
                     continue
-                raw_content = str(getattr(msg, 'content', ''))
+                # Skip history-tagged messages
+                if _get(msg, 'from_history', False):
+                    continue
+                
+                raw_content = str(_get(msg, 'content', '') or '')
                 if role == 'user':
                     raw_content = session_manager.unwrap_compaction_injection(raw_content)
+                
+                # Get metrics from message (dict or object)
+                metrics = _get(msg, 'metrics', None)
+                if metrics:
+                    if isinstance(metrics, dict):
+                        token_input = metrics.get('input_tokens', 0) or 0
+                        token_output = metrics.get('output_tokens', 0) or 0
+                    else:
+                        token_input = getattr(metrics, 'input_tokens', 0) or 0
+                        token_output = getattr(metrics, 'output_tokens', 0) or 0
+                else:
+                    token_input = 0
+                    token_output = 0
+                
                 normalized.append({
-                    'id': getattr(msg, 'id', f'{seg_agno_id}-{role}'),
+                    'id': _get(msg, 'id', f'{seg_agno_id}-{role}') or f'{seg_agno_id}-{role}',
                     'role': 'worker' if role == 'assistant' else role,
                     'content': raw_content,
+                    'contextSize': token_input,
+                    'outputTokens': token_output,
                     'senderName': worker_name if role in ('assistant', 'worker') else None,
                     'toolCalls': [],
                     'runIndex': filtered_idx,
