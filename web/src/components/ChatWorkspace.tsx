@@ -347,7 +347,9 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           for (const s of sessions) {
             if (!s.hasRunningRun) {
               const ss = ws.sessionStates[s.id];
-              if (ss?.isStreaming) {
+              // Only update if this session was restored from server (not locally streaming from a fresh send)
+              // Locally streaming sessions have loaded=true; restored sessions have loaded=false initially
+              if (ss?.isStreaming && ss.loaded !== true) {
                 ws.sessionStates[s.id] = { ...ss, isStreaming: false, runId: null, loaded: false };
                 changed = true;
               }
