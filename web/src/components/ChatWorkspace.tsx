@@ -2105,11 +2105,8 @@ function ToolApprovalDialog({ approval, onApprove, onReject }: {
               marginBottom: i < approval.approvals.length - 1 ? '8px' : 0,
               fontSize: '13px',
             }}>
-              <div style={{ fontWeight: 500, marginBottom: '4px', color: '#1e293b' }}>
-                {item.description || `${item.toolName}: ${item.toolArgs?.file_path || item.toolArgs?.path || 'unknown path'}`}
-              </div>
-              <div style={{ color: '#64748b', fontSize: '12px', wordBreak: 'break-all' }}>
-                {String(item.toolArgs?.file_path || item.toolArgs?.path || '')}
+              <div style={{ fontWeight: 500, color: '#1e293b', wordBreak: 'break-all' }}>
+                {item.description || `${item.toolName}`}
               </div>
             </div>
           ))}

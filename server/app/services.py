@@ -277,23 +277,40 @@ def _parse_function_args(tc: Any) -> dict:
 
 
 def _normalize_single_message(msg: Any, idx: int, worker_name: str | None = None) -> dict[str, Any]:
-    """Normalize a single agno Message to API response dict."""
-    role = str(getattr(msg, 'role', 'user'))
+    """Normalize a single agno Message to API response dict.
+    
+    Handles both object-style messages (from runtime) and dict-style messages (from DB).
+    """
+    # Support both object (getattr) and dict (get) access patterns
+    def _get(msg: Any, key: str, default: Any = None) -> Any:
+        if isinstance(msg, dict):
+            return msg.get(key, default)
+        return getattr(msg, key, default)
+    
+    role = str(_get(msg, 'role', 'user'))
     if role == 'assistant':
         role = 'worker'
 
-    raw_tool_calls = getattr(msg, 'tool_calls', None) or []
+    raw_tool_calls = _get(msg, 'tool_calls', None) or []
     normalized_tools = [_normalize_tool_call(tc) for tc in raw_tool_calls]
 
-    reasoning = getattr(msg, 'reasoning_content', '') or getattr(msg, 'reasoning', '') or ''
+    reasoning = _get(msg, 'reasoning_content', '') or _get(msg, 'reasoning', '') or ''
 
-    metrics = getattr(msg, 'metrics', None)
-    token_input = getattr(metrics, 'input_tokens', 0) or 0
-    token_output = getattr(metrics, 'output_tokens', 0) or 0
+    metrics = _get(msg, 'metrics', None)
+    if metrics:
+        if isinstance(metrics, dict):
+            token_input = metrics.get('input_tokens', 0) or 0
+            token_output = metrics.get('output_tokens', 0) or 0
+        else:
+            token_input = getattr(metrics, 'input_tokens', 0) or 0
+            token_output = getattr(metrics, 'output_tokens', 0) or 0
+    else:
+        token_input = 0
+        token_output = 0
 
-    msg_name = getattr(msg, 'name', None) or None
+    msg_name = _get(msg, 'name', None) or None
 
-    content = str(getattr(msg, 'content', ''))
+    content = str(_get(msg, 'content', ''))
 
     # Strip compaction injection prefix from user messages
     if role == 'user' and content.startswith('[System Injection - Prior Conversation Summary]'):
@@ -305,7 +322,7 @@ def _normalize_single_message(msg: Any, idx: int, worker_name: str | None = None
 
     attachment_lines: list[str] = []
     for kind in ('images', 'videos', 'files'):
-        items = getattr(msg, kind, None) or []
+        items = _get(msg, kind, None) or []
         for item in items:
             name = getattr(item, 'filename', None) or getattr(item, 'name', None) or getattr(item, 'filepath', None) or getattr(item, 'url', None) or kind[:-1]
             attachment_lines.append(f"- {kind[:-1]}: {name}")
