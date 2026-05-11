@@ -982,6 +982,74 @@ button {
   margin: 0;
 }
 
+.compacted-banner-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.compacted-banner-btn:hover {
+  opacity: 0.8;
+}
+
+.compacted-toggle {
+  margin-left: auto;
+  font-size: 11px;
+  color: #7c8fdb;
+}
+
+.compaction-history {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.compaction-segment {
+  background: rgba(124, 143, 219, 0.06);
+  border: 1px solid rgba(124, 143, 219, 0.15);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.compaction-segment-header {
+  font-weight: 600;
+  font-size: 12px;
+  color: #5b6abf;
+  margin-bottom: 6px;
+}
+
+.compaction-segment-summary {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #31415d;
+}
+
+.compaction-segment-summary p {
+  margin: 0 0 4px;
+}
+
+.compaction-segment-summary p:last-child {
+  margin-bottom: 0;
+}
+
+.compaction-segment-meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #64748b;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .compacted-icon {
   flex-shrink: 0;
 }

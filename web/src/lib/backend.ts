@@ -235,6 +235,25 @@ export async function compactSession(sessionId: string): Promise<{ ok: boolean; 
   return (await response.json()) as { ok: boolean; segment_id: string };
 }
 
+export interface SessionSegment {
+  id: string;
+  worker_session_id: string;
+  agno_session_id: string;
+  segment_order: number;
+  run_count: number;
+  compaction_summary: string | null;
+  compaction_meta: { key_decisions?: string[]; user_preferences?: string[]; pending_tasks?: string[] } | null;
+  status: string;
+  created_at: string;
+  compacted_at: string | null;
+}
+
+export async function getSessionSegments(sessionId: string): Promise<SessionSegment[]> {
+  const response = await fetchFromApi(`/api/compaction-sessions/${sessionId}/segments`);
+  if (!response.ok) throw new Error('Failed to load segments');
+  return (await response.json()) as SessionSegment[];
+}
+
 export interface MessagesPage {
   messages: ChatMessage[];
   total: number;

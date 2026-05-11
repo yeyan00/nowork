@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
-import { cancelRun, cloneSession, compactSession, continueRunStream, createSession, exportSessionContext, listMessages, listModels, listSessions, sendMessageStream, updateSession } from '../lib/backend';
-import type { AgentEvent, ContinueRunParams, ProviderInfo } from '../lib/backend';
+import { cancelRun, cloneSession, compactSession, continueRunStream, createSession, exportSessionContext, getSessionSegments, listMessages, listModels, listSessions, sendMessageStream, updateSession } from '../lib/backend';
+import type { AgentEvent, ContinueRunParams, ProviderInfo, SessionSegment } from '../lib/backend';
 import type { ChatAttachment, ChatMessage, MemberActivity, PreviewingFile, ToolApprovalItem, ToolCall, WorkerSummary, WorkspaceBinding, WorkspaceInfo } from '../types';
 import { FilePreviewSidebar } from './FilePreviewSidebar';
 import { notifyWorkerDone } from '../lib/notify';
@@ -177,6 +177,8 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [defaultModelRef, setDefaultModelRef] = useState('');
   const [isListening, setIsListening] = useState(false);
+  const [showCompactionHistory, setShowCompactionHistory] = useState(false);
+  const [compactionSegments, setCompactionSegments] = useState<SessionSegment[]>([]);
   const messageListRef = useRef<HTMLDivElement>(null);
   const speechRef = useRef<{ recognition: SpeechRecognition; preamble: string } | null>(null);
 
@@ -1576,10 +1578,54 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
         )}
         {!isLoading && (currentSessionState?.compactedSegments ?? 0) > 0 && (
           <article className="message-card system compacted-banner">
-            <p>
+            <button
+              type="button"
+              className="compacted-banner-btn"
+              onClick={async () => {
+                if (showCompactionHistory) {
+                  setShowCompactionHistory(false);
+                  return;
+                }
+                try {
+                  const segs = await getSessionSegments(activeSessionId!);
+                  setCompactionSegments(segs.filter(s => s.status === 'compacted'));
+                  setShowCompactionHistory(true);
+                } catch { /* ignore */ }
+              }}
+            >
               <span className="compacted-icon">📋</span>
               {t('chat.compactedHint', { count: currentSessionState!.compactedSegments! })}
-            </p>
+              <span className="compacted-toggle">{showCompactionHistory ? '▾' : '▸'}</span>
+            </button>
+            {showCompactionHistory && compactionSegments.length > 0 && (
+              <div className="compaction-history">
+                {compactionSegments.map((seg, i) => (
+                  <div key={seg.id} className="compaction-segment">
+                    <div className="compaction-segment-header">
+                      {t('chat.compactedSegment', { order: i + 1, runs: seg.run_count }) || `Compacted segment ${i + 1} (${seg.run_count} runs)`}
+                    </div>
+                    {seg.compaction_summary && (
+                      <div className="compaction-segment-summary">
+                        <MarkdownContent content={seg.compaction_summary} />
+                      </div>
+                    )}
+                    {seg.compaction_meta && (
+                      <div className="compaction-segment-meta">
+                        {seg.compaction_meta.key_decisions && seg.compaction_meta.key_decisions.length > 0 && (
+                          <div><strong>{t('chat.keyDecisions') || 'Key Decisions'}:</strong> {seg.compaction_meta.key_decisions.join(', ')}</div>
+                        )}
+                        {seg.compaction_meta.user_preferences && seg.compaction_meta.user_preferences.length > 0 && (
+                          <div><strong>{t('chat.userPreferences') || 'User Preferences'}:</strong> {seg.compaction_meta.user_preferences.join(', ')}</div>
+                        )}
+                        {seg.compaction_meta.pending_tasks && seg.compaction_meta.pending_tasks.length > 0 && (
+                          <div><strong>{t('chat.pendingTasks') || 'Pending Tasks'}:</strong> {seg.compaction_meta.pending_tasks.join(', ')}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </article>
         )}
         {!isLoading && messages.length === 0 && !currentSession && (
