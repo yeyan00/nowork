@@ -1599,7 +1599,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                 <ReasoningPanel content={message.reasoning} defaultOpen={!!message.streaming} />
               )}
               {message.role === 'worker'
-                ? <div className="message-body"><MarkdownContent content={message.content} /></div>
+                ? (message.content && message.content !== '...' ? <div className="message-body"><MarkdownContent content={message.content} /></div> : null)
                 : <div className="message-body">{message.content}</div>}
               {message.role === 'user' && message.runIndex !== undefined && (
                 <div className="message-actions">

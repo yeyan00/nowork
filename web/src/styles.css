@@ -2965,7 +2965,7 @@ button {
 .tool-chip {
   border: 1px solid rgba(132, 146, 170, 0.15);
   border-radius: 10px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   background: #f0f3f9;
   overflow: hidden;
 }
@@ -3185,6 +3185,7 @@ button {
 }
 
 .tool-call-list {
+  margin-top: 4px;
   margin-bottom: 8px;
 }
 
