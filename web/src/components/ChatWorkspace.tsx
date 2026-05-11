@@ -179,6 +179,12 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
   const [isListening, setIsListening] = useState(false);
   const [showCompactionHistory, setShowCompactionHistory] = useState(false);
   const [compactionSegments, setCompactionSegments] = useState<SessionSegment[]>([]);
+
+  // Reset compaction history when switching sessions
+  useEffect(() => {
+    setShowCompactionHistory(false);
+    setCompactionSegments([]);
+  }, [activeSessionId]);
   const messageListRef = useRef<HTMLDivElement>(null);
   const speechRef = useRef<{ recognition: SpeechRecognition; preamble: string } | null>(null);
 
@@ -500,11 +506,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
   const handleCreateSession = useCallback(async () => {
     if (!worker) return;
 
-    const now = new Date().toISOString();
-    const ws = effectiveWorkspaces.length > 0 && effectiveWorkspaces.length < allWorkspacePaths.length
-      ? effectiveWorkspaces
-      : null;
-    const nextSession = await createSession(worker.id, now, ws);
+    const nextSession = await createSession(worker.id, '', ws);
     updateWorkerState(worker.id, (workerState) => {
       workerState.sessions = [nextSession, ...workerState.sessions];
       workerState.activeSessionId = nextSession.id;
@@ -796,11 +798,10 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
     try {
       let sessionId = activeSessionId;
       if (!sessionId) {
-        const now = new Date().toISOString();
         const ws = effectiveWorkspaces.length > 0 && effectiveWorkspaces.length < allWorkspacePaths.length
           ? effectiveWorkspaces
           : null;
-        const createdSession = await createSession(targetWorkerId, now, ws);
+        const createdSession = await createSession(targetWorkerId, '', ws);
         sessionId = createdSession.id;
         setPendingSessionWorkspaces((current) => {
           const next = { ...current };
