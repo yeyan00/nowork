@@ -179,12 +179,6 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
   const [isListening, setIsListening] = useState(false);
   const [showCompactionHistory, setShowCompactionHistory] = useState(false);
   const [compactionSegments, setCompactionSegments] = useState<SessionSegment[]>([]);
-
-  // Reset compaction history when switching sessions
-  useEffect(() => {
-    setShowCompactionHistory(false);
-    setCompactionSegments([]);
-  }, [activeSessionId]);
   const messageListRef = useRef<HTMLDivElement>(null);
   const speechRef = useRef<{ recognition: SpeechRecognition; preamble: string } | null>(null);
 
@@ -240,6 +234,13 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
     ? currentWorkerState.sessionStates[composerSessionId] ?? createSessionState(composerSessionId)
     : createSessionState(DRAFT_SESSION_ID);
   const currentSession = currentWorkerState?.sessions.find((session) => session.id === activeSessionId) ?? null;
+
+  // Reset compaction history when switching sessions
+  useEffect(() => {
+    setShowCompactionHistory(false);
+    setCompactionSegments([]);
+  }, [activeSessionId]);
+
   const workerWorkspaces = useMemo(() => getWorkerWorkspaces(worker), [worker]);
   const workerDefaultModelRef = useMemo(() => {
     const cfg = worker?.config as Record<string, unknown> | undefined;
