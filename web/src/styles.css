@@ -971,13 +971,84 @@ button {
   opacity: 0.7;
 }
 
-.metrics-separator {
-  color: #94a3b8;
-  margin: 0 4px;
+.metrics-toggle-btn {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  opacity: 0.7;
+  transition: opacity 0.15s;
 }
 
-.metrics-total {
+.metrics-toggle-btn:hover {
+  opacity: 1;
+}
+
+.metrics-toggle-btn svg {
+  fill: currentColor;
+}
+
+.total-metrics-popup {
+  background: #fff;
+  border: 1px solid rgba(132, 146, 170, 0.25);
+  border-radius: 12px;
+  padding: 0;
+  max-width: 280px;
+  width: 90%;
+  margin: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+}
+
+.total-metrics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  border-bottom: 1px solid rgba(132, 146, 170, 0.15);
+}
+
+.total-metrics-content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.total-metrics-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.total-metrics-label {
   color: #64748b;
+  font-size: 13px;
+}
+
+.total-metrics-value {
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.total-metrics-total {
+  border-top: 1px solid rgba(132, 146, 170, 0.15);
+  padding-top: 12px;
+  margin-top: 4px;
+}
+
+.total-metrics-total .total-metrics-label {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.total-metrics-total .total-metrics-value {
+  font-weight: 600;
 }
 
 .chat-header {

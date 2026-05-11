@@ -183,6 +183,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
   const [isListening, setIsListening] = useState(false);
   const [showCompactionHistory, setShowCompactionHistory] = useState(false);
   const [compactionSegments, setCompactionSegments] = useState<SessionSegment[]>([]);
+  const [showTotalMetrics, setShowTotalMetrics] = useState(false);
   const messageListRef = useRef<HTMLDivElement>(null);
   const speechRef = useRef<{ recognition: SpeechRecognition; preamble: string } | null>(null);
 
@@ -1694,11 +1695,17 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                       <svg className="message-metrics-icon" viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M3 12h2v-4H3v4zm4 0h2V6H7v6zm4 0h2V3h-2v9zM2 14h12V2H2v12z"/></svg>
                       <span>{t('chat.tokenMetrics', { context: lastContext.toLocaleString(), output: lastOutput.toLocaleString() })}</span>
                       {totalInput > 0 && (
-                        <>
-                          <span className="metrics-separator">·</span>
-                          <svg className="message-metrics-icon" viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M8 0a8 8 0 100 16A8 8 0 008 0zm0 14.5a6.5 6.5 0 110-13 6.5 6.5 0 010 13zM8 3a5 5 0 100 10A5 5 0 008 3zm0 8.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7zM8 5a3 3 0 100 6 3 3 0 008-6z"/></svg>
-                          <span className="metrics-total">{t('chat.totalTokenMetrics', { input: totalInput.toLocaleString(), output: totalOutput.toLocaleString() })}</span>
-                        </>
+                        <button
+                          type="button"
+                          className="metrics-toggle-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowTotalMetrics(!showTotalMetrics);
+                          }}
+                          title={t('chat.totalTokenMetrics', { input: totalInput.toLocaleString(), output: totalOutput.toLocaleString() })}
+                        >
+                          <svg viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M8 0a8 8 0 100 16A8 8 0 008 0zm0 14.5a6.5 6.5 0 110-13 6.5 6.5 0 010 13zM8 3a5 5 0 100 10A5 5 0 008 3zm0 8.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z"/></svg>
+                        </button>
                       )}
                       {hasCompaction && (
                         <button
@@ -1975,6 +1982,31 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           onApprove={(alwaysAllowDir?: string) => void handleApproval(true, alwaysAllowDir)}
           onReject={() => void handleApproval(false)}
         />
+      )}
+
+      {showTotalMetrics && (currentSessionState?.totalInputTokens ?? 0) > 0 && (
+        <div className="member-overlay" style={{ zIndex: 100 }} onClick={(e) => { if (e.target === e.currentTarget) setShowTotalMetrics(false); }}>
+          <div className="total-metrics-popup">
+            <div className="total-metrics-header">
+              <span>{t('chat.totalTokenMetricsTitle') || '累计 Token 统计'}</span>
+              <button type="button" className="compaction-close-btn" onClick={() => setShowTotalMetrics(false)}>✕</button>
+            </div>
+            <div className="total-metrics-content">
+              <div className="total-metrics-row">
+                <span className="total-metrics-label">{t('chat.totalInput') || '输入'}:</span>
+                <span className="total-metrics-value">{(currentSessionState?.totalInputTokens ?? 0).toLocaleString()}</span>
+              </div>
+              <div className="total-metrics-row">
+                <span className="total-metrics-label">{t('chat.totalOutput') || '输出'}:</span>
+                <span className="total-metrics-value">{(currentSessionState?.totalOutputTokens ?? 0).toLocaleString()}</span>
+              </div>
+              <div className="total-metrics-row total-metrics-total">
+                <span className="total-metrics-label">{t('chat.totalSum') || '总计'}:</span>
+                <span className="total-metrics-value">{((currentSessionState?.totalInputTokens ?? 0) + (currentSessionState?.totalOutputTokens ?? 0)).toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );
