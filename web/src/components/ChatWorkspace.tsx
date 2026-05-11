@@ -1620,15 +1620,6 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           <article className="message-card system session-header-card">
             <div className="session-header">
               <p>{sessionTitle}</p>
-              {(currentSessionState?.totalInputTokens ?? 0) > 0 && (
-                <div className="session-total-tokens">
-                  <svg className="message-metrics-icon" viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M3 12h2v-4H3v4zm4 0h2V6H7v6zm4 0h2V3h-2v9zM2 14h12V2H2v12z"/></svg>
-                  <span>{t('chat.totalTokenMetrics', { 
-                    input: (currentSessionState?.totalInputTokens ?? 0).toLocaleString(), 
-                    output: (currentSessionState?.totalOutputTokens ?? 0).toLocaleString() 
-                  })}</span>
-                </div>
-              )}
             </div>
           </article>
         )}
@@ -1694,12 +1685,21 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                 // agno's input_tokens is cumulative — the last message has the largest value
                 const lastContext = message.contextSize || 0;
                 const lastOutput = message.outputTokens || 0;
+                const totalInput = currentSessionState?.totalInputTokens || 0;
+                const totalOutput = currentSessionState?.totalOutputTokens || 0;
                 const hasCompaction = (currentSessionState?.compactedSegments ?? 0) > 0;
-                if (lastContext > 0 || lastOutput > 0 || hasCompaction) {
+                if (lastContext > 0 || lastOutput > 0 || hasCompaction || totalInput > 0) {
                   return (
                     <div className="message-metrics">
                       <svg className="message-metrics-icon" viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M3 12h2v-4H3v4zm4 0h2V6H7v6zm4 0h2V3h-2v9zM2 14h12V2H2v12z"/></svg>
                       <span>{t('chat.tokenMetrics', { context: lastContext.toLocaleString(), output: lastOutput.toLocaleString() })}</span>
+                      {totalInput > 0 && (
+                        <>
+                          <span className="metrics-separator">·</span>
+                          <svg className="message-metrics-icon" viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M8 0a8 8 0 100 16A8 8 0 008 0zm0 14.5a6.5 6.5 0 110-13 6.5 6.5 0 010 13zM8 3a5 5 0 100 10A5 5 0 008 3zm0 8.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7zM8 5a3 3 0 100 6 3 3 0 008-6z"/></svg>
+                          <span className="metrics-total">{t('chat.totalTokenMetrics', { input: totalInput.toLocaleString(), output: totalOutput.toLocaleString() })}</span>
+                        </>
+                      )}
                       {hasCompaction && (
                         <button
                           type="button"

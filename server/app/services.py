@@ -346,16 +346,22 @@ def _normalize_runtime_messages(runtime_messages: list[Any], worker_name: str | 
     # Build a lookup from tool_call_id → {result, error} by scanning tool-role messages.
     # agno stores tool results as separate role='tool' Message objects, but the frontend
     # expects result/error to be embedded inside the assistant message's toolCalls list.
+    # Support both object (getattr) and dict (get) access patterns
+    def _get(msg: Any, key: str, default: Any = None) -> Any:
+        if isinstance(msg, dict):
+            return msg.get(key, default)
+        return getattr(msg, key, default)
+    
     tool_result_map: dict[str, dict[str, Any]] = {}
     for msg in runtime_messages:
-        role = str(getattr(msg, 'role', ''))
+        role = str(_get(msg, 'role', '') or '')
         if role != 'tool':
             continue
-        tc_id = getattr(msg, 'tool_call_id', None)
+        tc_id = _get(msg, 'tool_call_id', None)
         if not tc_id:
             continue
-        content = getattr(msg, 'content', None)
-        error = getattr(msg, 'tool_call_error', None)
+        content = _get(msg, 'content', None)
+        error = _get(msg, 'tool_call_error', None)
         tool_result_map[tc_id] = {
             'result': content if content is not None else None,
             'error': str(error) if error else None,
@@ -364,7 +370,7 @@ def _normalize_runtime_messages(runtime_messages: list[Any], worker_name: str | 
     result: list[dict[str, Any]] = []
     idx = 0
     for msg in runtime_messages:
-        role = str(getattr(msg, 'role', 'user'))
+        role = str(_get(msg, 'role', 'user') or 'user')
         # Skip tool-role messages — their results are merged into the preceding
         # assistant message's toolCalls via tool_result_map above.
         if role == 'tool':
@@ -396,27 +402,33 @@ def _get_messages_with_run_index(session_obj: Any, worker_name: str | None = Non
     Each message gets a 'runIndex' field indicating which conversation turn it belongs to.
     runIndex is a continuous sequence (0, 1, 2...) representing the user-visible turn order.
     """
-    runs = getattr(session_obj, 'runs', None) or []
+    # Support both object (getattr) and dict (get) access patterns
+    def _get(obj: Any, key: str, default: Any = None) -> Any:
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
+    
+    runs = _get(session_obj, 'runs', None) or []
     result: list[dict[str, Any]] = []
     filtered_idx = 0  # User-visible turn index (continuous, skipping PAUSED/CANCELLED/ERROR)
 
     for run in runs:
-        run_messages = getattr(run, 'messages', None) or []
+        run_messages = _get(run, 'messages', None) or []
         # Skip paused/cancelled/error runs
-        run_status = str(getattr(run, 'status', '')).upper()
+        run_status = str(_get(run, 'status', '') or '').upper()
         if run_status in ('PAUSED', 'CANCELLED', 'ERROR'):
             continue
         # Skip runs with parent_run_id (team member runs)
-        if getattr(run, 'parent_run_id', None):
+        if _get(run, 'parent_run_id', None):
             continue
 
         for msg in run_messages:
-            role = str(getattr(msg, 'role', ''))
+            role = str(_get(msg, 'role', '') or '')
             # Skip system and tool roles (tool results merged into assistant)
             if role in ('system', 'tool'):
                 continue
             # Skip history-tagged messages
-            if getattr(msg, 'from_history', False):
+            if _get(msg, 'from_history', False):
                 continue
 
             normalized = _normalize_single_message(msg, len(result), worker_name)

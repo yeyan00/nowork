@@ -971,6 +971,15 @@ button {
   opacity: 0.7;
 }
 
+.metrics-separator {
+  color: #94a3b8;
+  margin: 0 4px;
+}
+
+.metrics-total {
+  color: #64748b;
+}
+
 .chat-header {
   flex-shrink: 0;
 }
