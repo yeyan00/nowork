@@ -540,10 +540,32 @@ export interface ProviderInfo {
   models: ModelInfo[];
 }
 
+let _modelsCache: { providers: ProviderInfo[]; default_model: string } | null = null;
+let _modelsCachePromise: Promise<{ providers: ProviderInfo[]; default_model: string }> | null = null;
+
+export function clearModelsCache(): void {
+  _modelsCache = null;
+  _modelsCachePromise = null;
+}
+
 export async function listModels(): Promise<{ providers: ProviderInfo[]; default_model: string }> {
-  const response = await fetchFromApi('/api/models');
-  if (!response.ok) throw new Error('Failed to load models');
-  return (await response.json()) as { providers: ProviderInfo[]; default_model: string };
+  if (_modelsCache) return _modelsCache;
+  if (_modelsCachePromise) return _modelsCachePromise;
+
+  _modelsCachePromise = (async () => {
+    const response = await fetchFromApi('/api/models');
+    if (!response.ok) throw new Error('Failed to load models');
+    const result = (await response.json()) as { providers: ProviderInfo[]; default_model: string };
+    _modelsCache = result;
+    return result;
+  })();
+
+  try {
+    return await _modelsCachePromise;
+  } catch {
+    _modelsCachePromise = null;
+    throw new Error('Failed to load models');
+  }
 }
 
 export async function createProvider(payload: {
@@ -559,6 +581,7 @@ export async function createProvider(payload: {
     body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error('Failed to create provider');
+  clearModelsCache();
   return (await response.json()) as ProviderInfo;
 }
 
@@ -571,6 +594,7 @@ export async function updateProvider(
     body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error('Failed to update provider');
+  clearModelsCache();
   return (await response.json()) as ProviderInfo;
 }
 
@@ -581,6 +605,7 @@ export async function deleteProvider(
     method: 'DELETE',
   });
   if (!response.ok) throw new Error('Failed to delete provider');
+  clearModelsCache();
   return (await response.json()) as { ok: boolean; id: string };
 }
 

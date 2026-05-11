@@ -83,6 +83,7 @@
     "voiceInput": "Voice Input",
     "modelSelect": "Session model",
     "modelDefault": "Default model",
+    "modelLoading": "Loading models...",
     "cancel": "Cancel",
     "send": "Send",
     "memoryOn": "Memory enabled",

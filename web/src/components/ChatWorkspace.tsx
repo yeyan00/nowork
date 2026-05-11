@@ -241,7 +241,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
   const selectedModelLabel = useMemo(() => {
     for (const provider of providers) {
       const model = provider.models.find((m) => m.id === selectedModelRef);
-      if (model) return `${provider.name} / ${model.name}`;
+      if (model) return model.name;
     }
     return selectedModelRef || '';
   }, [providers, selectedModelRef]);
@@ -1761,16 +1761,30 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                 disabled={isStreaming || !activeSessionId || providers.length === 0}
                 aria-label={t('chat.modelSelect')}
               >
-                {!workerDefaultModelRef && defaultModelRef && (
-                  <option value={defaultModelRef}>{t('chat.modelDefault')}</option>
-                )}
-                {providers.map((provider) => (
-                  <optgroup key={provider.id} label={provider.name}>
-                    {provider.models.map((model) => (
-                      <option key={model.id} value={model.id}>{model.name}</option>
+                {providers.length === 0 && defaultModelRef === '' ? (
+                  <option value="">{t('chat.modelLoading') || 'Loading...'}</option>
+                ) : (
+                  <>
+                    {!workerDefaultModelRef && defaultModelRef && (
+                      <option value={defaultModelRef}>
+                        {(() => {
+                          for (const provider of providers) {
+                            const model = provider.models.find((m) => m.id === defaultModelRef);
+                            if (model) return model.name;
+                          }
+                          return defaultModelRef;
+                        })()}
+                      </option>
+                    )}
+                    {providers.map((provider) => (
+                      <optgroup key={provider.id} label={provider.name}>
+                        {provider.models.map((model) => (
+                          <option key={model.id} value={model.id}>{model.name}</option>
+                        ))}
+                      </optgroup>
                     ))}
-                  </optgroup>
-                ))}
+                  </>
+                )}
               </select>
               {currentSession?.modelOverride && (
                 <span className="composer-model-badge">override</span>
