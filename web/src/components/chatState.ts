@@ -12,6 +12,8 @@ export interface CachedSessionState {
   draft: string;
   tokenUsage: TokenUsage;
   liveTokenUsage: LiveTokenUsage | null;
+  totalInputTokens: number;   // cumulative input tokens for billing
+  totalOutputTokens: number;  // cumulative output tokens for billing
   isLoading: boolean;
   isLoadingMore: boolean;
   hasMore: boolean;

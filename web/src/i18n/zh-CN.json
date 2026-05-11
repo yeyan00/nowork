@@ -92,6 +92,7 @@
     "more": "...",
     "loadingMore": "加载中...",
     "tokenMetrics": "上下文: {context} | 输出: {output}",
+    "totalTokenMetrics": "累计: {input} input / {output} output",
     "memberActivities": "成员活动 ({completed}/{count})",
     "toggleMemberActivities": "切换成员活动显示",
     "showMemberActivities": "显示成员活动",

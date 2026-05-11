@@ -943,6 +943,29 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+.session-header-card {
+  background: rgba(132, 146, 170, 0.06);
+  border-radius: 8px;
+}
+
+.session-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.session-header p {
+  margin: 0;
+}
+
+.session-total-tokens {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #64748b;
+}
+
 .message-metrics-icon {
   flex-shrink: 0;
   opacity: 0.7;

@@ -48,6 +48,8 @@ function createSessionState(sessionId: string): CachedSessionState {
     draft: '',
     tokenUsage: { input: 0, output: 0, total: 0, duration: 0 },
     liveTokenUsage: null,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
     isLoading: false,
     isLoadingMore: false,
     hasMore: false,
@@ -81,6 +83,8 @@ function cloneWorkerState(workerState: CachedWorkerState): CachedWorkerState {
           messages: cloneMessages(sessionState.messages),
           tokenUsage: { ...sessionState.tokenUsage },
           liveTokenUsage: sessionState.liveTokenUsage ? { ...sessionState.liveTokenUsage } : null,
+          totalInputTokens: sessionState.totalInputTokens ?? 0,
+          totalOutputTokens: sessionState.totalOutputTokens ?? 0,
         },
       ]),
     ),
@@ -893,6 +897,9 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
             updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
               ...sessionState,
               liveTokenUsage: { context: liveInput, output: liveOutput },
+              // Billing accumulation: sum of each API call's input/output tokens
+              totalInputTokens: sessionState.totalInputTokens + (m.input_tokens ?? 0),
+              totalOutputTokens: sessionState.totalOutputTokens + (m.output_tokens ?? 0),
             }));
           }
           return;
@@ -1589,8 +1596,19 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
             <p>{t('chat.loadingMessages')}</p>          </article>
         )}
         {!isLoading && !error && currentSession && (
-          <article className="message-card system">
-            <p>{sessionTitle}</p>
+          <article className="message-card system session-header-card">
+            <div className="session-header">
+              <p>{sessionTitle}</p>
+              {(currentSessionState?.totalInputTokens ?? 0) > 0 && (
+                <div className="session-total-tokens">
+                  <svg className="message-metrics-icon" viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M3 12h2v-4H3v4zm4 0h2V6H7v6zm4 0h2V3h-2v9zM2 14h12V2H2v12z"/></svg>
+                  <span>{t('chat.totalTokenMetrics', { 
+                    input: (currentSessionState?.totalInputTokens ?? 0).toLocaleString(), 
+                    output: (currentSessionState?.totalOutputTokens ?? 0).toLocaleString() 
+                  })}</span>
+                </div>
+              )}
+            </div>
           </article>
         )}
         {!isLoading && messages.length === 0 && !currentSession && (
