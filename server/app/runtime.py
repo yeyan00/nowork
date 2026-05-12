@@ -250,6 +250,9 @@ def _build_model(model_ref: str | None) -> Any | None:
         name=model_cfg.get('provider', model_id),
         base_url=model_cfg.get('base_url'),
         api_key=model_cfg.get('api_key'),
+        # Default retry configuration for model stability
+        retries=3,
+        exponential_backoff=True,  # 1s → 2s → 4s
     )
     # Set context_window dynamically — agno Model doesn't have this field
     if model_cfg.get('context_window'):
