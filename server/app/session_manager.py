@@ -624,12 +624,16 @@ async def generate_compaction_summary(runs: list[Any], model: Any = None, is_tea
 
     Returns:
         {
-            'text': 'Human-readable summary',
+            'text': 'Markdown-formatted summary (Pi-style)',
             'structured': {
+                'goal': str,
+                'constraints_and_preferences': [...],
+                'progress_done': [...],
+                'progress_in_progress': [...],
+                'progress_blocked': [...],
                 'key_decisions': [...],
-                'user_preferences': [...],
-                'pending_tasks': [...],
-                'context_points': [...]
+                'next_steps': [...],
+                'critical_context': [...]
             }
         }
     """
@@ -649,23 +653,29 @@ async def generate_compaction_summary(runs: list[Any], model: Any = None, is_tea
         # Final fallback: simple truncation summary
         return _generate_simple_summary(runs, conversation_text)
 
-    prompt = f"""You are a conversation summarizer. Your job is to produce a HIGHLY CONCISE summary that preserves KEY INFORMATION the assistant will need in future turns.
+    prompt = f"""You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary that another LLM will use to continue the work.
+
+DO NOT continue the conversation. DO NOT respond to any questions. ONLY output the structured summary.
+
+Use this EXACT JSON format:
+
+{{
+  "goal": "What the user is trying to accomplish. Can include multiple tasks if the session covers different topics.",
+  "constraints_and_preferences": ["Any constraints, preferences, or requirements mentioned by user"],
+  "progress_done": ["[x] Completed tasks/changes with file paths if applicable"],
+  "progress_in_progress": ["[ ] Current work in progress"],
+  "progress_blocked": ["Issues preventing progress, if any"],
+  "key_decisions": ["**Decision**: Brief rationale - preserve why decisions were made"],
+  "next_steps": ["Ordered list of what should happen next"],
+  "critical_context": ["Any data, examples, error messages, or references needed to continue"]
+}}
 
 RULES:
-- summary: 2-3 sentences max, covering the main topics and progress
-- key_decisions: max 3 items, each under 50 characters
-- user_preferences: max 3 items, each under 50 characters
-- pending_tasks: max 3 items, each under 50 characters
-- context_points: max 5 items, each under 100 characters. These are the MOST IMPORTANT facts, data, or conclusions that MUST be preserved. Do NOT copy raw text — ABSTRACT and CONDENSE.
-
-Output strictly in this JSON format:
-{{
-  "summary": "...",
-  "key_decisions": ["..."],
-  "user_preferences": ["..."],
-  "pending_tasks": ["..."],
-  "context_points": ["..."]
-}}
+- Preserve exact file paths, function names, and error messages
+- Keep each section concise but complete
+- If a section has no content, write "(none)"
+- Do NOT copy raw text - ABSTRACT and CONDENSE while preserving key facts
+- The goal should capture the user's intent, not just surface-level requests
 
 Conversation history:
 {conversation_text}
@@ -697,13 +707,45 @@ Output JSON only, no other text."""
             content = content.strip()
 
         parsed = json.loads(content)
+
+        # Build human-readable markdown summary (similar to Pi's format)
+        summary_parts = []
+        if parsed.get('goal'):
+            summary_parts.append(f"## Goal\n{parsed['goal']}")
+        if parsed.get('constraints_and_preferences'):
+            prefs = parsed['constraints_and_preferences']
+            summary_parts.append(f"## Constraints & Preferences\n- " + "\n- ".join(prefs))
+        progress_parts = []
+        if parsed.get('progress_done'):
+            progress_parts.append("### Done\n- " + "\n- ".join(parsed['progress_done']))
+        if parsed.get('progress_in_progress'):
+            progress_parts.append("### In Progress\n- " + "\n- ".join(parsed['progress_in_progress']))
+        if parsed.get('progress_blocked'):
+            progress_parts.append("### Blocked\n- " + "\n- ".join(parsed['progress_blocked']))
+        if progress_parts:
+            summary_parts.append("## Progress\n" + "\n\n".join(progress_parts))
+        if parsed.get('key_decisions'):
+            summary_parts.append("## Key Decisions\n- " + "\n- ".join(parsed['key_decisions']))
+        if parsed.get('next_steps'):
+            steps = parsed['next_steps']
+            summary_parts.append("## Next Steps\n" + "\n".join(f"{i+1}. {s}" for i, s in enumerate(steps)))
+        if parsed.get('critical_context'):
+            ctx = parsed['critical_context']
+            summary_parts.append("## Critical Context\n- " + "\n- ".join(ctx))
+
+        text_summary = "\n\n".join(summary_parts) if summary_parts else content
+
         return {
-            'text': parsed.get('summary', content),
+            'text': text_summary,
             'structured': {
+                'goal': parsed.get('goal', ''),
+                'constraints_and_preferences': parsed.get('constraints_and_preferences', []),
+                'progress_done': parsed.get('progress_done', []),
+                'progress_in_progress': parsed.get('progress_in_progress', []),
+                'progress_blocked': parsed.get('progress_blocked', []),
                 'key_decisions': parsed.get('key_decisions', []),
-                'user_preferences': parsed.get('user_preferences', []),
-                'pending_tasks': parsed.get('pending_tasks', []),
-                'context_points': parsed.get('context_points', []),
+                'next_steps': parsed.get('next_steps', []),
+                'critical_context': parsed.get('critical_context', []),
             },
         }
     except Exception as e:
@@ -850,13 +892,25 @@ def _generate_simple_summary(runs: list[Any], conversation_text: str) -> dict[st
     # Only keep non-trivial lines
     key_lines = [l for l in tail.split('\n') if len(l.strip()) > 20][:10]
 
+    # Build simple markdown summary matching Pi-style format
+    summary_parts = [
+        f"## Goal\n(unknown - fallback summary)",
+        f"## Progress\n### Done\n- {user_msgs} user messages, {assistant_msgs} assistant messages processed",
+    ]
+    if key_lines:
+        summary_parts.append(f"## Critical Context\n- " + "\n- ".join(key_lines[:5]))
+
     return {
-        'text': f'Conversation: {user_msgs} user msgs, {assistant_msgs} assistant msgs. Recent: {tail[-300:]}',
+        'text': "\n\n".join(summary_parts),
         'structured': {
+            'goal': '',
+            'constraints_and_preferences': [],
+            'progress_done': [],
+            'progress_in_progress': [],
+            'progress_blocked': [],
             'key_decisions': [],
-            'user_preferences': [],
-            'pending_tasks': [],
-            'context_points': key_lines[:5],
+            'next_steps': [],
+            'critical_context': key_lines[:5],
         },
     }
 
@@ -982,11 +1036,12 @@ def build_compaction_text(summaries: list[dict[str, Any]]) -> str:
         lines = [f"## Segment {seg.get('segment_order', 0) + 1}"]
         summary = seg.get('compaction_summary', '')
         if summary:
-            lines.append(f"Summary: {summary}")
-        for key, label in [('key_decisions', 'Decisions'), ('pending_tasks', 'Pending'), ('context_points', 'Key Info')]:
+            lines.append(summary)
+        # Display key structured fields from compaction_meta
+        for key, label in [('key_decisions', 'Key Decisions'), ('next_steps', 'Next Steps'), ('critical_context', 'Critical Context')]:
             items = meta.get(key, [])
             if items:
-                lines.append(f"{label}: {'; '.join(str(i) for i in items[:5])}")
+                lines.append(f"**{label}:** {'; '.join(str(i) for i in items[:5])}")
         parts.append('\n'.join(lines))
     return '\n\n'.join(parts)
 
