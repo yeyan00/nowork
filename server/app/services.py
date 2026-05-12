@@ -1725,11 +1725,16 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
     media_kwargs, _normalized_attachments = _build_media_kwargs(agno_session_id, worker, runtime, attachments)
 
     # Inject compaction summaries into user message if available
+    # Inject compaction summaries into user message (ONLY for first message in new segment)
+    # run_count == 0 means this is the first message after compaction → inject summary
+    # run_count > 0 means summary was already injected in a previous message → skip
     actual_content = content
     if segment is not None:
-        summaries = session_manager.get_compaction_summaries(session_id)
-        if summaries:
-            actual_content = session_manager.wrap_with_compaction(content, summaries)
+        run_count = segment.get('run_count', 0) or 0
+        if run_count == 0:
+            summaries = session_manager.get_compaction_summaries(session_id)
+            if summaries:
+                actual_content = session_manager.wrap_with_compaction(content, summaries)
 
     accumulated_content = ''
     accumulated_reasoning = ''
