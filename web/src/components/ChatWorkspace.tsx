@@ -1206,6 +1206,22 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           if (document.hidden && worker?.name && userContent) {
             void notifyWorkerDone(worker.name, userContent);
           }
+          // Auto-set session title from first user message if title is empty/Untitled
+          if (userContent) {
+            const autoTitle = userContent.length > 30 ? userContent.slice(0, 30) + '...' : userContent;
+            updateWorkerState(targetWorkerId, (ws) => {
+              const s = ws.sessions.find((x) => x.id === sessionId);
+              if (s && (!s.title || s.title === 'Untitled')) {
+                updateSession(sessionId!, { title: autoTitle }).then((updated) => {
+                  updateWorkerState(targetWorkerId, (ws2) => ({
+                    ...ws2,
+                    sessions: ws2.sessions.map((x) => x.id === sessionId ? { ...x, title: updated.title } : x),
+                  }));
+                }).catch(() => {});
+              }
+              return ws;
+            });
+          }
           return;
         }
 
