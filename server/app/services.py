@@ -1874,13 +1874,58 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
     # threshold, compact BEFORE starting the new run.
     if segment is not None:
         try:
-            pre_compact_done = await _pre_run_compaction_check(segment, agno_session_id, session_id, runtime, is_team)
-            if pre_compact_done:
-                # Refresh segment and agno_session_id after compaction
-                segment = session_manager.resolve_segment(session_id)
-                agno_session_id = segment['agno_session_id'] if segment else agno_session_id
+            # Quick check first — only send CompactionStarted if compaction is actually needed
+            cfg = session_manager.get_compaction_config()
+            _pre_run_needs_compact = False
+            if cfg.get('enabled', True):
+                db = getattr(runtime, 'db', None)
+                if db and hasattr(db, 'get_session'):
+                    from agno.db.base import SessionType
+                    session_type = SessionType.TEAM if is_team else SessionType.AGENT
+                    try:
+                        session_obj = db.get_session(session_id=agno_session_id, session_type=session_type)
+                        if session_obj:
+                            runs = getattr(session_obj, 'runs', None) or []
+                            if runs:
+                                _last_input = 0
+                                for _run in reversed(runs):
+                                    _events = getattr(_run, 'events', None) or []
+                                    for _ev in reversed(_events):
+                                        _ev_input = getattr(_ev, 'input_tokens', 0) or 0
+                                        if _ev_input > 0:
+                                            _last_input = _ev_input
+                                            break
+                                    if _last_input > 0:
+                                        break
+                                if _last_input > 0:
+                                    _model = getattr(runtime, 'model', None)
+                                    _ctx_win = None
+                                    if _model:
+                                        _ctx_win = getattr(_model, 'context_window', None)
+                                        if _ctx_win is None:
+                                            _ctx_win = getattr(_model, '_context_window', None)
+                                    if _ctx_win is None or _ctx_win <= 0:
+                                        _ctx_win = 128000
+                                    _threshold = cfg.get('context_usage_threshold', 0.75)
+                                    _reserve = cfg.get('context_reserve_tokens', 4000)
+                                    _limit = int(_ctx_win * _threshold - _reserve)
+                                    if _last_input >= _limit:
+                                        _pre_run_needs_compact = True
+                    except Exception:
+                        pass
+
+            if _pre_run_needs_compact:
+                yield f"data: {json.dumps({'event': 'CompactionStarted', 'phase': 'pre-run', 'message': 'Compressing context, please wait...'})}\n\n"
+                pre_compact_done = await _pre_run_compaction_check(segment, agno_session_id, session_id, runtime, is_team)
+                if pre_compact_done:
+                    segment = session_manager.resolve_segment(session_id)
+                    agno_session_id = segment['agno_session_id'] if segment else agno_session_id
+                    yield f"data: {json.dumps({'event': 'CompactionCompleted', 'phase': 'pre-run'})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'event': 'CompactionSkipped', 'phase': 'pre-run'})}\n\n"
         except Exception as e:
             logger.warning('Pre-run compaction check failed for session %s: %s', session_id, e)
+            yield f"data: {json.dumps({'event': 'CompactionFailed', 'phase': 'pre-run', 'message': str(e)})}\n\n"
 
     # Track member agent activities for Team workers
     member_activities: dict[str, dict[str, Any]] = {}
@@ -2068,11 +2113,21 @@ async def stream_message(session_id: str, content: str, attachments: list[dict[s
                 session_manager.update_worker_session(session_id, status='active')
             except Exception:
                 pass
-            compacted = await _execute_compaction()
-            if compacted:
-                yield f"data: {json.dumps({'event': 'ContextCompacted', 'message': 'Context limit reached. Earlier conversation has been compacted. If the response was incomplete, please send another message to continue.'})}\n\n"
+            if need_compact:
+                # Signal frontend that compaction is starting and release the lock
+                # so the user can send new messages while compaction runs in background
+                yield f"data: {json.dumps({'event': 'CompactionStarted', 'phase': 'post-stream', 'message': 'Compressing context...'})}\n\n"
         if lock.locked():
             lock.release()
+        # Execute compaction AFTER releasing the lock so user can send new messages
+        if segment is not None and need_compact:
+            try:
+                compacted = await _execute_compaction()
+                if compacted:
+                    yield f"data: {json.dumps({'event': 'ContextCompacted', 'message': 'Context limit reached. Earlier conversation has been compacted. If the response was incomplete, please send another message to continue.'})}\n\n"
+            except Exception as e:
+                logger.warning('Post-stream compaction failed for session %s: %s', session_id, e)
+                yield f"data: {json.dumps({'event': 'CompactionFailed', 'phase': 'post-stream', 'message': str(e)})}\n\n"
 
 
 async def cancel_run(run_id: str) -> bool:

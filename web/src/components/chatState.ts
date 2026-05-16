@@ -24,6 +24,7 @@ export interface CachedSessionState {
   lastActiveAt: number;
   memberActivitiesByRun: MemberActivitiesByRun[];
   compactedSegments: number;
+  isCompacting: boolean;
   pendingApproval: ToolApprovalRequest | null;
 }
 
@@ -65,6 +66,7 @@ export function ensureSessionState(workerState: CachedWorkerState, sessionId: st
       lastActiveAt: 0,
       memberActivitiesByRun: [],
       compactedSegments: 0,
+      isCompacting: false,
       pendingApproval: null,
     };
   }

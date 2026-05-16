@@ -113,6 +113,8 @@
     "cloneSession": "Clone Session",
     "compactSession": "Compact Session",
     "compactConfirm": "Compact this session? This will summarize old messages and may take a few seconds.",
+    "compacting": "Compressing context...",
+    "compactionFailed": "Context compression failed, consider starting a new session",
     "renameSession": "Rename",
     "cloneFromHere": "Clone from here",
     "exportContext": "Export Context"

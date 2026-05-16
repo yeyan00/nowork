@@ -76,6 +76,7 @@ function createSessionState(sessionId: string): CachedSessionState {
     lastActiveAt: 0,
     memberActivitiesByRun: [],
     compactedSegments: 0,
+    isCompacting: false,
     pendingApproval: null,
   };
 }
@@ -594,22 +595,32 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
   }, [activeSessionId, updateWorkerState, worker]);
 
   const handleCompactSession = useCallback(async () => {
-    if (!worker || !activeSessionId || isStreaming) return;
+    if (!worker || !activeSessionId || isStreaming || currentSessionState?.isCompacting) return;
 
-    // Confirm before compacting (consumes time and tokens)
     const confirmed = window.confirm(t('chat.compactConfirm') || 'Compact this session? This will summarize old messages and may take a few seconds.');
     if (!confirmed) return;
 
-    await compactSession(activeSessionId);
-    // Refresh messages to show compacted state
-    const result = await listMessages(activeSessionId, PAGE_SIZE, 0);
     updateSessionState(worker.id, activeSessionId, (sessionState) => ({
       ...sessionState,
-      messages: result.messages,
-      hasMore: result.has_more,
-      compactedSegments: result.compactedSegments || 0,
-      memberActivitiesByRun: result.memberActivitiesByRun || [],
+      isCompacting: true,
     }));
+    try {
+      await compactSession(activeSessionId);
+      const result = await listMessages(activeSessionId, PAGE_SIZE, 0);
+      updateSessionState(worker.id, activeSessionId, (sessionState) => ({
+        ...sessionState,
+        messages: result.messages,
+        hasMore: result.has_more,
+        compactedSegments: result.compactedSegments || 0,
+        memberActivitiesByRun: result.memberActivitiesByRun || [],
+        isCompacting: false,
+      }));
+    } catch {
+      updateSessionState(worker.id, activeSessionId, (sessionState) => ({
+        ...sessionState,
+        isCompacting: false,
+      }));
+    }
   }, [activeSessionId, isStreaming, updateSessionState, worker]);
 
   const handleWorkspaceToggle = useCallback((path: string, checked: boolean) => {
@@ -1232,6 +1243,37 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
           updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
             ...sessionState,
             compactedSegments: (sessionState.compactedSegments ?? 0) + 1,
+            isCompacting: false,
+          }));
+        }
+
+        if (eventType === 'CompactionStarted') {
+          updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
+            ...sessionState,
+            isCompacting: true,
+          }));
+        }
+
+        if (eventType === 'CompactionCompleted') {
+          updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
+            ...sessionState,
+            isCompacting: false,
+            compactedSegments: (sessionState.compactedSegments ?? 0) + 1,
+          }));
+        }
+
+        if (eventType === 'CompactionSkipped') {
+          updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
+            ...sessionState,
+            isCompacting: false,
+          }));
+        }
+
+        if (eventType === 'CompactionFailed') {
+          updateSessionState(targetWorkerId, sessionId!, (sessionState) => ({
+            ...sessionState,
+            isCompacting: false,
+            error: t('chat.compactionFailed') || 'Context compression failed, consider starting a new session',
           }));
         }
 
@@ -1766,6 +1808,14 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
             </article>
           );
         })}
+        {currentSessionState?.isCompacting && (
+          <article className="message-card system">
+            <div className="compaction-indicator">
+              <span className="compaction-spinner" />
+              <span>{t('chat.compacting') || 'Compressing context...'}</span>
+            </div>
+          </article>
+        )}
       </div>
 
       {showCompactionHistory && compactionSegments.length > 0 && (

@@ -1171,6 +1171,29 @@ button {
   gap: 4px;
 }
 
+.compaction-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #64748b;
+  padding: 4px 0;
+}
+
+.compaction-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #d1d5db;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: compaction-spin 0.8s linear infinite;
+}
+
+@keyframes compaction-spin {
+  to { transform: rotate(360deg); }
+}
+
 .message-card.continuation {
   margin-top: -8px;
   border-top-left-radius: 8px;
