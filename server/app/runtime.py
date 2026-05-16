@@ -686,6 +686,8 @@ async def _build_single_agent(raw: dict[str, Any], learning_enabled: bool | None
                 f'{paths_hint}'
             )
 
+    agent_kwargs['save_messages_on_cancel'] = True
+
     return Agent(**agent_kwargs)
 
 
@@ -771,6 +773,8 @@ async def _build_single_team(raw: dict[str, Any], existing_agents: list[Agent],
                 f'{wiki_purpose}'
                 f'{paths_hint}'
             )
+
+    team_kwargs['save_messages_on_cancel'] = True
 
     return Team(**team_kwargs)
 

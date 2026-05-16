@@ -10,6 +10,7 @@ models:
     name: qwen3.6-plus
     image: true
     video: false
+    context_window: 131072
   # glm-4.7:
   #   name: glm-4.7
   #   image: false
