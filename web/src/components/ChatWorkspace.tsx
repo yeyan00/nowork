@@ -2005,9 +2005,6 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                   </>
                 )}
               </select>
-              {currentSession?.modelOverride && (
-                <span className="composer-model-badge">override</span>
-              )}
             </div>
             <button
               type="button"
