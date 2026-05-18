@@ -1723,7 +1723,11 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
                 <ReasoningPanel content={message.reasoning} defaultOpen={!!message.streaming} />
               )}
               {message.role === 'worker'
-                ? (message.content && message.content !== '...' ? <div className="message-body"><MarkdownContent content={message.content} /></div> : null)
+                ? (message.content && message.content !== '...'
+                  ? <div className="message-body"><MarkdownContent content={message.content} /></div>
+                  : (!message.content && message.streaming
+                    ? <div className="message-body"><span className="message-loading-dots"><span /><span /><span /></span></div>
+                    : null))
                 : <div className="message-body">{message.content}</div>}
               {message.role === 'user' && message.runIndex !== undefined && (
                 <div className="message-actions">

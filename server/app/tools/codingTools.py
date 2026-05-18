@@ -1615,6 +1615,8 @@ class CodingTools(Toolkit):
         :return: Matching lines with file paths and line numbers, or an error message.
             Returned file paths may be relative to the searched directory. Output
             may also be truncated by the configured line and byte limits.
+        :note: Search timeout is 30 seconds. Choose specific paths and patterns to
+            avoid timeouts on large codebases.
         """
         try:
             if not pattern:
