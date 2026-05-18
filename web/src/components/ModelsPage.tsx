@@ -25,6 +25,7 @@ interface ProviderForm {
   provider: string;
   baseUrl: string;
   apiKey: string;
+  authType?: string;
   models: ModelEntry[];
 }
 
@@ -46,6 +47,7 @@ function providerToForm(p: ProviderInfo): ProviderForm {
     provider: p.provider || p.id,
     baseUrl: p.baseUrl || '',
     apiKey: p.apiKey || '',
+    authType: p.authType,
     models: (p.models || []).map((m) => ({
       localId: m.localId || m.id.split('/').pop() || m.id,
       name: m.name,
@@ -297,16 +299,18 @@ export function ModelsPage() {
                     placeholder="https://api.openai.com/v1"
                   />
                 </label>
-                <label className="settings-label">
-                  API Key
-                  <input
-                    className="settings-input"
-                    type="password"
-                    value={form.apiKey}
-                    onChange={(e) => { setForm((f) => ({ ...f, apiKey: e.target.value })); markDirty(); }}
-                    placeholder="sk-..."
-                  />
-                </label>
+                {form.authType !== 'oauth' && (
+                  <label className="settings-label">
+                    API Key
+                    <input
+                      className="settings-input"
+                      type="password"
+                      value={form.apiKey}
+                      onChange={(e) => { setForm((f) => ({ ...f, apiKey: e.target.value })); markDirty(); }}
+                      placeholder="sk-..."
+                    />
+                  </label>
+                )}
 
                 <div className="models-section-header">
                   <h3>{t('models.models')}</h3>

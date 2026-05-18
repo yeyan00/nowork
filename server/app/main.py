@@ -499,11 +499,26 @@ async def api_fetch_remote_models(request: Request):
     body = await request.json()
     base_url = body.get('baseUrl', '').rstrip('/')
     api_key = body.get('apiKey')
+    auth_type = body.get('authType', 'api_key')
     if not base_url:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail='baseUrl is required')
+
+    if auth_type == 'oauth':
+        from app.auth import get_codex_models
+        return {'models': get_codex_models()}
+
     models = fetch_remote_models(base_url, api_key)
     return {'models': models}
+
+
+@app.get('/api/oauth/status')
+def api_oauth_status():
+    from app.auth import is_oauth_available, get_auth_path
+    return {
+        'available': is_oauth_available('openai'),
+        'authPath': str(get_auth_path()) if get_auth_path() else None,
+    }
 
 
 @app.get('/api/tools-catalog')

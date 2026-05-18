@@ -558,6 +558,7 @@ export interface ProviderInfo {
   provider: string;
   baseUrl: string;
   apiKey: string;
+  authType?: string;
   models: ModelInfo[];
 }
 

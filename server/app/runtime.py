@@ -241,20 +241,47 @@ def _build_model(model_ref: str | None) -> Any | None:
     model_cfg = get_full_model_config(model_ref)
     if not model_cfg:
         return None
-    from agno.models.openai.like import OpenAILike
     model_id = model_cfg.get('id')
     if not model_id:
         raise ValueError(f"模型配置中缺少 id 字段: {model_cfg}")
-    model = OpenAILike(
-        id=model_id,
-        name=model_cfg.get('provider', model_id),
-        base_url=model_cfg.get('base_url'),
-        api_key=model_cfg.get('api_key'),
-        # Default retry configuration for model stability
-        retries=3,
-        exponential_backoff=True,  # 1s → 2s → 4s
-    )
-    # Set context_window dynamically — agno Model doesn't have this field
+
+    auth_type = model_cfg.get('auth_type', 'api_key')
+
+    if auth_type == 'oauth':
+        from agno.models.openai import OpenResponses
+        from app.auth import get_valid_access_token, get_account_id
+
+        access_token = get_valid_access_token('openai')
+        if not access_token:
+            raise ValueError("OAuth token 未找到，请先在 opencode 中登录 OpenAI")
+
+        account_id = get_account_id('openai')
+        default_headers = {}
+        if account_id:
+            default_headers['ChatGPT-Account-Id'] = account_id
+
+        model = OpenResponses(
+            id=model_id,
+            name=model_cfg.get('provider', model_id),
+            api_key=access_token,
+            base_url=model_cfg.get('base_url', 'https://chatgpt.com/backend-api/codex'),
+            store=False,
+            request_params={
+                'instructions': model_cfg.get('default_instructions', 'You are a helpful assistant.'),
+            },
+            default_headers=default_headers if default_headers else None,
+        )
+    else:
+        from agno.models.openai.like import OpenAILike
+        model = OpenAILike(
+            id=model_id,
+            name=model_cfg.get('provider', model_id),
+            base_url=model_cfg.get('base_url'),
+            api_key=model_cfg.get('api_key'),
+            retries=3,
+            exponential_backoff=True,
+        )
+
     if model_cfg.get('context_window'):
         model.context_window = model_cfg['context_window']
     return model

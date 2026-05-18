@@ -114,6 +114,24 @@ def get_full_model_config(model_ref: str | None = None, config: dict | None = No
     except ValueError:
         return {}
     provider_name, model_id = _parse_model_ref(ref)
+    
+    if provider_name == 'chatgpt-codex':
+        from app.auth import get_codex_models, is_oauth_available
+        if not is_oauth_available('openai'):
+            return {}
+        codex_models = get_codex_models()
+        model_info = next((m for m in codex_models if m['id'] == model_id), None)
+        limit = model_info.get('limit') if model_info else None
+        context_window = limit.get('context') if limit else None
+        return {
+            'id': model_id,
+            'provider': 'openai',
+            'base_url': 'https://chatgpt.com/backend-api/codex',
+            'auth_type': 'oauth',
+            'default_instructions': 'You are a helpful assistant.',
+            'context_window': context_window,
+        }
+    
     provider_cfg = load_provider_config(provider_name)
     provider_cfg['id'] = model_id
     # Merge model-level fields (e.g. context_window) from models map
@@ -275,6 +293,7 @@ def resolve_database_config(db_cfg: dict | None) -> dict:
 
 
 def get_all_providers(config: dict | None = None) -> list[dict]:
+    from app.auth import get_codex_models, is_oauth_available
     cfg = config or load_config()
     provider_refs = cfg.get('models', [])
     result = []
@@ -285,6 +304,33 @@ def get_all_providers(config: dict | None = None) -> list[dict]:
         if not provider_cfg:
             continue
         result.append(_serialize_provider(ref, provider_cfg))
+
+    if is_oauth_available('openai'):
+        existing_ids = {p.get('id') for p in result}
+        if 'chatgpt-codex' not in existing_ids:
+            codex_models = get_codex_models()
+            result.append({
+                'id': 'chatgpt-codex',
+                'name': 'ChatGPT Codex',
+                'type': 'openai_compatible',
+                'provider': 'openai',
+                'baseUrl': 'https://chatgpt.com/backend-api/codex',
+                'apiKey': '',
+                'authType': 'oauth',
+                'defaultInstructions': 'You are a helpful assistant.',
+                'models': [
+                    {
+                        'id': f'chatgpt-codex/{m["id"]}',
+                        'localId': m['id'],
+                        'name': m['name'],
+                        'image': True,
+                        'video': False,
+                        'contextWindow': m.get('limit', {}).get('context') if m.get('limit') else None,
+                    }
+                    for m in codex_models
+                ],
+            })
+
     return result
 
 
@@ -303,7 +349,7 @@ def _serialize_provider(provider_id: str, provider_cfg: dict) -> dict:
             'video': model_info.get('video', legacy_vision),
             'contextWindow': model_info.get('context_window'),
         })
-    return {
+    result = {
         'id': provider_id,
         'name': provider_cfg.get('name', provider_cfg.get('provider', provider_id)),
         'type': provider_cfg.get('type', 'openai_compatible'),
@@ -312,6 +358,11 @@ def _serialize_provider(provider_id: str, provider_cfg: dict) -> dict:
         'apiKey': provider_cfg.get('api_key', ''),
         'models': models,
     }
+    auth_type = provider_cfg.get('auth_type')
+    if auth_type:
+        result['authType'] = auth_type
+        result['defaultInstructions'] = provider_cfg.get('default_instructions', '')
+    return result
 
 
 def save_provider_config(provider_id: str, provider_cfg: dict) -> None:
