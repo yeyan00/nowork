@@ -414,10 +414,13 @@ def _get_messages_with_run_index(session_obj: Any, worker_name: str | None = Non
 
     for run in runs:
         run_messages = _get(run, 'messages', None) or []
-        # Skip paused/cancelled/error runs
         run_status = str(_get(run, 'status', '') or '').upper()
-        if run_status in ('PAUSED', 'CANCELLED', 'ERROR'):
+        if run_status in ('PAUSED', 'ERROR'):
             continue
+        if run_status == 'CANCELLED':
+            usable_as_history = _get(run, 'usable_as_history', False)
+            if not usable_as_history:
+                continue
         # Skip runs with parent_run_id (team member runs)
         if _get(run, 'parent_run_id', None):
             continue
@@ -500,10 +503,13 @@ def _load_compacted_agent_messages(runtime: Any, seg_agno_id: str, worker_name: 
         filtered_idx = 0  # User-visible turn index (continuous)
         
         for run in runs:
-            # Skip paused/cancelled/error runs
             run_status = str(_get(run, 'status', '') or '').upper()
-            if run_status in ('PAUSED', 'CANCELLED', 'ERROR'):
+            if run_status in ('PAUSED', 'ERROR'):
                 continue
+            if run_status == 'CANCELLED':
+                usable_as_history = _get(run, 'usable_as_history', False)
+                if not usable_as_history:
+                    continue
             for msg in (_get(run, 'messages', None) or []):
                 role = str(_get(msg, 'role', '') or '')
                 if role in ('system', 'tool'):
