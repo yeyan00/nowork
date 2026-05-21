@@ -31,7 +31,7 @@ from agno.tools import Toolkit
 from agno.tools.function import ToolResult
 from agno.utils.log import log_error, log_info, logger
 
-from app.utils.mime import is_image, is_pdf, sniff_mime_type
+from app.utils.mime import is_image, sniff_mime_type
 
 
 # ============================================================================
@@ -565,10 +565,9 @@ class CodingTools(Toolkit):
     
     _TOOL_INSTRUCTIONS = {
         "read_file": dedent("""\
-            **read_file** - Read text files with line numbers, or image/PDF files.
+            **read_file** - Read text files with line numbers, or image files.
             - For text files: returns contents with 1-based line numbers and pagination.
             - For image files (PNG, JPEG, GIF, WebP, BMP): returns the image for vision-capable models to analyze.
-            - For PDF files: returns the PDF as a file artifact.
             - Use this before editing to understand the current contents and nearby code style.
             - Use `offset` and `limit` to paginate large files. `offset` is 0-based, so `offset=0` starts at line 1.
             - Output may be truncated by line or byte limits. If you need the rest of a file, call read_file again with a larger offset.
@@ -1343,12 +1342,11 @@ class CodingTools(Toolkit):
         return None
     
     def read_file(self, file_path: str, offset: int = 0, limit: Optional[int] = None) -> Union[str, ToolResult]:
-        """Read a text file with line numbers and pagination, or an image/PDF file.
+        """Read a text file with line numbers and pagination, or an image file.
 
         For text files: Returns the selected slice with 1-based line numbers.
         For image files (PNG, JPEG, GIF, WebP, BMP): Returns the image as a visual
         artifact that vision-capable models can see and analyze.
-        For PDF files: Returns the PDF as a file artifact.
         Use this before editing files and use pagination for large files.
 
         :param file_path: Path to the file to read, relative to an allowed workspace
@@ -1357,7 +1355,7 @@ class CodingTools(Toolkit):
             from line 1.
         :param limit: Maximum number of file lines to return before formatting. If not
             provided, the default configured line window is used.
-        :return: Formatted file contents, a ToolResult with image/PDF artifact, or an
+        :return: Formatted file contents, a ToolResult with image artifact, or an
             error message.
         """
         try:
@@ -1393,20 +1391,6 @@ class CodingTools(Toolkit):
                     except Exception as e:
                         log_error(f"Error reading image file: {e}")
                         return f"Error reading image file: {e}"
-
-                # Handle PDF files — return as ToolResult with File artifact
-                if is_pdf(resolved_path, sample):
-                    try:
-                        from agno.media import File as MediaFile
-
-                        content = resolved_path.read_bytes()
-                        return ToolResult(
-                            content=f"PDF read successfully: {file_path} ({len(content)} bytes)",
-                            files=[MediaFile(content=content, mime_type=mime)],
-                        )
-                    except Exception as e:
-                        log_error(f"Error reading PDF file: {e}")
-                        return f"Error reading PDF file: {e}"
 
                 # Binary file detection (non-media binary files)
                 if b"\x00" in sample:
