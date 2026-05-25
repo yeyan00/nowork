@@ -2,12 +2,9 @@
 
 # NoWork
 
-**Agents do the work. You don't have to.**
+Open-source desktop AI agent workspace for coding, research, documents, and multi-agent workflows.
 
-A desktop AI agent workspace where each Agent or Team appears like a chat contact.
-Pick a worker, start a conversation, and let it plan, code, review, research, or process documents for you.
-
-Build your own AI workforce — all in one chat window.
+NoWork lets you create AI workers like chat contacts. Each worker can plan, code, review, research, process files, and run workflows inside a local desktop app.
 
 [简体中文](./README.zh-CN.md)
 
