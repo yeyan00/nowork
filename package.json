@@ -1,7 +1,7 @@
 {
     "name":  "nowork-desktop",
     "private":  true,
-    "version":  "0.0.8",
+    "version":  "0.0.9",
     "scripts":  {
                     "tauri:dev":  "tauri dev",
                     "tauri:build":  "tauri build",

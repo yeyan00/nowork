@@ -9,7 +9,7 @@ _yaml
 adodbapi
 adsi
 agno
-agno-2.6.3.dist-info
+agno-2.6.12.dist-info
 aiohappyeyeballs
 aiohappyeyeballs-2.6.1.dist-info
 aiohttp
@@ -33,7 +33,7 @@ bits
 cachetools
 cachetools-7.0.5.dist-info
 certifi
-certifi-2026.2.25.dist-info
+certifi-2026.5.20.dist-info
 cffi
 cffi-2.0.0.dist-info
 charset_normalizer
@@ -52,7 +52,7 @@ directsound
 distro
 distro-1.9.0.dist-info
 docstring_parser
-docstring_parser-0.17.0.dist-info
+docstring_parser-0.18.0.dist-info
 docx
 dotenv
 et_xmlfile
@@ -66,7 +66,7 @@ frozenlist-1.8.0.dist-info
 git
 gitdb
 gitdb-4.0.12.dist-info
-gitpython-3.1.46.dist-info
+gitpython-3.1.50.dist-info
 google
 greenlet
 greenlet-3.4.0.dist-info
@@ -87,7 +87,7 @@ httpx_sse-0.4.3.dist-info
 hyperframe
 hyperframe-6.1.0.dist-info
 idna
-idna-3.11.dist-info
+idna-3.18.dist-info
 ifilter
 internet
 isapi
@@ -104,9 +104,9 @@ lxml
 lxml-6.1.0.dist-info
 mapi
 markdown_it
-markdown_it_py-4.0.0.dist-info
+markdown_it_py-4.2.0.dist-info
 mcp
-mcp-1.27.0.dist-info
+mcp-1.25.1.dev161+635e346.dist-info
 mdurl
 mdurl-0.1.2.dist-info
 mmapfile
@@ -121,10 +121,12 @@ openai
 openai-2.31.0.dist-info
 openpyxl
 openpyxl-3.1.5.dist-info
+opentelemetry
+opentelemetry_api-1.42.1.dist-info
 orjson
 orjson-3.11.8.dist-info
 packaging
-packaging-26.0.dist-info
+packaging-26.2.dist-info
 pandas
 pandas-3.0.2.dist-info
 pandas.libs
@@ -140,11 +142,11 @@ pycparser
 pycparser-3.0.dist-info
 pycryptodome-3.23.0.dist-info
 pydantic
-pydantic-2.12.5.dist-info
+pydantic-2.13.4.dist-info
 pydantic_core
-pydantic_core-2.41.5.dist-info
+pydantic_core-2.46.4.dist-info
 pydantic_settings
-pydantic_settings-2.13.1.dist-info
+pydantic_settings-2.14.1.dist-info
 pygments
 pygments-2.20.0.dist-info
 pyjwt-2.12.1.dist-info
@@ -156,7 +158,7 @@ python_dateutil-2.9.0.post0.dist-info
 python_docx-1.2.0.dist-info
 python_dotenv-1.2.2.dist-info
 python_multipart
-python_multipart-0.0.26.dist-info
+python_multipart-0.0.32.dist-info
 python_pptx-1.0.2.dist-info
 pythoncom
 pythonwin
@@ -170,7 +172,7 @@ requests-2.33.1.dist-info
 requests_toolbelt
 requests_toolbelt-1.0.0.dist-info
 rich
-rich-14.3.4.dist-info
+rich-15.0.0.dist-info
 rpds
 rpds_py-0.30.0.dist-info
 servicemanager
@@ -194,7 +196,7 @@ timer
 tqdm
 tqdm-4.67.3.dist-info
 typer
-typer-0.24.1.dist-info
+typer-0.26.7.dist-info
 typing_extensions-4.15.0.dist-info
 typing_extensions.py
 typing_inspection
