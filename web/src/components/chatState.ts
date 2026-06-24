@@ -33,6 +33,7 @@ export interface CachedWorkerState {
   sessions: SessionSummary[];
   activeSessionId: string | null;
   sessionsLoaded: boolean;
+  sessionsScopeKey: string | null;
   sessionStates: Record<string, CachedSessionState>;
 }
 
@@ -42,6 +43,7 @@ export function createEmptyWorkerState(workerId: string): CachedWorkerState {
     sessions: [],
     activeSessionId: null,
     sessionsLoaded: false,
+    sessionsScopeKey: null,
     sessionStates: {},
   };
 }

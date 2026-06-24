@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
-import { cancelRun, cloneSession, compactSession, continueRunStream, createSession, exportSessionContext, getSessionSegments, listMessages, listModels, listSessions, sendMessageStream, updateSession } from '../lib/backend';
+import { cancelRun, cloneSession, compactSession, continueRunStream, createSession, createWorkspaceSession, exportSessionContext, getSessionSegments, listMessages, listModels, listSessions, listWorkspaceSessions, sendMessageStream, updateSession } from '../lib/backend';
 import type { AgentEvent, ContinueRunParams, ProviderInfo, SessionSegment } from '../lib/backend';
-import type { ChatAttachment, ChatMessage, MemberActivity, PreviewingFile, ToolApprovalItem, ToolCall, WorkerSummary, WorkspaceBinding, WorkspaceInfo } from '../types';
+import type { ChatAttachment, ChatMessage, MemberActivity, PreviewingFile, ToolApprovalItem, ToolCall, WorkerSummary, WorkspaceBinding, WorkspaceInfo, WorkspaceSummary } from '../types';
 import { FilePreviewSidebar } from './FilePreviewSidebar';
 import { notifyWorkerDone } from '../lib/notify';
 import type { CachedSessionState, CachedWorkerState } from './chatState';
@@ -14,6 +14,7 @@ import { WorkerSettingsSidebar } from './WorkerSettingsSidebar';
 
 interface ChatWorkspaceProps {
   worker: WorkerSummary | null;
+  workspace: WorkspaceSummary | null;
   chatStates: Record<string, CachedWorkerState>;
   onChatStatesChange: React.Dispatch<React.SetStateAction<Record<string, CachedWorkerState>>>;
   requestedSessionId?: string | null;
@@ -164,7 +165,7 @@ async function pickLocalPaths(kind: ChatAttachment['kind']): Promise<string[]> {
   return input.split('|').map((item) => item.trim()).filter(Boolean);
 }
 
-export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requestedSessionId, onRequestedSessionHandled }: ChatWorkspaceProps) {
+export function ChatWorkspace({ worker, workspace, chatStates, onChatStatesChange, requestedSessionId, onRequestedSessionHandled }: ChatWorkspaceProps) {
   const { t } = useI18n();
   const [showSessionList, setShowSessionList] = useState(false);
   const [showWorkerSettings, setShowWorkerSettings] = useState(false);
@@ -245,6 +246,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
     if (!worker) return null;
     return chatStates[worker.id] ?? createEmptyWorkerState(worker.id);
   }, [chatStates, worker]);
+  const sessionsScopeKey = workspace ? `workspace:${workspace.id}` : 'worker';
 
   const activeSessionId = currentWorkerState?.activeSessionId ?? null;
   const currentSessionState = activeSessionId && currentWorkerState
@@ -263,7 +265,15 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
     setCompactionSegments([]);
   }, [activeSessionId]);
 
-  const workerWorkspaces = useMemo(() => getWorkerWorkspaces(worker), [worker]);
+  const workerWorkspaces = useMemo(() => {
+    const configured = getWorkerWorkspaces(worker);
+    if (!workspace) return configured;
+    if (configured.some((item) => item.path === workspace.path)) return configured;
+    return [
+      ...configured,
+      { path: workspace.path, permission: workspace.permission },
+    ];
+  }, [worker, workspace]);
   const workerDefaultModelRef = useMemo(() => {
     const cfg = worker?.config as Record<string, unknown> | undefined;
     return typeof cfg?.model === 'string' ? cfg.model : '';
@@ -294,8 +304,9 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
     if (worker && pendingSessionWorkspaces[worker.id]) {
       return pendingSessionWorkspaces[worker.id].split(',').filter(Boolean);
     }
+    if (workspace) return [workspace.path];
     return workerWorkspaces.map((ws) => ws.path);
-  }, [currentSession?.workspaces, pendingSessionWorkspaces, worker, workerWorkspaces]);
+  }, [currentSession?.workspaces, pendingSessionWorkspaces, worker, workerWorkspaces, workspace]);
 
   const allWorkspacePaths = useMemo(() => workerWorkspaces.map((ws) => ws.path), [workerWorkspaces]);
   const workerCapabilities = useMemo(() => getWorkerCapabilities(worker), [worker]);
@@ -332,21 +343,25 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
 
   useEffect(() => {
     if (!worker) return;
-    if (currentWorkerState?.sessionsLoaded) return;
+    if (currentWorkerState?.sessionsLoaded && currentWorkerState.sessionsScopeKey === sessionsScopeKey) return;
 
     let cancelled = false;
 
-    void listSessions(worker.id)
+    const sessionsPromise = workspace ? listWorkspaceSessions(workspace.id) : listSessions(worker.id);
+
+    void sessionsPromise
       .then((nextSessions) => {
         if (cancelled) return;
+        const scopedSessions = nextSessions.filter((session) => session.workerId === worker.id);
         updateWorkerState(worker.id, (workerState) => {
-          workerState.sessions = nextSessions;
+          workerState.sessions = scopedSessions;
           workerState.sessionsLoaded = true;
-          if (!workerState.activeSessionId) {
-            workerState.activeSessionId = nextSessions[0]?.id ?? null;
+          workerState.sessionsScopeKey = sessionsScopeKey;
+          if (!workerState.activeSessionId || !scopedSessions.some((session) => session.id === workerState.activeSessionId)) {
+            workerState.activeSessionId = scopedSessions[0]?.id ?? null;
           }
           // Restore isStreaming state for sessions with a running run (e.g. after page refresh)
-          for (const s of nextSessions) {
+          for (const s of scopedSessions) {
             if (s.hasRunningRun) {
               workerState.sessionStates[s.id] = {
                 ...(workerState.sessionStates[s.id] ?? createSessionState(s.id)),
@@ -383,7 +398,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
     return () => {
       cancelled = true;
     };
-  }, [composerSessionId, currentWorkerState?.sessionsLoaded, updateSessionState, updateWorkerState, worker]);
+  }, [composerSessionId, currentWorkerState?.sessionsLoaded, currentWorkerState?.sessionsScopeKey, sessionsScopeKey, updateSessionState, updateWorkerState, worker, workspace]);
 
   // Poll for running-run completion: when any session has isStreaming=true (e.g. restored after
   // page refresh while a background run is in progress), periodically check listSessions to
@@ -394,10 +409,12 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
     if (!worker || !hasAnyStreaming) return;
 
     const interval = setInterval(() => {
-      void listSessions(worker.id).then((sessions) => {
+      const sessionsPromise = workspace ? listWorkspaceSessions(workspace.id) : listSessions(worker.id);
+      void sessionsPromise.then((sessions) => {
+        const scopedSessions = sessions.filter((session) => session.workerId === worker.id);
         updateWorkerState(worker.id, (ws) => {
           let changed = false;
-          for (const s of sessions) {
+          for (const s of scopedSessions) {
             if (!s.hasRunningRun) {
               const ss = ws.sessionStates[s.id];
               // Only update if this session was restored from server (not locally streaming from a fresh send)
@@ -409,7 +426,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
             }
           }
           if (changed) {
-            ws.sessions = sessions;
+            ws.sessions = scopedSessions;
           }
           return ws;
         });
@@ -419,7 +436,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [hasAnyStreaming, updateWorkerState, worker]);
+  }, [hasAnyStreaming, updateWorkerState, worker, workspace]);
 
   useEffect(() => {
     if (!worker || !requestedSessionId || !currentWorkerState?.sessionsLoaded) return;
@@ -554,7 +571,9 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
   const handleCreateSession = useCallback(async () => {
     if (!worker) return;
 
-    const nextSession = await createSession(worker.id, '', effectiveWorkspaces);
+    const nextSession = workspace
+      ? await createWorkspaceSession(workspace.id, worker.id, '', effectiveWorkspaces)
+      : await createSession(worker.id, '', effectiveWorkspaces);
     updateWorkerState(worker.id, (workerState) => {
       workerState.sessions = [nextSession, ...workerState.sessions];
       workerState.activeSessionId = nextSession.id;
@@ -573,7 +592,7 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
       delete next[worker.id];
       return next;
     });
-  }, [allWorkspacePaths.length, effectiveWorkspaces, updateWorkerState, worker]);
+  }, [allWorkspacePaths.length, effectiveWorkspaces, updateWorkerState, worker, workspace]);
 
   const handleCloneSession = useCallback(async (cloneFromRun?: number) => {
     if (!worker || !activeSessionId) return;
@@ -1507,6 +1526,13 @@ export function ChatWorkspace({ worker, chatStates, onChatStatesChange, requeste
             <span className={`worker-badge ${worker.type.toLowerCase()}`}>{worker.type}</span>
           </div>
           <p>{worker.description}</p>
+          {workspace && (
+            <div className="chat-workspace-context" title={workspace.path}>
+              <span>{t('workspace.current')}</span>
+              <strong>{workspace.name}</strong>
+              <code>{workspace.path}</code>
+            </div>
+          )}
         </div>
 
         <div className="header-actions">
