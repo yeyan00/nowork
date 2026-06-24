@@ -2,6 +2,7 @@ export type WorkerType = 'Agent' | 'Team' | 'Workflow';
 
 export type AppPage =
   | 'Chat'
+  | 'Workspaces'
   | 'Workers'
   | 'Channels'
   | 'Schedules'
@@ -79,6 +80,14 @@ export interface SessionSummary {
   hasRunningRun?: boolean;
   totalInputTokens?: number;   // cumulative input tokens from DB
   totalOutputTokens?: number;  // cumulative output tokens from DB
+}
+
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  path: string;
+  permission: 'read' | 'read-write';
+  workerIds: string[];
 }
 
 export interface TokenUsage {

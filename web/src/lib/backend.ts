@@ -1,4 +1,4 @@
-import type { ChannelPlatform, ChannelSummary, ChatAttachment, ChatMessage, MemberActivitiesByRun, ScheduleRun, ScheduleSummary, SendMessageResult, SessionSummary, ToolCall, WorkerSummary } from '../types';
+import type { ChannelPlatform, ChannelSummary, ChatAttachment, ChatMessage, MemberActivitiesByRun, ScheduleRun, ScheduleSummary, SendMessageResult, SessionSummary, ToolCall, WorkerSummary, WorkspaceSummary } from '../types';
 
 // Lazy-loaded Tauri invoke — only available when running inside Tauri desktop shell
 let _invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null | undefined;
@@ -184,6 +184,39 @@ export async function listSessions(workerId: string): Promise<SessionSummary[]> 
   }
 
   return (await response.json()) as SessionSummary[];
+}
+
+export async function listWorkspaces(): Promise<WorkspaceSummary[]> {
+  const response = await fetchFromApi('/api/workspaces');
+
+  if (!response.ok) {
+    throw new Error('Failed to load workspaces');
+  }
+
+  return (await response.json()) as WorkspaceSummary[];
+}
+
+export async function listWorkspaceSessions(workspaceId: string): Promise<SessionSummary[]> {
+  const response = await fetchFromApi(`/api/workspaces/${encodeURIComponent(workspaceId)}/sessions`);
+
+  if (!response.ok) {
+    throw new Error('Failed to load workspace sessions');
+  }
+
+  return (await response.json()) as SessionSummary[];
+}
+
+export async function createWorkspaceSession(workspaceId: string, workerId: string, title: string, workspaces?: string[] | null): Promise<SessionSummary> {
+  const response = await fetchFromApi(`/api/workspaces/${encodeURIComponent(workspaceId)}/sessions`, {
+    method: 'POST',
+    body: JSON.stringify({ workerId, title, workspaces: workspaces ?? null }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to create workspace session');
+  }
+
+  return (await response.json()) as SessionSummary;
 }
 
 export async function createSession(workerId: string, title: string, workspaces?: string[] | null): Promise<SessionSummary> {
