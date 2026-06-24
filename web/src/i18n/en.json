@@ -1,6 +1,7 @@
 {
   "nav": {
     "Chat": "Chat",
+    "Workspaces": "Workspaces",
     "Workers": "Workers",
     "Channels": "Channels",
     "Schedules": "Schedules",
@@ -118,6 +119,16 @@
     "renameSession": "Rename",
     "cloneFromHere": "Clone from here",
     "exportContext": "Export Context"
+  },
+  "workspace": {
+    "title": "Workspaces",
+    "subtitle": "Open a project workspace, then choose a worker for the session.",
+    "search": "Search workspaces by name or path",
+    "current": "Workspace",
+    "readWrite": "Read-write",
+    "readOnly": "Read-only",
+    "workerCount": "{count} worker(s)",
+    "empty": "No workspaces configured. Add workspace paths in Worker Studio first."
   },
   "workerList": {
     "title": "Workers",

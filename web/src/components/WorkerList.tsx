@@ -12,6 +12,8 @@ interface WorkerListProps {
   activeWorkerId?: string;
   runningWorkerIds?: Set<string>;
   onSelect: (workerId: string) => void;
+  title?: string;
+  subtitle?: string;
 }
 
 function parseRecentTime(value?: string | null): number {
@@ -53,7 +55,7 @@ function formatRecentTime(value: string | undefined, locale: string): string | n
   }).format(new Date(timestamp));
 }
 
-export function WorkerList({ workers, activeWorkerId, runningWorkerIds = new Set(), onSelect }: WorkerListProps) {
+export function WorkerList({ workers, activeWorkerId, runningWorkerIds = new Set(), onSelect, title, subtitle }: WorkerListProps) {
   const { t, locale } = useI18n();
   const [showSearch, setShowSearch] = useState(false);
   const [query, setQuery] = useState('');
@@ -72,7 +74,10 @@ export function WorkerList({ workers, activeWorkerId, runningWorkerIds = new Set
   return (
     <section className="worker-panel">
       <header className="worker-panel-header">
-          <h2>{t('workerList.title')}</h2>
+        <div className="worker-panel-title-block">
+          <h2>{title ?? t('workerList.title')}</h2>
+          {subtitle && <p title={subtitle}>{subtitle}</p>}
+        </div>
         <button
           type="button"
           className={`worker-search-toggle ${showSearch ? 'active' : ''}`}

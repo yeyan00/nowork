@@ -14,10 +14,11 @@ import { SchedulesPage } from './components/SchedulesPage';
 import { SettingsPage } from './components/SettingsPage';
 import { WorkerList } from './components/WorkerList';
 import { WorkersManager } from './components/WorkersManager';
+import { WorkspacesPage } from './components/WorkspacesPage';
 import { getRunningWorkerIds } from './components/chatState';
 import { managementCards } from './data/mockData';
-import { listWorkers } from './lib/backend';
-import type { AppPage, WorkerSummary } from './types';
+import { listWorkers, listWorkspaces } from './lib/backend';
+import type { AppPage, WorkerSummary, WorkspaceSummary } from './types';
 import type { CachedWorkerState } from './components/chatState';
 
 function parseRecentTime(value?: string | null): number {
@@ -41,6 +42,8 @@ function getCachedWorkerRecentTime(workerState?: CachedWorkerState | null): numb
 export default function App() {
   const [activePage, setActivePage] = useState<AppPage>('Chat');
   const [workers, setWorkers] = useState<WorkerSummary[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [activeWorkerId, setActiveWorkerId] = useState<string | null>(null);
   const [chatStates, setChatStates] = useState<Record<string, CachedWorkerState>>({});
   const [requestedSessionId, setRequestedSessionId] = useState<string | null>(null);
@@ -55,15 +58,17 @@ export default function App() {
     let cancelled = false;
     let retries = 0;
 
-    async function loadWorkers() {
+    async function loadInitialData() {
       while (retries < 60 && !cancelled) {
         try {
-          const nextWorkers = await listWorkers();
+          const [nextWorkers, nextWorkspaces] = await Promise.all([listWorkers(), listWorkspaces()]);
           if (!cancelled) {
             setWorkers(nextWorkers);
-            if (activePage === 'Chat') {
-              setActiveWorkerId(nextWorkers[0]?.id ?? null);
-            }
+            setWorkspaces(nextWorkspaces);
+            const firstWorkspace = nextWorkspaces[0] ?? null;
+            setActiveWorkspaceId(firstWorkspace?.id ?? null);
+            const firstWorkspaceWorkerId = firstWorkspace?.workerIds.find((workerId) => nextWorkers.some((worker) => worker.id === workerId));
+            setActiveWorkerId(firstWorkspaceWorkerId ?? nextWorkers[0]?.id ?? null);
           }
           return;
         } catch {
@@ -74,24 +79,32 @@ export default function App() {
       // Give up after 30s
       if (!cancelled) {
         setWorkers([]);
+        setWorkspaces([]);
+        setActiveWorkspaceId(null);
         setActiveWorkerId(null);
       }
     }
 
-    void loadWorkers();
+    void loadInitialData();
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // Re-fetch workers when switching back to Chat page
   useEffect(() => {
     if (activePage === 'Chat') {
-      void listWorkers().then((w) => {
-        setWorkers(w);
-        if (w.length > 0 && !w.find((ww) => ww.id === activeWorkerId)) {
-          setActiveWorkerId(w[0].id);
+      void Promise.all([listWorkers(), listWorkspaces()]).then(([nextWorkers, nextWorkspaces]) => {
+        setWorkers(nextWorkers);
+        setWorkspaces(nextWorkspaces);
+        const nextWorkspace = nextWorkspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? nextWorkspaces[0] ?? null;
+        if (nextWorkspace?.id !== activeWorkspaceId) {
+          setActiveWorkspaceId(nextWorkspace?.id ?? null);
+        }
+        const availableWorkerIds = nextWorkspace?.workerIds ?? nextWorkers.map((worker) => worker.id);
+        if (!activeWorkerId || !availableWorkerIds.includes(activeWorkerId)) {
+          const fallbackWorkerId = availableWorkerIds.find((workerId) => nextWorkers.some((worker) => worker.id === workerId));
+          setActiveWorkerId(fallbackWorkerId ?? nextWorkers[0]?.id ?? null);
         }
       }).catch(() => {});
     }
@@ -126,7 +139,12 @@ export default function App() {
     });
   }, [chatStates, workers]);
 
-  const activeWorker = sortedWorkers.find((worker) => worker.id === activeWorkerId) ?? null;
+  const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null;
+  const workspaceWorkers = useMemo(() => {
+    if (!activeWorkspace) return sortedWorkers;
+    return sortedWorkers.filter((worker) => activeWorkspace.workerIds.includes(worker.id));
+  }, [activeWorkspace, sortedWorkers]);
+  const activeWorker = workspaceWorkers.find((worker) => worker.id === activeWorkerId) ?? workspaceWorkers[0] ?? null;
   const runningWorkerIds = useMemo(() => getRunningWorkerIds(chatStates), [chatStates]);
 
   const openChatSession = useCallback((workerId: string, sessionId?: string | null) => {
@@ -135,6 +153,16 @@ export default function App() {
     setRequestedSessionId(sessionId ?? null);
   }, []);
 
+  const openWorkspace = useCallback((workspaceId: string) => {
+    const workspace = workspaces.find((item) => item.id === workspaceId) ?? null;
+    setActiveWorkspaceId(workspaceId);
+    if (workspace && (!activeWorkerId || !workspace.workerIds.includes(activeWorkerId))) {
+      const fallbackWorkerId = workspace.workerIds.find((workerId) => workers.some((worker) => worker.id === workerId));
+      setActiveWorkerId(fallbackWorkerId ?? null);
+    }
+    setActivePage('Chat');
+  }, [activeWorkerId, workers, workspaces]);
+
   let content;
 
   if (activePage === 'Chat') {
@@ -142,10 +170,12 @@ export default function App() {
       <div className="chat-layout">
         <div className="chat-sidebar" style={{ width: sidebarWidth }}>
           <WorkerList
-            workers={sortedWorkers}
-            activeWorkerId={activeWorkerId ?? undefined}
+            workers={workspaceWorkers}
+            activeWorkerId={activeWorker?.id ?? undefined}
             runningWorkerIds={runningWorkerIds}
             onSelect={setActiveWorkerId}
+            title={activeWorkspace?.name ?? undefined}
+            subtitle={activeWorkspace?.path ?? undefined}
           />
         </div>
         <div
@@ -157,6 +187,7 @@ export default function App() {
         <div className="chat-main">
           <ChatWorkspace
             worker={activeWorker}
+            workspace={activeWorkspace}
             chatStates={chatStates}
             onChatStatesChange={setChatStates}
             requestedSessionId={requestedSessionId}
@@ -165,6 +196,8 @@ export default function App() {
         </div>
       </div>
     );
+  } else if (activePage === 'Workspaces') {
+    content = <WorkspacesPage workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} onOpenWorkspace={openWorkspace} />;
   } else if (activePage === 'Workers') {
     content = <WorkersManager onWorkerUpdate={(updated) => {
       setWorkers((current) => current.map((w) => w.id === updated.id ? updated : w));

@@ -2,6 +2,7 @@ import { useI18n } from '../i18n';
 import type { AppPage } from '../types';
 
 const pages: Array<{ page: AppPage; icon: string; i18nKey: string }> = [
+  { page: 'Workspaces', icon: 'P', i18nKey: 'nav.Workspaces' },
   { page: 'Chat', icon: 'C', i18nKey: 'nav.Chat' },
   { page: 'Workers', icon: 'W', i18nKey: 'nav.Workers' },
   { page: 'Channels', icon: 'H', i18nKey: 'nav.Channels' },

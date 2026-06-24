@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import dataclasses
+import hashlib
 import json
 import logging
 import time
@@ -701,6 +702,93 @@ def list_workers(worker_type: str | None = None, agent_os: Any | None = None) ->
 
     workers.sort(key=lambda worker: (str(worker.get('recent') or ''), str(worker.get('name') or '')), reverse=True)
     return workers
+
+
+def _workspace_id_for_path(path: str) -> str:
+    normalized = str(Path(path).expanduser().resolve())
+    digest = hashlib.sha1(normalized.encode('utf-8')).hexdigest()[:16]
+    return f'ws-{digest}'
+
+
+def _workspace_name_for_path(path: str) -> str:
+    resolved = Path(path).expanduser()
+    return resolved.name or str(resolved)
+
+
+def list_workspaces(agent_os: Any | None = None) -> list[dict[str, Any]]:
+    workspaces_by_path: dict[str, dict[str, Any]] = {}
+    for worker in list_workers(agent_os=agent_os):
+        worker_id = str(worker.get('id') or '')
+        config = worker.get('config', {})
+        workspace_entries = config.get('workspaces', []) if isinstance(config, dict) else []
+        if not isinstance(workspace_entries, list):
+            continue
+        for entry in workspace_entries:
+            if not isinstance(entry, dict):
+                continue
+            raw_path = entry.get('path')
+            if not isinstance(raw_path, str) or not raw_path.strip():
+                continue
+            path = str(Path(raw_path).expanduser().resolve())
+            existing = workspaces_by_path.get(path)
+            permission = 'read' if entry.get('permission') == 'read' else 'read-write'
+            if existing is None:
+                workspaces_by_path[path] = {
+                    'id': _workspace_id_for_path(path),
+                    'name': _workspace_name_for_path(path),
+                    'path': path,
+                    'permission': permission,
+                    'workerIds': [worker_id] if worker_id else [],
+                }
+                continue
+            if permission == 'read-write':
+                existing['permission'] = 'read-write'
+            worker_ids = existing.get('workerIds')
+            if isinstance(worker_ids, list) and worker_id and worker_id not in worker_ids:
+                worker_ids.append(worker_id)
+    results = sorted(workspaces_by_path.values(), key=lambda item: str(item.get('name', '')).lower())
+    for workspace in results:
+        worker_ids = workspace.get('workerIds')
+        if isinstance(worker_ids, list):
+            worker_ids.sort()
+    return results
+
+
+def get_workspace(workspace_id: str, agent_os: Any | None = None) -> dict[str, Any]:
+    for workspace in list_workspaces(agent_os=agent_os):
+        if workspace.get('id') == workspace_id:
+            return workspace
+    raise HTTPException(status_code=404, detail='Workspace not found')
+
+
+def list_workspace_sessions(workspace_id: str, agent_os: Any | None = None) -> list[dict[str, Any]]:
+    workspace = get_workspace(workspace_id, agent_os=agent_os)
+    workspace_path = str(workspace['path'])
+    sessions: list[dict[str, Any]] = []
+    for worker_id in workspace.get('workerIds', []):
+        if not isinstance(worker_id, str):
+            continue
+        for session in list_sessions(worker_id, agent_os=agent_os):
+            workspaces = session.get('workspaces')
+            if isinstance(workspaces, list) and workspace_path in workspaces:
+                sessions.append(session)
+    sessions.sort(key=lambda item: str(item.get('updatedAt') or item.get('createdAt') or ''), reverse=True)
+    return sessions
+
+
+def create_workspace_session(
+    workspace_id: str,
+    worker_id: str,
+    title: str,
+    workspaces: list[str] | None = None,
+    agent_os: Any | None = None,
+) -> dict[str, Any]:
+    workspace = get_workspace(workspace_id, agent_os=agent_os)
+    worker_ids = workspace.get('workerIds', [])
+    if worker_id not in worker_ids:
+        raise HTTPException(status_code=400, detail='Worker is not available in this workspace')
+    session_workspaces = workspaces if workspaces else [str(workspace['path'])]
+    return create_session(worker_id, title, workspaces=session_workspaces, agent_os=agent_os)
 
 
 def get_worker(worker_id: str) -> dict[str, Any]:

@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 
-from app.schemas import MessageCreatePayload, SchedulePayload, SessionCreatePayload, SessionUpdatePayload, WorkerCreatePayload, WorkerUpdatePayload
+from app.schemas import MessageCreatePayload, SchedulePayload, SessionCreatePayload, SessionUpdatePayload, WorkerCreatePayload, WorkerUpdatePayload, WorkspaceSessionCreatePayload
 from app.schedules import create_schedule, delete_schedule, get_schedule, list_schedule_runs, list_schedules, schedule_manager, update_schedule
 from app.channels.manager import ChannelManager
 from app.services import (
@@ -20,6 +20,7 @@ from app.services import (
     create_message,
     create_provider,
     create_session,
+    create_workspace_session,
     create_worker,
     update_session,
     delete_provider,
@@ -32,6 +33,8 @@ from app.services import (
     list_mcp_servers,
     list_models,
     list_sessions,
+    list_workspace_sessions,
+    list_workspaces,
     list_skill_files,
     list_skills,
     list_tools_catalog,
@@ -187,6 +190,21 @@ async def api_update_worker(worker_id: str, payload: WorkerUpdatePayload, reques
 @app.get('/api/workers/{worker_id}/sessions')
 def api_list_sessions(worker_id: str, request: Request) -> list[dict[str, object]]:
     return list_sessions(worker_id, agent_os=_get_agent_os(request))
+
+
+@app.get('/api/workspaces')
+def api_list_workspaces(request: Request) -> list[dict[str, object]]:
+    return list_workspaces(agent_os=_get_agent_os(request))
+
+
+@app.get('/api/workspaces/{workspace_id}/sessions')
+def api_list_workspace_sessions(workspace_id: str, request: Request) -> list[dict[str, object]]:
+    return list_workspace_sessions(workspace_id, agent_os=_get_agent_os(request))
+
+
+@app.post('/api/workspaces/{workspace_id}/sessions', status_code=201)
+def api_create_workspace_session(workspace_id: str, payload: WorkspaceSessionCreatePayload, request: Request) -> dict[str, object]:
+    return create_workspace_session(workspace_id, payload.workerId, payload.title, payload.workspaces, agent_os=_get_agent_os(request))
 
 
 @app.post('/api/workers/{worker_id}/sessions', status_code=201)

@@ -1,6 +1,7 @@
 {
   "nav": {
     "Chat": "聊天",
+    "Workspaces": "工作区",
     "Workers": "工作台",
     "Channels": "频道",
     "Schedules": "定时任务",
@@ -118,6 +119,16 @@
     "renameSession": "重命名",
     "cloneFromHere": "从此处克隆",
     "exportContext": "导出调试信息"
+  },
+  "workspace": {
+    "title": "工作区",
+    "subtitle": "先打开项目工作区，再选择用于会话的工作助手。",
+    "search": "按名称或路径搜索工作区",
+    "current": "工作区",
+    "readWrite": "读写",
+    "readOnly": "只读",
+    "workerCount": "{count} 个工作助手",
+    "empty": "暂无工作区。请先在工作台里添加 workspace 路径。"
   },
   "workerList": {
     "title": "工作助手",
