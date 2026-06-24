@@ -26,6 +26,12 @@ class SessionCreatePayload(BaseModel):
     workspaces: Optional[list[str]] = None
 
 
+class WorkspaceSessionCreatePayload(BaseModel):
+    workerId: str
+    title: str = ''
+    workspaces: Optional[list[str]] = None
+
+
 class SessionUpdatePayload(BaseModel):
     title: Optional[str] = None
     workspaces: Optional[list[str]] = None
