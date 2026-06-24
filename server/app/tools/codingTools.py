@@ -849,13 +849,17 @@ class CodingTools(Toolkit):
         else:
             raise ValueError("base_dirs must be a string, Path, or list of strings/Paths")
 
-        # Merge workspace_permissions paths into base_dirs (from yaml workspaces[].path)
-        # Note: workspace_permissions is deprecated for permission control, but still used
-        # to pass workspace paths from yaml config. We merge them into base_dirs for full access.
+        self.read_only_workspace_dirs: List[Path] = []
         if workspace_permissions:
-            for raw_path in workspace_permissions.keys():
+            for raw_path, permission in workspace_permissions.items():
                 resolved = Path(raw_path).expanduser().resolve()
-                if resolved.exists() and resolved.is_dir() and resolved not in self.base_dirs:
+                if not resolved.exists() or not resolved.is_dir():
+                    continue
+                if permission == "read":
+                    if resolved not in self.read_only_workspace_dirs:
+                        self.read_only_workspace_dirs.append(resolved)
+                    continue
+                if resolved not in self.base_dirs:
                     self.base_dirs.append(resolved)
 
         # Validate all directories exist
@@ -1183,6 +1187,13 @@ class CodingTools(Toolkit):
 
     def _is_read_allowed(self, path: Path) -> bool:
         """Check if path is readable (Tier 1 or Tier 2)."""
+        for read_only_dir in self.read_only_workspace_dirs:
+            try:
+                path.relative_to(read_only_dir)
+                return True
+            except ValueError:
+                continue
+
         # Tier 1: in base_dirs → always readable
         if self._is_in_base_dirs(path):
             return True

@@ -12,7 +12,7 @@ import logging
 import os
 import stat as stat_mod
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -22,8 +22,9 @@ router = APIRouter(prefix='/api/fs', tags=['filesystem'])
 
 # ── Helpers ──────────────────────────────────────────────────────
 
-MAX_READ_SIZE = 2 * 1024 * 1024  # 2 MB text read limit
-MAX_BINARY_SIZE = 10 * 1024 * 1024  # 10 MB binary read limit
+MAX_READ_SIZE: Final = 2 * 1024 * 1024  # 2 MB text read limit
+MAX_BINARY_SIZE: Final = 10 * 1024 * 1024  # 10 MB binary read limit
+ALLOWED_WORKSPACE_ROOTS: tuple[Path, ...] = ()
 
 # Directories to always skip when listing
 SKIP_DIR_NAMES = frozenset({
@@ -80,6 +81,42 @@ def _is_path_within_root(path: str, root: str) -> bool:
         return False
 
 
+def _configured_workspace_roots() -> tuple[Path, ...]:
+    from app import repository
+
+    roots: list[Path] = []
+    for worker in repository.list_workers():
+        config = worker.get('config', {})
+        workspaces = config.get('workspaces', []) if isinstance(config, dict) else []
+        if not isinstance(workspaces, list):
+            continue
+        for workspace in workspaces:
+            if not isinstance(workspace, dict):
+                continue
+            raw_path = workspace.get('path')
+            if not isinstance(raw_path, str) or not raw_path.strip():
+                continue
+            root = Path(raw_path).expanduser().resolve()
+            if root not in roots:
+                roots.append(root)
+    return tuple(roots)
+
+
+def _allowed_workspace_roots() -> tuple[Path, ...]:
+    if ALLOWED_WORKSPACE_ROOTS:
+        return tuple(root.expanduser().resolve() for root in ALLOWED_WORKSPACE_ROOTS)
+    return _configured_workspace_roots()
+
+
+def _ensure_workspace_path(path: str) -> None:
+    roots = _allowed_workspace_roots()
+    if not roots:
+        raise HTTPException(status_code=403, detail='No workspace roots configured')
+    if any(_is_path_within_root(path, str(root)) for root in roots):
+        return
+    raise HTTPException(status_code=403, detail=f'Path outside workspace: {_normalize_path(path)}')
+
+
 def _is_text_file(path: str) -> bool:
     """Heuristic: decide if a file should be read as utf-8 text."""
     ext = Path(path).suffix.lower()
@@ -130,6 +167,7 @@ def list_directory(
 ) -> dict[str, Any]:
     """List contents of a directory."""
     normalized = _normalize_path(path)
+    _ensure_workspace_path(normalized)
 
     if not os.path.isdir(normalized):
         raise HTTPException(status_code=400, detail=f'Not a directory: {normalized}')
@@ -171,6 +209,7 @@ def read_file(
 ) -> dict[str, Any]:
     """Read a text file and return its content."""
     normalized = _normalize_path(path)
+    _ensure_workspace_path(normalized)
 
     if not os.path.isfile(normalized):
         raise HTTPException(status_code=400, detail=f'Not a file: {normalized}')
@@ -212,6 +251,7 @@ def read_raw_file(
     import base64
 
     normalized = _normalize_path(path)
+    _ensure_workspace_path(normalized)
 
     if not os.path.isfile(normalized):
         raise HTTPException(status_code=400, detail=f'Not a file: {normalized}')
@@ -248,6 +288,7 @@ def stat_file(
 ) -> dict[str, Any]:
     """Get metadata for a file or directory."""
     normalized = _normalize_path(path)
+    _ensure_workspace_path(normalized)
 
     if not os.path.exists(normalized):
         raise HTTPException(status_code=404, detail=f'Not found: {normalized}')
