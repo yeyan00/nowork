@@ -55,10 +55,24 @@ def _merge_learning(raw: dict[str, Any]) -> dict[str, Any]:
     return merged
 
 
+def _normalize_model_ref(raw_model: Any) -> str | None:
+    if isinstance(raw_model, str):
+        return raw_model
+    if not isinstance(raw_model, dict):
+        return None
+    provider = raw_model.get('provider')
+    model = raw_model.get('model')
+    if not isinstance(model, str) or not model.strip():
+        return None
+    if isinstance(provider, str) and provider.strip():
+        return f'{provider.strip()}/{model.strip()}'
+    return model.strip()
+
+
 def _serialize_worker(worker_cfg: dict[str, Any]) -> dict[str, Any]:
     block = _extract_worker_block(worker_cfg)
     worker_type = _detect_type(worker_cfg)
-    model_ref = worker_cfg.get('model')
+    model_ref = _normalize_model_ref(worker_cfg.get('model'))
     return {
         'id': block.get('id') or '',
         'type': worker_type,
@@ -157,7 +171,7 @@ def create_worker(payload: dict[str, Any]) -> dict[str, Any]:
             'name': name,
             'description': payload.get('description', ''),
         },
-        'model': payload.get('config', {}).get('model') or clone_cfg.get('model'),
+        'model': _normalize_model_ref(payload.get('config', {}).get('model')) or _normalize_model_ref(clone_cfg.get('model')),
     }
 
     save_worker_config(ref, new_cfg)
@@ -188,7 +202,7 @@ def update_worker(worker_id: str, payload: dict[str, Any]) -> dict[str, Any] | N
         else:
             block.pop('i18n', None)
     if 'model' in config:
-        raw['model'] = config['model']
+        raw['model'] = _normalize_model_ref(config['model'])
     if 'workspaces' in config:
         ws_key = 'team_workspaces' if _detect_type(raw) == 'Team' else 'workspaces'
         raw[ws_key] = config['workspaces']
