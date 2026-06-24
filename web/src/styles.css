@@ -586,6 +586,22 @@ button {
   box-shadow: 0 0 0 3px rgba(76, 120, 255, 0.12);
 }
 
+.worker-panel-title-block {
+  min-width: 0;
+}
+
+.worker-panel-title-block h2 {
+  margin-bottom: 4px;
+}
+
+.worker-panel-title-block p {
+  margin: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .worker-items {
   display: flex;
   flex-direction: column;
@@ -596,6 +612,88 @@ button {
   min-height: 0;
   padding-right: 6px;
   scrollbar-gutter: stable;
+}
+
+.workspace-toolbar {
+  margin-bottom: 16px;
+}
+
+.workspace-search-input {
+  max-width: 420px;
+}
+
+.workspace-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.workspace-card {
+  min-height: 160px;
+  padding: 18px;
+  border: 1px solid rgba(132, 146, 170, 0.18);
+  border-radius: 18px;
+  background: #fff;
+  color: #162033;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 12px 28px rgba(24, 36, 58, 0.06);
+}
+
+.workspace-card:hover,
+.workspace-card.active {
+  border-color: rgba(76, 120, 255, 0.42);
+  box-shadow: 0 16px 32px rgba(76, 120, 255, 0.12);
+}
+
+.workspace-card-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.workspace-card-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: #dfe9ff;
+  color: #26438a;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+}
+
+.workspace-permission-badge {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #edf3ff;
+  color: #26438a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workspace-card-path,
+.workspace-card-meta {
+  color: #52627f;
+  font-size: 13px;
+}
+
+.workspace-card-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-empty-state {
+  padding: 28px;
+  border-radius: 18px;
+  background: #fff;
+  color: #52627f;
+  border: 1px dashed rgba(132, 146, 170, 0.28);
 }
 
 .worker-item {
@@ -725,6 +823,31 @@ button {
 .chat-title-block {
   display: grid;
   gap: 4px;
+}
+
+.chat-workspace-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: #edf3ff;
+  color: #52627f;
+  max-width: min(720px, 100%);
+}
+
+.chat-workspace-context strong {
+  color: #22314d;
+}
+
+.chat-workspace-context code {
+  max-width: 460px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "JetBrains Mono", "Cascadia Code", monospace;
+  font-size: 12px;
 }
 
 .header-actions {

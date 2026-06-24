@@ -89,3 +89,4 @@ NUL
 scripts/package-allowlist.txt
 scripts/upload-release-local.cmd
 scripts/upload-release-local.ps1
+.playwright*
