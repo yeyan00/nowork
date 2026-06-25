@@ -64,6 +64,9 @@ from app.services import (
     get_session_config_info,
     update_session_config_info,
     trigger_manual_compaction,
+    save_environment_variables,
+    apply_environment_variables,
+    get_environment_variables,
 )
 
 logger = logging.getLogger('nowork')
@@ -1102,6 +1105,26 @@ def api_get_session_segments(ws_id: str) -> list[dict[str, object]]:
 @app.post('/api/compaction-sessions/{ws_id}/compact')
 async def api_trigger_compaction(ws_id: str, request: Request) -> dict[str, object]:
     return await trigger_manual_compaction(ws_id, agent_os=_get_agent_os(request))
+
+
+@app.get('/api/env')
+def api_get_env() -> dict[str, object]:
+    return get_environment_variables()
+
+
+@app.post('/api/env')
+async def api_save_env(request: Request) -> dict[str, object]:
+    body = await request.json()
+    changes = body.get('changes') if isinstance(body, dict) else None
+    if not isinstance(changes, dict):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail='changes must be an object of name->value')
+    return save_environment_variables(changes)
+
+
+@app.post('/api/env/apply')
+async def api_apply_env(request: Request) -> dict[str, object]:
+    return await apply_environment_variables(agent_os=_get_agent_os(request))
 
 
 from app.channels_api import router as channels_router

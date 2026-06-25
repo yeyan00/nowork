@@ -19,6 +19,12 @@ from pydantic import BaseModel
 from app.executor import run_worker, _find_agent_os_worker
 from app import repository
 from app import session_manager
+from app.env_settings import (
+    apply_environment_variables as _apply_environment_variables,
+    list_environment_variables,
+    save_environment_variables as _save_environment_variables,
+)
+
 
 logger = logging.getLogger('nowork')
 
@@ -123,6 +129,41 @@ def clear_worker_session_runtime_cache(worker_id: str) -> None:
     stale = [sid for sid, entry in _SESSION_RUNTIME_CACHE.items() if entry.worker_id == worker_id]
     for sid in stale:
         _SESSION_RUNTIME_CACHE.pop(sid, None)
+
+
+def clear_all_session_runtime_cache() -> None:
+    _SESSION_RUNTIME_CACHE.clear()
+
+
+async def reload_all_workers(agent_os: Any | None = None) -> list[str]:
+    if agent_os is None:
+        return []
+
+    from app.runtime import reload_worker
+
+    teams = list(getattr(agent_os, 'teams', []) or [])
+    workers = list(getattr(agent_os, 'agents', []) or []) + teams
+    reloaded: list[str] = []
+    for worker in workers:
+        worker_id = str(getattr(worker, 'id', '') or '')
+        worker_type = 'Team' if worker in teams else 'Agent'
+        if worker_id and await reload_worker(agent_os, worker_id, worker_type):
+            reloaded.append(worker_id)
+    return reloaded
+
+
+def save_environment_variables(changes: dict[str, str | None]) -> dict[str, Any]:
+    payload = [{'name': key, 'value': value} for key, value in changes.items()]
+    saved = _save_environment_variables(payload)
+    return {'applied': False, **saved}
+
+
+async def apply_environment_variables(agent_os: Any | None = None) -> dict[str, Any]:
+    return await _apply_environment_variables(agent_os)
+
+
+def get_environment_variables() -> dict[str, Any]:
+    return list_environment_variables()
 
 
 async def _build_runtime_for_session(worker: dict[str, Any], model_ref: str, agent_os: Any | None,
