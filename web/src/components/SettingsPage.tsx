@@ -3,10 +3,12 @@
  */
 
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { useI18n, LOCALE_OPTIONS } from '../i18n';
 import type { Locale } from '../i18n/types';
+import { EnvSettingsSection } from './EnvSettingsSection';
 import { LogViewer } from './LogViewer';
-import { getSessionConfig, updateSessionConfig } from '../lib/backend';
+import { SessionCompactionSection } from './SessionCompactionSection';
 
 /**
  * Open a URL in the system browser.
@@ -48,7 +50,7 @@ function compareVersions(a: string, b: string): number {
 
 /* ── Section Block ─────────────────────────────────────────────── */
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="settings-block">
       <h3 className="settings-block-title">{title}</h3>
@@ -67,28 +69,8 @@ export function SettingsPage() {
   const [showLicense, setShowLicense] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
 
-  // Session compaction config (always enabled, no toggle)
-  const [compactionLoaded, setCompactionLoaded] = useState(false);
-  const [compactionSaving, setCompactionSaving] = useState(false);
-  const [compactionThreshold, setCompactionThreshold] = useState(75);
-  const [compactionReserve, setCompactionReserve] = useState(4000);
-  const [compactionPreserve, setCompactionPreserve] = useState(5);
-  const [compactionMaxSummaries, setCompactionMaxSummaries] = useState(3);
-  const [compactionDirty, setCompactionDirty] = useState(false);
 
   const appVersion = __APP_VERSION__;
-
-  // Load compaction config once
-  if (!compactionLoaded) {
-    setCompactionLoaded(true);
-    void getSessionConfig().then((cfg) => {
-      const c = cfg.compaction;
-      setCompactionThreshold(Math.round((c.context_usage_threshold ?? 0.75) * 100));
-      setCompactionReserve(c.context_reserve_tokens ?? 4000);
-      setCompactionPreserve(c.preserve_recent_messages ?? 5);
-      setCompactionMaxSummaries(c.max_summaries_injected ?? 3);
-    }).catch(() => {});
-  }
 
   async function handleCheckUpdate() {
     setUpdateStatus('checking');
@@ -137,53 +119,8 @@ export function SettingsPage() {
       </header>
 
       <div className="settings-sections">
-        {/* ── Session Compaction ─────────────────────────────── */}
-        <Section title={t('settings.session')}>
-          <p className="settings-section-desc">{t('settings.sessionHint')}</p>
-          <div className="settings-form" style={{ gap: '10px' }}>
-            <label className="settings-label">
-              {t('settings.compactionThreshold')}
-              <div className="slider-row">
-                <input type="range" className="settings-slider" min={50} max={95} step={5} value={compactionThreshold} onChange={(e) => { setCompactionThreshold(Number(e.target.value)); setCompactionDirty(true); }} />
-                <span className="slider-value">{compactionThreshold}%</span>
-              </div>
-            </label>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <label className="settings-label" style={{ flex: 1 }}>
-                {t('settings.compactionReserve')}
-                <input type="number" className="settings-input" min={1000} max={50000} step={500} value={compactionReserve} onChange={(e) => { setCompactionReserve(Number(e.target.value) || 4000); setCompactionDirty(true); }} />
-              </label>
-              <label className="settings-label" style={{ flex: 1 }}>
-                {t('settings.compactionPreserve')}
-                <input type="number" className="settings-input" min={0} max={20} value={compactionPreserve} onChange={(e) => { setCompactionPreserve(Number(e.target.value) || 5); setCompactionDirty(true); }} />
-              </label>
-            </div>
-            <label className="settings-label">
-              {t('settings.compactionMaxSummaries')}
-              <input type="number" className="settings-input" min={1} max={10} value={compactionMaxSummaries} onChange={(e) => { setCompactionMaxSummaries(Number(e.target.value) || 3); setCompactionDirty(true); }} />
-            </label>
-          </div>
-
-          {compactionDirty && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
-              <button type="button" className="primary-button" disabled={compactionSaving} onClick={() => {
-                setCompactionSaving(true);
-                void updateSessionConfig({
-                  enabled: true,
-                  context_usage_threshold: compactionThreshold / 100,
-                  context_reserve_tokens: compactionReserve,
-                  preserve_recent_messages: compactionPreserve,
-                  max_summaries_injected: compactionMaxSummaries,
-                })
-                  .then(() => { setCompactionDirty(false); })
-                  .catch(() => {})
-                  .finally(() => { setCompactionSaving(false); });
-              }}>
-                {compactionSaving ? t('settings.saving') : t('settings.save')}
-              </button>
-            </div>
-          )}
-        </Section>
+        <SessionCompactionSection />
+        <EnvSettingsSection />
 
         {/* ── Language ─────────────────────────────────────── */}
         <Section title={t('settings.language')}>

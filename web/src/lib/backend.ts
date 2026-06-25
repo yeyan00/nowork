@@ -1152,6 +1152,44 @@ export async function uninstallExtension(extId: string): Promise<{ ok: boolean; 
 }
 
 
+export interface EnvironmentVariableEntry {
+  readonly name: string;
+  readonly value: string;
+  readonly hasValue: boolean;
+  readonly maskedValue: string;
+}
+
+export interface EnvironmentVariablesResponse {
+  readonly variables: readonly EnvironmentVariableEntry[];
+}
+
+export interface ApplyEnvironmentVariablesResponse extends EnvironmentVariablesResponse {
+  readonly applied: boolean;
+  readonly activeRuns: number;
+  readonly reloadedWorkers: readonly string[];
+}
+
+export async function getEnvironmentVariables(): Promise<EnvironmentVariablesResponse> {
+  const response = await fetchFromApi('/api/env');
+  if (!response.ok) throw new Error('Failed to get environment variables');
+  return (await response.json()) as EnvironmentVariablesResponse;
+}
+
+export async function saveEnvironmentVariables(changes: Record<string, string | null>): Promise<EnvironmentVariablesResponse> {
+  const response = await fetchFromApi('/api/env', {
+    method: 'POST',
+    body: JSON.stringify({ changes }),
+  });
+  if (!response.ok) throw new Error('Failed to save environment variables');
+  return (await response.json()) as EnvironmentVariablesResponse;
+}
+
+export async function applyEnvironmentVariables(): Promise<ApplyEnvironmentVariablesResponse> {
+  const response = await fetchFromApi('/api/env/apply', { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to apply environment variables');
+  return (await response.json()) as ApplyEnvironmentVariablesResponse;
+}
+
 // =============================================================================
 // Session Compaction APIs
 // =============================================================================
